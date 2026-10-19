@@ -3,10 +3,57 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { PublicLocation } from '../api/client'
 
-// Center of the four covered provinces: Coclé, Veraguas, Herrera, Los Santos
 const PANAMA_CENTER: [number, number] = [8.1, -80.9]
 const PANAMA_BOUNDS: [[number, number], [number, number]] = [[7.0, -82.5], [9.5, -79.5]]
 
+// ── GeoJSON types ────────────────────────────────────────────────────────────
+type GeoProps = { provincia: string; distrito: string; corregimiento: string; id: string }
+type GeoFeature = {
+  type: 'Feature'
+  properties: GeoProps
+  geometry:
+    | { type: 'Polygon'; coordinates: number[][][] }
+    | { type: 'MultiPolygon'; coordinates: number[][][][] }
+}
+type GeoCollection = { type: 'FeatureCollection'; features: GeoFeature[] }
+
+// ── Module-level GeoJSON cache ───────────────────────────────────────────────
+let geoCache: GeoCollection | null = null
+let geoPromise: Promise<GeoCollection> | null = null
+
+async function loadGeo(): Promise<GeoCollection> {
+  if (geoCache) return geoCache
+  if (!geoPromise) {
+    geoPromise = fetch('/panama_corregimientos.geo.json')
+      .then((r) => r.json() as Promise<GeoCollection>)
+      .then((d) => { geoCache = d; return d })
+      .catch(() => { geoPromise = null; return { type: 'FeatureCollection', features: [] } })
+  }
+  return geoPromise
+}
+
+// ── Ray-casting point-in-polygon ─────────────────────────────────────────────
+function pipRing(x: number, y: number, ring: number[][]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j]
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
+function geocodeLocal(lat: number, lng: number, geo: GeoCollection): GeoProps | null {
+  for (const ft of geo.features) {
+    const g = ft.geometry
+    const polys: number[][][][] = g.type === 'Polygon' ? [g.coordinates] : g.coordinates
+    for (const poly of polys) {
+      if (pipRing(lng, lat, poly[0])) return ft.properties
+    }
+  }
+  return null
+}
+
+// ── Name matching ─────────────────────────────────────────────────────────────
 function normalizeName(name: string): string {
   return name
     .toLowerCase()
@@ -29,6 +76,7 @@ function findMatch(candidates: PublicLocation[], ...terms: (string | undefined)[
   return undefined
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 type LocationPickerProps = {
   locations: PublicLocation[]
   value?: number | null
@@ -73,7 +121,9 @@ export default function LocationPicker({
     onChange?.(locationId ? Number(locationId) : null)
   }
 
-  // Initialize map when shown
+  // Pre-warm the geo cache when the map toggle is visible
+  useEffect(() => { void loadGeo() }, [])
+
   useEffect(() => {
     if (!showMap || !mapRef.current || leafletRef.current) return
 
@@ -88,62 +138,55 @@ export default function LocationPicker({
     map.on('click', async (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng
 
-      // Update or place marker
       if (markerRef.current) {
         markerRef.current.setLatLng([lat, lng])
       } else {
         markerRef.current = L.circleMarker([lat, lng], {
-          radius: 9,
-          color: '#fff',
-          weight: 2,
-          fillColor: '#16a34a',
-          fillOpacity: 1,
+          radius: 9, color: '#fff', weight: 2, fillColor: '#16a34a', fillOpacity: 1,
         }).addTo(map)
       }
 
       setGeocoding(true)
       setMapNote(null)
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-          { headers: { 'Accept-Language': 'es-PA,es', 'User-Agent': 'ElEmpujoncito/1.0' } },
-        )
-        const data = await res.json() as { address?: Record<string, string> }
-        const addr = data.address ?? {}
+        const geo = await loadGeo()
+        const match = geocodeLocal(lat, lng, geo)
 
-        const provinces = locations.filter((l) => l.level === 'province')
-        const matchedProvince = findMatch(provinces, addr.state, addr.region)
-        if (!matchedProvince) {
-          setMapNote('No encontramos esa ubicación en el directorio. Selecciónala manualmente.')
+        if (!match) {
+          setMapNote('Ubicación fuera del área cubierta. Selecciónala manualmente desde los desplegables.')
           return
         }
 
-        const districtCandidates = locations.filter((l) => l.level === 'district' && l.parent_id === matchedProvince.id)
-        const matchedDistrict = findMatch(districtCandidates, addr.county, addr.municipality, addr.city)
+        const provinces = locations.filter((l) => l.level === 'province')
+        const matchedProvince = findMatch(provinces, match.provincia)
+        if (!matchedProvince) {
+          setMapNote('Provincia no encontrada en el directorio. Selecciónala manualmente.')
+          return
+        }
+
+        const districtCandidates = locations.filter(
+          (l) => l.level === 'district' && l.parent_id === matchedProvince.id,
+        )
+        const matchedDistrict = findMatch(districtCandidates, match.distrito)
 
         const corregimientoCandidates = matchedDistrict
           ? locations.filter((l) => l.level === 'corregimiento' && l.parent_id === matchedDistrict.id)
           : []
-        const matchedCorregimiento = findMatch(
-          corregimientoCandidates,
-          addr.neighbourhood,
-          addr.suburb,
-          addr.village,
-          addr.town,
-          addr.city_district,
-        )
+        const matchedCorregimiento = matchedDistrict
+          ? findMatch(corregimientoCandidates, match.corregimiento)
+          : undefined
 
         const best = matchedCorregimiento ?? matchedDistrict ?? matchedProvince
         choose(String(best.id))
         setMapNote(
           matchedCorregimiento
-            ? `Detectado: ${matchedCorregimiento.name}, ${matchedDistrict?.name ?? ''}, ${matchedProvince.name}`
+            ? `✓ ${matchedCorregimiento.name} · ${matchedDistrict?.name ?? ''} · ${matchedProvince.name}`
             : matchedDistrict
-              ? `Detectado: ${matchedDistrict.name}, ${matchedProvince.name} — elige el corregimiento si lo necesitas`
-              : `Detectado: ${matchedProvince.name} — elige distrito y corregimiento`,
+              ? `${matchedDistrict.name} · ${matchedProvince.name} — elige el corregimiento si lo deseas`
+              : `${matchedProvince.name} — elige distrito y corregimiento`,
         )
       } catch {
-        setMapNote('No se pudo obtener la ubicación. Selecciónala manualmente.')
+        setMapNote('No se pudo detectar la ubicación. Selecciónala manualmente.')
       } finally {
         setGeocoding(false)
       }
@@ -157,7 +200,6 @@ export default function LocationPicker({
     }
   }, [showMap]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resize map when shown (Leaflet needs the container to be visible)
   useEffect(() => {
     if (showMap && leafletRef.current) {
       setTimeout(() => leafletRef.current?.invalidateSize(), 50)
