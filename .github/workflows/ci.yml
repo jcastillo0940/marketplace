@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and verify marketplace
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      APP_PORT: '8000'
+      WEB_PORT: '5173'
+      MYSQL_PORT: '3307'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Validate production Compose secret gates
+        shell: pwsh
+        run: ./scripts/verify-production-compose.ps1
+
+      - name: Validate backup archive safety and integrity checks
+        shell: pwsh
+        run: ./scripts/test-backup-format.ps1
+
+      - name: Validate off-host backup encryption and tamper rejection
+        shell: pwsh
+        run: ./scripts/test-backup-crypto.ps1
+
+      - name: Build production Docker images
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          APP_URL: https://marketplace.example.invalid
+          FRONTEND_URL: https://marketplace.example.invalid
+          MAIL_HOST: smtp.example.invalid
+          MAIL_USERNAME: ci-smtp-user
+          MAIL_PASSWORD: ci-smtp-placeholder
+          MAIL_FROM_ADDRESS: no-reply@example.invalid
+          SANCTUM_STATEFUL_DOMAINS: marketplace.example.invalid
+          DB_DATABASE: marketplace
+          DB_USERNAME: marketplace
+          DB_PASSWORD: ci-database-placeholder
+          MYSQL_ROOT_PASSWORD: ci-root-placeholder
+          REDIS_PASSWORD: ci-redis-placeholder
+          TWILIO_ACCOUNT_SID: AC00000000000000000000000000000000
+          TWILIO_AUTH_TOKEN: ci-twilio-placeholder
+          TWILIO_FROM_NUMBER: '+15005550006'
+          MEDIA_FILESYSTEM_DISK: local
+        run: docker compose -p marketplace-production-smoke -f docker-compose.production.yml build
+
+      - name: Smoke-test production Nginx and Laravel API proxy
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          APP_URL: https://marketplace.example.invalid
+          FRONTEND_URL: https://marketplace.example.invalid
+          MAIL_HOST: smtp.example.invalid
+          MAIL_USERNAME: ci-smtp-user
+          MAIL_PASSWORD: ci-smtp-placeholder
+          MAIL_FROM_ADDRESS: no-reply@example.invalid
+          SANCTUM_STATEFUL_DOMAINS: marketplace.example.invalid
+          DB_DATABASE: marketplace
+          DB_USERNAME: marketplace
+          DB_PASSWORD: ci-database-placeholder
+          MYSQL_ROOT_PASSWORD: ci-root-placeholder
+          REDIS_PASSWORD: ci-redis-placeholder
+          TWILIO_ACCOUNT_SID: AC00000000000000000000000000000000
+          TWILIO_AUTH_TOKEN: ci-twilio-placeholder
+          TWILIO_FROM_NUMBER: '+15005550006'
+          MEDIA_FILESYSTEM_DISK: local
+          PROXY_NETWORK_SUBNET: 10.255.251.0/29
+          PROXY_WEB_IP: 10.255.251.2
+          PROXY_API_IP: 10.255.251.3
+          WEB_PORT: '0'
+        run: |
+          set -euo pipefail
+          compose=(docker compose -p marketplace-production-smoke -f docker-compose.production.yml)
+          cleanup() { "${compose[@]}" down --volumes --remove-orphans; }
+          trap cleanup EXIT
+          "${compose[@]}" up --detach --wait --wait-timeout 300 mysql redis
+          "${compose[@]}" run --rm --no-deps api sh -c 'php docker/wait-for-database.php && php artisan migrate --force --seed'
+          "${compose[@]}" up --detach --wait --wait-timeout 300
+          web_port="$("${compose[@]}" port web 8080 | sed 's/.*://')"
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 "http://127.0.0.1:${web_port}/api/ready" | jq --exit-status '.status == "ready" and .setup.reference_data == "ready"'
+          curl --fail --silent --show-error "http://127.0.0.1:${web_port}/healthz" | grep -Fx 'ok'
+
+      - name: Smoke-test production API entrypoint gates without dependencies
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          APP_URL: https://marketplace.example.invalid
+          FRONTEND_URL: https://marketplace.example.invalid
+          MAIL_HOST: smtp.example.invalid
+          MAIL_USERNAME: ci-smtp-user
+          MAIL_PASSWORD: ci-smtp-placeholder
+          MAIL_FROM_ADDRESS: no-reply@example.invalid
+          SANCTUM_STATEFUL_DOMAINS: marketplace.example.invalid
+          DB_DATABASE: marketplace
+          DB_USERNAME: marketplace
+          DB_PASSWORD: ci-database-placeholder
+          MYSQL_ROOT_PASSWORD: ci-root-placeholder
+          REDIS_PASSWORD: ci-redis-placeholder
+          TWILIO_ACCOUNT_SID: AC00000000000000000000000000000000
+          TWILIO_AUTH_TOKEN: ci-twilio-placeholder
+          TWILIO_FROM_NUMBER: '+15005550006'
+          MEDIA_FILESYSTEM_DISK: local
+        run: |
+          docker compose -p marketplace-production-smoke -f docker-compose.production.yml run --rm --no-deps api php artisan --version
+          if APP_KEY=invalid docker compose -p marketplace-production-smoke -f docker-compose.production.yml run --rm --no-deps api php artisan --version; then
+            echo 'The production entrypoint accepted an invalid APP_KEY.' >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 78
+          fi
+          if MEDIA_FILESYSTEM_DISK=s3 docker compose -p marketplace-production-smoke -f docker-compose.production.yml run --rm --no-deps api php artisan --version; then
+            echo 'The production entrypoint accepted S3 without credentials.' >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 78
+          fi
+
+      - name: Build Docker development images
+        run: docker compose build
+
+      - name: Start database and cache before application readiness
+        run: docker compose up --detach --wait --wait-timeout 300 mysql redis
+
+      - name: Install backend dependencies and seed before API readiness
+        run: docker compose run --rm --no-deps api sh -c "composer install --no-interaction && php docker/wait-for-database.php && php artisan migrate --force --seed"
+
+      - name: Start the complete Docker stack
+        run: docker compose up --detach --wait --wait-timeout 300
+
+      - name: Verify API readiness and development frontend page
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 http://localhost:8000/api/ready | jq --exit-status '.status == "ready" and .setup.reference_data == "ready"'
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 http://localhost:5173/ > /dev/null
+
+      - name: Verify Laravel routes against OpenAPI
+        shell: pwsh
+        run: ./scripts/verify-openapi.ps1 -UseDocker
+
+      - name: Run backend test suite
+        run: |
+          docker compose exec --no-TTY api ./vendor/bin/pint --test
+          docker compose exec --no-TTY api composer audit --locked
+          docker compose exec --no-TTY --env APP_ENV=testing --env DB_CONNECTION=sqlite --env DB_DATABASE=:memory: api php artisan test
+
+      - name: Run frontend tests, production build, lint and design checks
+        run: |
+          docker compose exec --no-TTY web npm test -- --run
+          docker compose exec --no-TTY web npm run build
+          docker compose exec --no-TTY web npm run lint
+          docker compose exec --no-TTY web npm audit --audit-level=moderate
+          docker compose exec --no-TTY web npm run verify:design
+
+      - name: Stop stack and discard CI volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans

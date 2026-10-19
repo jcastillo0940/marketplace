@@ -1,0 +1,1810 @@
+openapi: 3.1.0
+info:
+  title: Mercado Solidario API
+  version: 0.1.0
+  description: >-
+    API JSON de descubrimiento y contacto directo con productores. El servidor es
+    autoridad de permisos y estados. Los clics de contacto no representan ventas.
+    Todas las rutas /admin requieren sesión autenticada y TOTP administrativo confirmado.
+servers:
+  - url: http://localhost:8000/api
+    description: Desarrollo local
+tags:
+  - name: Public
+  - name: Auth
+  - name: Producer
+  - name: Moderation
+  - name: Admin
+paths:
+  /health:
+    get:
+      tags: [Public]
+      summary: Comprueba que el proceso API responde
+      responses:
+        '200':
+          description: Proceso disponible, sin comprobar dependencias
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+  /ready:
+    get:
+      tags: [Public]
+      summary: Comprueba si el API puede atender solicitudes
+      description: Comprueba MySQL, cache, Redis y el esquema de catálogos. Responde 503 con estado genérico sin exponer detalles internos si falla una dependencia, tabla o consulta. Si los servicios responden pero faltan categorías activas, los siete distritos de Herrera o Los Santos, o los mínimos de 49/81 corregimientos activos, responde ready con setup.reference_data=needs_seed.
+      responses:
+        '200':
+          description: Dependencias y esquema disponibles; reference_data puede requerir la carga inicial de catálogos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ready }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, const: ok }
+                      cache: { type: string, const: ok }
+                      redis: { type: string, const: ok }
+                  setup:
+                    type: object
+                    properties:
+                      reference_data: { type: string, enum: [ready, needs_seed] }
+        '503':
+          description: Una dependencia o consulta necesaria no está disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: not_ready }
+  /products:
+    get:
+      tags: [Public]
+      summary: Busca ofertas publicadas y disponibles
+      parameters:
+        - in: query
+          name: q
+          description: Búsqueda literal en título, descripción y nombre público; los signos %, _ y ! no actúan como comodines
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: province
+          description: Slug de una provincia activa; incluye distritos y corregimientos descendientes
+          schema: { type: string }
+        - in: query
+          name: district
+          description: Slug de un distrito activo; incluye sus corregimientos
+          schema: { type: string }
+        - in: query
+          name: corregimiento
+          description: Slug de un corregimiento activo
+          schema: { type: string }
+        - in: query
+          name: sort
+          description: relevance prioriza coincidencias en título y luego ordena por fecha/ID descendente; newest ordena por fecha/ID descendente
+          schema: { type: string, enum: [relevance, newest], default: relevance }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        '200':
+          description: Página de ofertas que pueden mostrarse públicamente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedProducts' }
+  /message-templates:
+    get:
+      tags: [Public]
+      summary: Obtiene los textos editables prellenados para contactar productores
+      responses:
+        '200':
+          description: Plantillas públicas sin información administrativa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [product, producer]
+                    properties:
+                      product: { type: string }
+                      producer: { type: string }
+  /products/{slug}:
+    get:
+      tags: [Public]
+      summary: Obtiene una oferta pública por slug
+      parameters:
+        - { $ref: '#/components/parameters/Slug' }
+      responses:
+        '200':
+          description: Oferta publicada y disponible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404': { description: Oferta no pública o inexistente }
+  /products/{slug}/images/{imageId}:
+    get:
+      tags: [Public]
+      summary: Entrega una imagen pública de una oferta disponible
+      description: >-
+        Solo responde si la oferta sigue públicamente disponible y la imagen está marcada como pública. Sin variant entrega la foto completa; variant=thumbnail entrega una derivada de hasta 480 px (o la foto completa para imágenes anteriores o variantes ausentes). Ambas usan la misma comprobación de visibilidad y los encabezados Cache-Control public y X-Content-Type-Options nosniff.
+      parameters:
+        - { $ref: '#/components/parameters/Slug' }
+        - name: imageId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: variant
+          in: query
+          required: false
+          description: 'thumbnail solicita la versión ligera del catálogo; si se omite se entrega la versión completa.'
+          schema: { type: string, enum: [thumbnail] }
+      responses:
+        '200':
+          description: Archivo de imagen público
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=86400' }
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        '404': { description: Oferta o imagen no pública o inexistente }
+  /search-events:
+    post:
+      tags: [Public]
+      summary: Registra una búsqueda confirmada sin ofertas coincidentes
+      description: >-
+        Laravel vuelve a ejecutar los mismos filtros antes de aceptar el evento. Solo guarda si se usó una palabra clave y los filtros de categoría/zona; no almacena el término, IP, cuenta ni agente de usuario.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                q: { type: string, maxLength: 120 }
+                category: { type: string, maxLength: 120 }
+                province: { type: string, maxLength: 120 }
+                district: { type: string, maxLength: 120 }
+                corregimiento: { type: string, maxLength: 120 }
+      responses:
+        '202': { description: Búsqueda sin resultados registrada }
+        '409': { description: La combinación enviada sí tiene ofertas disponibles }
+        '422': { description: Búsqueda vacía o filtros no válidos }
+        '429': { description: Límite de frecuencia alcanzado }
+  /producers:
+    get:
+      tags: [Public]
+      summary: Lista productores activos con ofertas disponibles y filtros por actividad, categoría y ubicación
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: category
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: province
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: district
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: corregimiento
+          schema: { type: string, maxLength: 120 }
+        - { $ref: '#/components/parameters/Page' }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        '200': { description: Productores paginados; omite teléfonos y datos privados }
+        '404': { description: Ubicación seleccionada inexistente o inactiva }
+        '422': { description: Filtros no válidos }
+  /producers/{slug}:
+    get:
+      tags: [Public]
+      summary: Obtiene un perfil público y sus ofertas disponibles
+      parameters:
+        - { $ref: '#/components/parameters/Slug' }
+      responses:
+        '200':
+          description: Perfil con ubicación general y contacto público
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProducerPublic' }
+        '404': { description: Perfil no público o inexistente }
+  /categories:
+    get:
+      tags: [Public]
+      summary: Lista categorías públicas activas
+      responses:
+        '200':
+          description: Categorías y recuentos públicos opcionales
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+  /locations:
+    get:
+      tags: [Public]
+      summary: Lista ubicaciones generales activas para filtros
+      responses:
+        '200':
+          description: Jerarquía administrativa de Panamá
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Location' }
+  /contact-events:
+    post:
+      tags: [Public]
+      summary: Registra la intención de contactar a un productor
+      description: Registra contacto desde una oferta disponible o un perfil activo con teléfono público verificado. Debe enviarse exactamente un destino. No registra conversación, compra, pago ni venta completada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              oneOf:
+                - required: [product_id]
+                  not: { required: [producer_id] }
+                - required: [producer_id]
+                  not: { required: [product_id] }
+              properties:
+                product_id: { type: integer, minimum: 1, description: Oferta públicamente disponible; exclusivo con producer_id. }
+                producer_id: { type: integer, minimum: 1, description: Perfil activo con teléfono verificado y público; exclusivo con product_id. }
+                channel: { type: string, enum: [whatsapp, phone] }
+      responses:
+        '202': { description: Evento aceptado o deduplicado }
+        '422': { description: Debe indicar exactamente un destino y un canal válido }
+        '404': { description: Oferta no pública o perfil sin teléfono público verificado }
+        '429': { description: Límite de frecuencia alcanzado }
+  /reports:
+    post:
+      tags: [Public]
+      summary: Envía una denuncia de perfil u oferta
+      description: Evidencia adjunta es privada y nunca forma parte de una respuesta pública.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [resource_type, resource_id, reason_code, description]
+              properties:
+                resource_type: { type: string, enum: [product, producer] }
+                resource_id: { type: integer }
+                reason_code: { type: string, enum: [incorrect, unavailable, suspicious, unsafe, other] }
+                description: { type: string, minLength: 10, maxLength: 1000 }
+                contact_email: { type: [string, 'null'], format: email }
+                evidence: { type: array, maxItems: 3, items: { type: string, format: binary } }
+      responses:
+        '202':
+          description: Denuncia recibida con referencia no enumerable que puede mostrarse al denunciante
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reference, message]
+                properties:
+                  reference: { type: string, format: uuid }
+                  message: { type: string }
+        '422': { description: Datos no válidos }
+        '429': { description: Límite de frecuencia alcanzado }
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registra una cuenta de productor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, public_name, location_id, phone, terms_version, privacy_version]
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 12, writeOnly: true }
+                public_name: { type: string, maxLength: 120 }
+                activity: { type: string, maxLength: 120 }
+                location_id: { type: integer, description: ID de provincia activa sin padre, distrito bajo provincia activa o corregimiento bajo distrito y provincia activos }
+                phone: { type: string, maxLength: 40, description: Ocho dígitos locales de Panamá o número internacional con prefijo. Se normaliza a E.164 antes de guardar o enviar el OTP. }
+                terms_version: { type: string, enum: [terms-2026-10], description: Versión vigente fijada por configuración del servidor }
+                privacy_version: { type: string, enum: [privacy-2026-10], description: Versión vigente fijada por configuración del servidor }
+                registration_method: { type: string, enum: [self, assisted], default: self }
+                producer_authorized: { type: boolean, description: Requerido cuando registration_method es assisted }
+                terms_confirmed: { type: boolean, description: Requerido para registro asistido }
+                privacy_confirmed: { type: boolean, description: Requerido para registro asistido }
+      responses:
+        '201': { description: Cuenta creada en estado de verificación }
+        '422': { description: Datos no válidos o versiones de consentimiento desactualizadas }
+        '429': { description: Límite de frecuencia alcanzado }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Inicia sesión de SPA con cookie Sanctum
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, writeOnly: true }
+      responses:
+        '204': { description: Sesión iniciada para productor u operador sin MFA habilitado }
+        '200': { description: Sesión administrativa activa; requiere inscripción MFA antes de usar rutas administrativas }
+        '202': { description: Contraseña válida; falta el código TOTP }
+        '422': { description: Credenciales no válidas con respuesta genérica }
+        '429': { description: Límite de frecuencia o intentos MFA alcanzado; no se emite un desafío administrativo }
+        '503': { description: Limitador compartido no disponible; no se emite un desafío administrativo }
+  /auth/password/forgot:
+    post:
+      tags: [Auth]
+      summary: Solicita instrucciones de recuperación sin revelar si el correo existe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Respuesta uniforme para cuentas existentes y desconocidas }
+        '422': { description: Correo no válido }
+        '429': { description: Límite de frecuencia alcanzado }
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Cambia la contraseña usando un token de recuperación de un solo uso
+      description: No inicia sesión automáticamente ni omite el desafío MFA. Envía la URL al frontend por correo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: { type: string, format: email }
+                token: { type: string, writeOnly: true }
+                password: { type: string, minLength: 12, writeOnly: true }
+                password_confirmation: { type: string, minLength: 12, writeOnly: true }
+      responses:
+        '200': { description: Contraseña actualizada; se conserva MFA administrativo }
+        '422': { description: Token vencido, no válido o datos inconsistentes }
+        '429': { description: Límite de frecuencia alcanzado }
+  /auth/verify:
+    post:
+      tags: [Auth]
+      summary: Confirma el OTP vigente del teléfono privado del productor
+      description: Requiere una sesión iniciada, un OTP previamente solicitado y que el código corresponda al teléfono privado actual. El inicio del OTP se realiza por POST /me/verify-phone/start.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string, maxLength: 40, description: Número del productor; se aceptan ocho dígitos de Panamá o E.164 internacional. }
+                code: { type: string, pattern: '^\\d{6}$', writeOnly: true }
+      responses:
+        '200': { description: Teléfono confirmado y desafío consumido }
+        '401': { description: Sesión ausente }
+        '422': { description: Código, teléfono o desafío no válidos }
+        '429': { description: Intentos agotados o demasiadas solicitudes }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Cierra la sesión actual
+      security: [{ cookieAuth: [] }]
+      responses:
+        '204': { description: Sesión cerrada y revocada }
+  /auth/mfa/challenge:
+    post:
+      tags: [Auth]
+      summary: Completa el segundo paso TOTP de una sesión administrativa pendiente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, pattern: '^\\d{6}$' }
+      responses:
+        '200': { description: Código verificado y sesión autenticada }
+        '401': { description: Desafío ausente o expirado }
+        '422': { description: Código incorrecto }
+        '429': { description: Límite de intentos alcanzado }
+        '503': { description: Limitador compartido no disponible; el desafío falla de forma cerrada }
+  /auth/mfa/recovery-requests:
+    post:
+      tags: [Auth]
+      summary: Solicita una recuperación manual del autenticador perdido
+      description: >-
+        Solo acepta una sesión pendiente de MFA emitida por contraseña y vigente por cinco minutos. La respuesta 202 es genérica, no confirma si existe la cuenta y no incluye identificadores ni datos de la cuenta objetivo. El personal permanece bloqueado hasta dos aprobaciones de revisores distintos y la reinscripción TOTP obligatoria. La solicitud expira según MFA_RECOVERY_TTL_HOURS (72 horas por defecto; rango permitido 1–168).
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, maxLength: 1000, description: Motivo proporcionado por el solicitante; no debe incluir códigos de autenticación. }
+      responses:
+        '202': { description: Solicitud registrada con respuesta genérica; no enumera cuentas }
+        '401': { description: Sesión pendiente ausente o expirada }
+        '403': { description: La sesión pendiente no corresponde a personal interno elegible }
+        '409': { description: Ya se aprobó la recuperación y la reinscripción está pendiente }
+        '419': { description: Token CSRF ausente o no válido }
+        '422': { description: Motivo no válido }
+        '429': { description: Límite de frecuencia alcanzado }
+  /admin/mfa-recovery-requests:
+    get:
+      tags: [Admin]
+      summary: Lista solicitudes abiertas de recuperación MFA
+      description: Requiere permiso security.mfa_recovery.review y MFA vigente. Solo devuelve los datos mínimos de la cuenta afectada, motivos y decisiones previas; nunca semillas o códigos.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200': { description: Cola paginada de solicitudes abiertas, 20 por página, sin caché }
+        '401': { description: Sesión ausente }
+        '403': { description: Cuenta no pertenece al personal interno o falta el permiso security.mfa_recovery.review }
+        '428': { description: MFA administrativo no confirmado }
+        '423': { description: La cuenta del revisor está bloqueada por recuperación MFA }
+  /admin/mfa-recovery-requests/{id}/decision:
+    post:
+      tags: [Admin]
+      summary: Registra una aprobación o rechazo individual
+      description: Requiere permiso security.mfa_recovery.review y MFA vigente. Un revisor no puede decidir su propia solicitud; la aprobación requiere dos personas distintas. Cada decisión y motivo queda en historial y auditoría. Rechazar o vencer mantiene el bloqueo hasta que el usuario complete MFA con su autenticador previo.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                reason: { type: string, minLength: 10, maxLength: 1000 }
+      responses:
+        '200': { description: Decisión auditada; segunda aprobación habilita reinscripción, no acceso administrativo }
+        '401': { description: Sesión ausente }
+        '403': { description: Cuenta no pertenece al personal interno, es la solicitante o falta el permiso security.mfa_recovery.review }
+        '428': { description: MFA administrativo no confirmado }
+        '404': { description: Solicitud no encontrada }
+        '409': { description: Decisión duplicada, propia, terminal o solicitud vencida }
+        '422': { description: Decisión o motivo no válido }
+        '423': { description: La cuenta del revisor está bloqueada por recuperación MFA }
+        '429': { description: Límite de frecuencia alcanzado }
+  /auth/mfa/setup:
+    get:
+      tags: [Auth]
+      summary: Genera o devuelve la clave de inscripción MFA al usuario interno autenticado
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Estado MFA y secreto de inscripción sin caché }
+        '403': { description: Cuenta no pertenece al personal interno }
+        '401': { description: Sesión ausente }
+  /auth/mfa/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirma la aplicación autenticadora y activa MFA
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, pattern: '^\\d{6}$' }
+      responses:
+        '200': { description: MFA activo y auditado }
+        '409': { description: No hay inscripción pendiente }
+        '422': { description: Código incorrecto }
+  /sanctum/csrf-cookie:
+    get:
+      tags: [Auth]
+      summary: Inicializa cookies CSRF de Sanctum para la SPA
+      servers:
+        - url: http://localhost:8000
+          description: Desarrollo local; en producción, la misma ruta vive en el host de la SPA/API, fuera del prefijo /api
+      responses:
+        '204': { description: Cookies de sesión y XSRF establecidas }
+  /me:
+    get:
+      tags: [Auth]
+      summary: Devuelve identidad, roles y permisos de la sesión actual
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Identidad autenticada con los permisos efectivos de la sesión }
+        '401': { description: Sesión ausente o expirada }
+  /me/verify-phone:
+    post:
+      tags: [Producer]
+      summary: Confirma el OTP vigente para el teléfono privado del productor
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string, maxLength: 40, description: Número del productor; se aceptan ocho dígitos de Panamá o E.164 internacional. }
+                code: { type: string, pattern: '^\\d{6}$', writeOnly: true }
+      responses:
+        '200': { description: Teléfono confirmado; el desafío queda consumido }
+        '401': { description: Sesión ausente }
+        '422': { description: Código, teléfono o desafío no válidos }
+        '429': { description: Intentos agotados o desafío bloqueado }
+  /me/verify-phone/start:
+    post:
+      tags: [Producer]
+      summary: Solicita un OTP para verificar el teléfono privado mediante el proveedor SMS configurado
+      security: [{ cookieAuth: [] }]
+      responses:
+        '202': { description: OTP enviado; solo el adaptador fake en local/pruebas puede devolver development_code }
+        '401': { description: Sesión ausente }
+        '429': { description: Límite de frecuencia alcanzado }
+        '503': { description: Proveedor SMS no disponible; el desafío se invalida y no se devuelve el OTP }
+  /me/products:
+    get:
+      tags: [Producer]
+      summary: Lista todos los estados de las publicaciones propias
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Publicaciones propias paginadas; cada producto incluye la última decisión de moderación cuando fue devuelto o rechazado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ProducerProduct' } }
+        '401': { description: Sesión ausente }
+    post:
+      tags: [Producer]
+      summary: Crea borrador manual con fotografía obligatoria
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ProductWrite' }
+      responses:
+        '201': { description: Borrador privado creado }
+        '422': { description: Datos, formato de imagen o cantidad no válida }
+  /me/metrics:
+    get:
+      tags: [Producer]
+      summary: Consulta conteos propios de publicaciones e intenciones de contacto
+      description: Devuelve publicaciones por estado, intenciones de contacto por canal y desde el perfil, y las cinco ofertas con más intenciones en los últimos 30 días. No incluye compradores ni eventos individuales; las intenciones no representan ventas.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Resumen privado del productor autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [products, contact_intentions_30d, contact_channels_30d, profile_contact_intentions_30d, top_products_30d, period_days]
+                    properties:
+                      products: { type: object, additionalProperties: { type: integer, minimum: 0 }, description: Conteo por estado de publicación }
+                      contact_intentions_30d: { type: integer, minimum: 0 }
+                      contact_channels_30d:
+                        type: object
+                        required: [whatsapp, phone]
+                        properties:
+                          whatsapp: { type: integer, minimum: 0 }
+                          phone: { type: integer, minimum: 0 }
+                      profile_contact_intentions_30d: { type: integer, minimum: 0, description: Clics de contacto desde el perfil sin seleccionar una oferta }
+                      top_products_30d:
+                        type: array
+                        maxItems: 5
+                        items:
+                          type: object
+                          required: [product_id, title, contact_intentions]
+                          properties:
+                            product_id: { type: integer }
+                            title: { type: string }
+                            contact_intentions: { type: integer, minimum: 0 }
+                      period_days: { type: integer, const: 30 }
+        '401': { description: Sesión ausente }
+        '404': { description: Cuenta sin perfil de productor }
+  /me/appeals:
+    get:
+      tags: [Producer]
+      summary: Consulta el estado de suspensión y el historial de apelaciones propios
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Estado propio, motivo de suspensión e historial de revisión }
+        '401': { description: Sesión ausente }
+    post:
+      tags: [Producer]
+      summary: Solicita una revisión humana de una suspensión vigente
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 20, maxLength: 2000 }
+      responses:
+        '201': { description: Solicitud recibida y auditada }
+        '409': { description: Perfil no suspendido o apelación ya pendiente }
+        '422': { description: Motivo no válido }
+  /me/products/{id}:
+    get:
+      tags: [Producer]
+      summary: Obtiene una publicación propia para consultar o editar
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Publicación propia, incluidas imágenes privadas }
+        '404': { description: Publicación ajena o inexistente }
+    patch:
+      tags: [Producer]
+      summary: Actualiza una publicación propia editable
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ProductWrite' }
+      responses:
+        '200': { description: Borrador/devuelta/rechazada conserva su estado; una oferta publicada, pausada o agotada pasa a pending, queda oculta hasta revisión y conserva published_at }
+        '404': { description: Publicación ajena o inexistente }
+        '409': { description: Estado no editable }
+        '422': { description: Datos o imágenes no válidos }
+        '429': { description: Se excedió el límite de seis escrituras por minuto por cuenta }
+    put:
+      tags: [Producer]
+      summary: Compatibilidad temporal para clientes anteriores que actualizan una publicación propia
+      deprecated: true
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ProductWrite' }
+      responses:
+        '200': { description: Actualización aceptada; use PATCH para clientes nuevos }
+        '404': { description: Publicación ajena o inexistente }
+  /me/products/{id}/images/{imageId}:
+    get:
+      tags: [Producer]
+      summary: Obtiene una fotografía privada de una publicación propia
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - name: imageId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Archivo de imagen servido sin caché pública }
+        '404': { description: Imagen ajena o inexistente }
+  /me/products/{id}/submit:
+    post:
+      tags: [Producer]
+      summary: Envía una publicación propia a revisión humana
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '202': { description: Borrador o publicación corregida en cola de moderación; el rechazo previo permanece en el historial }
+        '403': { description: Recurso ajeno o permiso insuficiente }
+        '422': { description: Faltan datos, fotos almacenadas no disponibles, o la categoría dejó de estar activa }
+  /me/products/{id}/transition:
+    post:
+      tags: [Producer]
+      summary: Pausa, agota, reactiva o retira una publicación propia
+      description: La retirada está permitida desde borrador, en revisión, cambios solicitados, rechazo, publicación, pausa y agotado.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [published, paused, sold_out, withdrawn] }
+                reason: { type: [string, 'null'], maxLength: 1000 }
+      responses:
+        '200': { description: Estado actualizado; transición queda auditada }
+        '404': { description: Publicación ajena o inexistente }
+        '422': { description: Transición no permitida }
+  /me/products/{id}/renew:
+    post:
+      tags: [Producer]
+      summary: Renueva la vigencia de una oferta publicada que venció
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Fecha de publicación renovada; historial y auditoría registrados }
+        '404': { description: Publicación ajena o inexistente }
+        '409': { description: La oferta no venció, el perfil del productor está inactivo o la categoría está desactivada }
+  /admin/products/{id}/images/{imageId}:
+    get:
+      tags: [Moderation]
+      summary: Entrega privada una imagen de una oferta pendiente y registra acceso
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - in: path
+          name: imageId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Imagen privada con cache deshabilitado }
+        '403': { description: Permiso products.review requerido }
+  /admin/reports/{id}/evidence/{evidenceId}:
+    get:
+      tags: [Admin]
+      summary: Entrega evidencia privada de denuncia y registra acceso
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - in: path
+          name: evidenceId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Archivo privado con cache deshabilitado }
+        '403': { description: Permiso reports.manage requerido }
+  /admin/moderation:
+    get:
+      tags: [Moderation]
+      summary: Lista publicaciones pendientes para revisión autorizada
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Página de 20 publicaciones pendientes con las tres entradas recientes de historial (incluye actor y motivo); los controles deben seguir current_page y last_page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedModerationQueue' }
+        '403': { description: Permiso products.review requerido }
+  /admin/products/{id}/approve:
+    post:
+      tags: [Moderation]
+      summary: Aprueba una publicación pendiente con motivo obligatorio
+      description: Utiliza la misma autorización, validaciones de productor/categoría/fotografías, historial y auditoría que la decisión approve.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Oferta aprobada, publicada y auditada }
+        '401': { description: No autenticado }
+        '403': { description: Permiso products.review requerido }
+        '404': { description: Oferta inexistente o fuera de la cola pendiente }
+        '422': { description: Motivo no válido, fotos no disponibles, productor inactivo o con teléfono no verificado, o categoría inactiva }
+  /admin/products/{id}/decision:
+    post:
+      tags: [Moderation]
+      summary: Aprueba, rechaza o solicita cambios con motivo obligatorio; aprobar requiere productor y categoría activos
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              properties:
+                decision: { type: string, enum: [approve, reject, request_changes] }
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Transición y auditoría registradas }
+        '403': { description: Permiso products.review requerido }
+        '422': { description: Transición inválida, fotos no disponibles, productor inactivo o con teléfono no verificado, o categoría inactiva }
+        '409': { description: La publicación ya no está pendiente; actualice la cola antes de decidir }
+        '401': { description: No autenticado }
+  /admin/message-templates:
+    get:
+      tags: [Admin]
+      summary: Lee plantillas, versiones y cinco cambios recientes
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Plantillas con version y auditoría reciente }
+        '401': { description: No autenticado }
+        '403': { description: MFA o permiso messages.manage requerido }
+  /admin/message-templates/{key}:
+    put:
+      tags: [Admin]
+      summary: Actualiza una plantilla WhatsApp de producto o productor
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, enum: [product, producer] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, minLength: 10, maxLength: 500, description: "Admite {product_title} y {producer_name}; product_title es obligatorio para product y producer_name para producer." }
+      responses:
+        '200': { description: Plantilla versionada y auditada }
+        '401': { description: No autenticado }
+        '403': { description: MFA o permiso messages.manage requerido }
+        '422': { description: Texto inválido o variable obligatoria ausente }
+  /admin/products/bulk-decision:
+    post:
+      tags: [Moderation]
+      summary: Aplica una decisión común a publicaciones pendientes seleccionadas explícitamente
+      description: >-
+        Acepta como máximo 20 IDs (una página visible). Requiere products.review y MFA de administración.
+        Cada publicación se bloquea, valida y transiciona con su historial y auditoría propios. Los elementos
+        que ya no están pendientes o fallan validaciones se informan individualmente; los demás se conservan.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, decision, reason]
+              properties:
+                ids: { type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: { type: integer, minimum: 1 } }
+                decision: { type: string, enum: [approve, reject, request_changes] }
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200':
+          description: Resultado mixto o completo con éxitos y fallos individuales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [processed, failed]
+                    properties:
+                      processed:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, status]
+                          properties:
+                            id: { type: integer }
+                            status: { type: string, enum: [published, rejected, changes_requested] }
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, message]
+                          properties:
+                            id: { type: integer }
+                            message: { type: string }
+        '401': { description: No autenticado }
+        '403': { description: MFA o permiso products.review requerido }
+        '422': { description: Selección fuera de límites, IDs duplicados o datos comunes no válidos }
+  /me/profile:
+    put:
+      tags: [Producer]
+      summary: Actualiza el perfil propio; cambiar el teléfono invalida la verificación
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_name, phone_private]
+              properties:
+                public_name: { type: string, minLength: 2, maxLength: 120 }
+                activity: { type: [string, 'null'], maxLength: 120 }
+                description: { type: [string, 'null'], maxLength: 2000 }
+                location_id: { type: [integer, 'null'] }
+                phone_private: { type: string, maxLength: 40, description: Ocho dígitos locales de Panamá o número internacional con prefijo. Se guarda normalizado a E.164. }
+      responses:
+        '200': { description: Perfil actualizado; nunca se devuelve el teléfono privado }
+        '401': { description: Sesión ausente }
+        '422': { description: Datos no válidos }
+  /admin/reports:
+    get:
+      tags: [Admin]
+      summary: Lista denuncias activas por prioridad con responsable y fecha SLA
+      description: >-
+        Si no se envía status, solo devuelve casos nuevos o en revisión. Cada elemento incluye assignee, priority y sla_due_at calculado con REPORT_SLA_*_HOURS; no incluye el correo del reportante ni rutas privadas de evidencia.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [new, reviewing, resolved, dismissed] }
+        - { $ref: '#/components/parameters/Page' }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Página de casos activos con evidencia, responsable y sla_due_at; correo del reportante y rutas privadas excluidos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedReportCases' }
+        '403': { description: Permiso reports.manage requerido }
+  /admin/reports/{id}:
+    get:
+      tags: [Admin]
+      summary: Consulta el expediente privado de una denuncia y su historial de acciones
+      description: >-
+        Requiere permiso reports.manage y MFA. Devuelve el resumen del recurso relacionado, metadatos de evidencia y eventos de auditoría sin reporter_id, correo del reportante ni rutas privadas de almacenamiento. La evidencia se descarga por la ruta auditada y autorizada.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200':
+          description: Expediente disponible para personal autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [id, can_release, resource_type, resource_id, resource, history, evidence]
+                    properties:
+                      id: { type: integer }
+                      can_release: { type: boolean, description: true solo cuando está en revisión y asignado al moderador autenticado }
+                      resource_type: { type: string, enum: [product, producer] }
+                      resource_id: { type: integer }
+                      resource:
+                        type: [object, 'null']
+                        properties:
+                          type: { type: string, enum: [product, producer] }
+                          id: { type: integer }
+                          label: { type: string }
+                          slug: { type: string }
+                      history: { type: array, items: { type: object } }
+                      evidence: { type: array, items: { type: object } }
+        '401': { description: No autenticado }
+        '403': { description: Permiso reports.manage requerido }
+        '404': { description: Caso inexistente }
+    put:
+      tags: [Admin]
+      summary: Actualiza el estado de un caso con registro de auditoría
+      description: Al pasar un caso nuevo a reviewing, queda asignado al moderador autenticado. Solo esa persona puede continuar o cerrar el caso.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, resolution_note]
+              properties:
+                status: { type: string, enum: [reviewing, resolved, dismissed] }
+                priority: { type: string, enum: [low, normal, high, urgent] }
+                resolution_note: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Caso asignado al moderador actual o cerrado; estado y nota auditados }
+        '403': { description: Permiso reports.manage requerido }
+        '409': { description: Caso asignado a otra persona }
+        '422': { description: Transición inválida o faltan datos }
+  /admin/reports/{id}/release:
+    post:
+      tags: [Admin]
+      summary: Devuelve a la cola un caso que el moderador actual no puede continuar
+      description: Requiere permiso reports.manage y MFA. Solo el responsable actual puede liberar un caso reviewing; estado y asignación cambian en una transacción y quedan auditados con motivo.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution_note]
+              properties:
+                resolution_note: { type: string, minLength: 10, maxLength: 1000 }
+      responses:
+        '200': { description: Caso devuelto a la cola con estado new y sin responsable }
+        '403': { description: Permiso reports.manage requerido }
+        '404': { description: Caso inexistente }
+        '409': { description: Caso cerrado o asignado a otra persona }
+        '422': { description: Falta el motivo o no cumple el mínimo de diez caracteres }
+  /admin/reports/{id}/priority:
+    patch:
+      tags: [Admin]
+      summary: Cambia la prioridad del caso, recalcula el plazo SLA y registra auditoría
+      description: No cambia el estado ni la asignación. Un moderador distinto del responsable no puede cambiar la prioridad de un caso asignado.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: string, enum: [low, normal, high, urgent] }
+      responses:
+        '200': { description: Prioridad guardada; devuelve estado/asignación y SLA recalculado }
+        '403': { description: Permiso reports.manage requerido }
+        '409': { description: Caso asignado a otro moderador }
+        '422': { description: Prioridad inválida }
+  /admin/security/alerts:
+    get:
+      tags: [Admin]
+      summary: Lista señales internas explicables que requieren revisión humana
+      description: >-
+        Detecta tres o más reportes del mismo recurso en una ventana móvil de 24 horas. La señal no confirma fraude ni provoca una suspensión automática. Solo expone identificadores del recurso y conteos agregados, sin datos del reportante.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, reviewing, resolved, dismissed] }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Página de señales abiertas o de los estados solicitados
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedRiskAlerts' }
+        '403': { description: Permiso security.alerts.view requerido }
+        '422': { description: Filtros no válidos }
+  /admin/security/alerts/{id}:
+    put:
+      tags: [Admin]
+      summary: Asigna, resuelve o descarta una señal con una nota auditada
+      description: >-
+        Las transiciones son open→reviewing/dismissed y reviewing→resolved/dismissed. Una señal asignada solo puede actualizarla su persona responsable. Ninguna transición suspende al productor automáticamente.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, resolution_note]
+              properties:
+                status: { type: string, enum: [reviewing, resolved, dismissed] }
+                resolution_note: { type: string, minLength: 10, maxLength: 1000 }
+      responses:
+        '200': { description: Estado, responsable y nota auditados }
+        '403': { description: Permiso security.alerts.manage requerido }
+        '409': { description: Transición no permitida o señal asignada a otro moderador }
+        '422': { description: Nota o estado no válido }
+  /admin/producers/assisted:
+    post:
+      tags: [Admin]
+      summary: Registra a un productor con su autorización y atribuye al operador
+      description: Requiere sesión interna autenticada, MFA confirmado y permiso producers.assist. El servidor fuerza el registro asistido, valida autorización y consentimientos, y no confía en registration_method enviado por el cliente. El operador conserva su sesión; el productor queda pendiente y debe verificar su teléfono antes de publicar.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, public_name, location_id, phone, terms_version, privacy_version, producer_authorized, terms_confirmed, privacy_confirmed]
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 12, writeOnly: true }
+                public_name: { type: string, maxLength: 120 }
+                activity: { type: string, maxLength: 120 }
+                location_id: { type: integer, description: ID de localidad con jerarquía de padres activa y niveles provincia/distrito/corregimiento válidos }
+                phone: { type: string, maxLength: 40, description: Ocho dígitos locales de Panamá o número internacional con prefijo. Se normaliza a E.164 antes de guardar. }
+                terms_version: { type: string }
+                privacy_version: { type: string }
+                producer_authorized: { type: boolean, const: true }
+                terms_confirmed: { type: boolean, const: true }
+                privacy_confirmed: { type: boolean, const: true }
+      responses:
+        '201': { description: Productor creado; operador, autorización y consentimientos atribuidos }
+        '401': { description: Sesión ausente }
+        '403': { description: MFA no confirmado o permiso producers.assist requerido }
+        '422': { description: Datos, ubicación o consentimientos no válidos }
+  /admin/producers:
+    get:
+      tags: [Admin]
+      summary: Busca productores con perfil y publicaciones contadas para apoyo, moderación o revisión de confianza
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, active, suspended] }
+      responses:
+        '200': { description: Productores paginados; cuentas y correos se omiten para el permiso producers.verify dedicado }
+        '403': { description: Se requiere producers.assist, producers.suspend o producers.verify }
+  /admin/producers/{id}:
+    get:
+      tags: [Admin]
+      summary: Consulta ficha administrativa, verificación y trazabilidad de un productor
+      description: Requiere MFA y permiso producers.assist, producers.suspend o producers.verify. Para producers.verify se omiten los datos de cuenta de la lista. Omite teléfono privado, código/hash de verificación y evidencia privada.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Perfil, nivel/fecha de verificación, consentimientos versionados, resumen de publicaciones e historial auditado }
+        '403': { description: Se requiere producers.assist, producers.suspend o producers.verify }
+        '404': { description: Perfil inexistente }
+  /admin/producers/{id}/status:
+    put:
+      tags: [Admin]
+      summary: Suspende con producers.suspend o activa con producers.assist; al reactivar devuelve ofertas publicadas a revisión y audita los cambios
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile_status, reason]
+              properties:
+                profile_status: { type: string, enum: [active, suspended] }
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Estado actualizado y auditado; al reactivar, data.products_queued_for_review indica cuántas ofertas pasaron a revisión }
+        '403': { description: Suspender requiere producers.suspend; activar requiere producers.assist }
+        '409': { description: El perfil ya tiene el estado solicitado }
+  /admin/producers/{id}/trust-level:
+    put:
+      tags: [Admin]
+      summary: Actualiza el nivel de revisión manual de un productor
+      description: Requiere MFA y producers.verify. Exige teléfono verificado y registra actor, nivel anterior/nuevo y motivo en el historial interno y bitácora. No acepta ni conserva documentos de identidad.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level, reason]
+              properties:
+                level: { type: string, enum: [contact_confirmed, identity_reviewed, producer_validated] }
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Nivel actualizado; devuelve el nivel y la etiqueta pública }
+        '403': { description: Se requiere producers.verify }
+        '409': { description: El perfil ya tiene el nivel solicitado }
+        '422': { description: Falta confirmar el teléfono o seguir la secuencia de revisión }
+  /admin/producer-appeals:
+    get:
+      tags: [Admin]
+      summary: Lista apelaciones pendientes de revisión humana
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Apelaciones pendientes con motivo de suspensión, solicitud y conteo de ofertas publicadas del productor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        reason: { type: string }
+                        status: { type: string, enum: [pending] }
+                        submitted_at: { type: string, format: date-time }
+                        published_products_count: { type: integer, minimum: 0 }
+                        producer:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            public_name: { type: string }
+                            slug: { type: string }
+                            profile_status: { type: string, enum: [suspended] }
+                            suspension_reason: { type: [string, 'null'] }
+                        submitter:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            name: { type: string }
+        '403': { description: Permiso producers.appeals.manage requerido }
+  /admin/producer-appeals/{id}:
+    put:
+      tags: [Admin]
+      summary: Acepta la apelación y restablece el perfil o confirma la suspensión
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, resolution_note]
+              properties:
+                decision: { type: string, enum: [reinstated, upheld] }
+                resolution_note: { type: string, minLength: 10, maxLength: 1000 }
+      responses:
+        '200':
+          description: Resolución y cambios de perfil auditados; al aceptar, las ofertas publicadas pasan a revisión humana y la respuesta incluye el conteo actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [id, status, producer_profile_status, products_queued_for_review]
+                    properties:
+                      id: { type: integer }
+                      status: { type: string, enum: [reinstated, upheld] }
+                      producer_profile_status: { type: string, enum: [active, suspended] }
+                      products_queued_for_review: { type: integer, minimum: 0 }
+        '403': { description: Permiso producers.appeals.manage requerido }
+        '409': { description: Apelación ya resuelta o perfil ya no suspendido }
+  /admin/categories:
+    get:
+      tags: [Admin]
+      summary: Lista categorías con publicaciones asociadas
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Categorías administrativas }
+        '403': { description: Permiso catalogs.manage requerido }
+    post:
+      tags: [Admin]
+      summary: Crea una categoría o subcategoría
+      description: Una categoría puede ser raíz o depender de una raíz activa. La jerarquía admite como máximo una subcategoría.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Categoría creada y auditada }
+        '422': { description: Padre inactivo, propio o con profundidad inválida }
+        '403': { description: Permiso catalogs.manage requerido }
+  /admin/locations:
+    get:
+      tags: [Admin]
+      summary: Lista ubicaciones jerárquicas administrativas
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Ubicaciones administrativas }
+        '403': { description: Permiso catalogs.manage requerido }
+    post:
+      tags: [Admin]
+      summary: Crea una ubicación respetando su nivel padre
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminLocationWrite' }
+      responses:
+        '201': { description: Ubicación creada y auditada }
+        '422': { description: Nombre duplicado en el mismo nivel, padre incompatible o slug no único }
+        '403': { description: Permiso catalogs.manage requerido }
+  /admin/analytics:
+    get:
+      tags: [Admin]
+      summary: Devuelve conteos agregados para la operación
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Conteos agregados y tiempo medio hasta primera decisión humana para publicaciones decididas en los últimos 30 días
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminMetricsResponse' }
+        '403': { description: Permiso analytics.view requerido }
+  /admin/metrics:
+    get:
+      tags: [Admin]
+      summary: Devuelve conteos agregados para la operación
+      deprecated: true
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Conteos agregados y tiempo medio hasta primera decisión humana para publicaciones decididas en los últimos 30 días
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminMetricsResponse' }
+        '403': { description: Permiso analytics.view requerido }
+  /admin/analytics/export.csv:
+    get:
+      tags: [Admin]
+      summary: Descarga métricas operativas agregadas en CSV
+      description: Exporta conteos por estado, periodo y tiempo medio agregado hasta primera decisión humana. No contiene datos personales ni términos de búsqueda. Requiere MFA y analytics.view.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Archivo CSV UTF-8 de métricas agregadas
+          content:
+            text/csv:
+              schema: { type: string }
+        '403': { description: Permiso analytics.view requerido }
+  /admin/metrics/export.csv:
+    get:
+      tags: [Admin]
+      summary: Descarga métricas operativas agregadas en CSV
+      description: Exporta conteos por estado, periodo y tiempo medio agregado hasta primera decisión humana. No contiene datos personales ni términos de búsqueda. Requiere MFA y analytics.view.
+      deprecated: true
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Archivo CSV UTF-8 de métricas agregadas
+          content:
+            text/csv:
+              schema: { type: string }
+        '403': { description: Permiso analytics.view requerido }
+  /admin/audit:
+    get:
+      tags: [Admin]
+      summary: Consulta eventos de auditoría paginados
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Eventos con actor y motivo }
+        '403': { description: Permiso audit.view requerido }
+  /admin/categories/{id}:
+    put:
+      tags: [Admin]
+      summary: Actualiza o reactiva una categoría
+      description: Permite nombre, estado y padre. La jerarquía admite una sola subcategoría; un padre debe estar activo. No se desactivan categorías con ofertas o hijas.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Categoría actualizada y auditada }
+        '422': { description: Jerarquía inválida o dependencias impiden el cambio }
+        '403': { description: Permiso catalogs.manage requerido }
+    delete:
+      tags: [Admin]
+      summary: Desactiva una categoría sin borrar historial
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Categoría desactivada }
+        '409': { description: La categoría aún tiene ofertas asociadas }
+  /admin/locations/{id}:
+    put:
+      tags: [Admin]
+      summary: Actualiza o reactiva una ubicación conservando jerarquía
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminLocationWrite' }
+      responses:
+        '200': { description: Ubicación actualizada y auditada }
+        '422': { description: Nombre duplicado en el mismo nivel, padre inactivo o incompatible, slug no único o dependencias impiden el cambio }
+        '403': { description: Permiso catalogs.manage requerido }
+    delete:
+      tags: [Admin]
+      summary: Desactiva una ubicación sin borrar historial
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Ubicación desactivada }
+        '409': { description: La ubicación tiene perfiles o dependencias }
+  /admin/roles:
+    get:
+      tags: [Admin]
+      summary: Lista roles que el actor puede administrar
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Roles y permisos; admin no recibe los roles críticos admin/super_admin }
+        '403': { description: Solo administradores }
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Lista cuentas y roles para administración autorizada
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200': { description: Cuentas paginadas con roles, sin credenciales }
+        '403': { description: Permiso users.manage requerido }
+  /admin/users/{id}/roles:
+    put:
+      tags: [Admin]
+      summary: Reemplaza roles de una cuenta y registra auditoría
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles, reason]
+              properties:
+                roles: { type: array, minItems: 1, items: { type: string } }
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        '200': { description: Roles reemplazados y auditados }
+        '403': { description: Permiso users.manage requerido; solo super_admin puede asignar o modificar admin/super_admin }
+        '422': { description: Datos no válidos, intento de retirar el último superadministrador o de auto-retirarse como último superadministrador }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: marketplace-solidario-session
+      description: Cookie derivada de APP_NAME=Marketplace Solidario en Compose de producción; cambia si SESSION_COOKIE se sobrescribe.
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Slug:
+      in: path
+      name: slug
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9-]+$' }
+  schemas:
+    AdminMetricsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [producers, products, reports_open, contact_intentions_30d, searches_without_results_30d, moderation_decisions_30d, average_moderation_hours_30d]
+          properties:
+            producers: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+            products: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+            reports_open: { type: integer, minimum: 0 }
+            contact_intentions_30d: { type: integer, minimum: 0 }
+            searches_without_results_30d: { type: integer, minimum: 0 }
+            moderation_decisions_30d: { type: integer, minimum: 0, description: Decisiones humanas tomadas en los últimos 30 días para publicaciones enviadas a revisión. }
+            average_moderation_hours_30d: { type: [number, 'null'], minimum: 0, description: Promedio de horas desde el evento más reciente de envío a revisión hasta la primera decisión humana; null cuando no hay decisiones con historial completo. }
+    ProductStatus:
+      type: string
+      enum: [draft, pending, changes_requested, published, paused, sold_out, rejected, suspended, withdrawn]
+    Product:
+      type: object
+      description: Oferta públicamente disponible; solo se devuelve cuando el estado, vigencia, existencias, categoría, perfil activo y teléfono verificado cumplen las reglas del catálogo.
+      required: [id, slug, title, description, category, unit, delivery_method, status, producer, images]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        unit: { type: string }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        price_type: { type: string, enum: [fixed, from, contact] }
+        price_amount: { type: [number, 'null'], minimum: 0, description: Debe ser null cuando price_type es contact; en fixed/from se requiere un monto. }
+        currency: { type: [string, 'null'], enum: [USD, PAB, null] }
+        stock_quantity: { type: [number, 'null'], minimum: 0 }
+        delivery_method: { type: string, maxLength: 120 }
+        producer: { $ref: '#/components/schemas/ProducerSummary' }
+        images: { type: array, maxItems: 5, items: { $ref: '#/components/schemas/ProductImage' } }
+        published_at: { type: [string, 'null'], format: date-time }
+    ProductWrite:
+      type: object
+      required: [title, category_id, description, unit, delivery_method]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        category_id: { type: integer }
+        description: { type: string, minLength: 20, maxLength: 3000 }
+        unit: { type: string, maxLength: 40 }
+        price_type: { type: string, enum: [fixed, from, contact] }
+        price_amount: { type: [number, 'null'], minimum: 0, description: Debe ser null cuando price_type es contact; en fixed/from se requiere un monto. }
+        currency: { type: string, enum: [USD, PAB] }
+        stock_quantity: { type: [number, 'null'], minimum: 0 }
+        delivery_method: { type: string, maxLength: 120 }
+        images: { type: array, minItems: 1, maxItems: 5, items: { type: string, format: binary } }
+        remove_image_ids: { type: array, maxItems: 5, items: { type: integer }, description: IDs de fotografías propias que se retirarán al editar; debe permanecer al menos una imagen }
+        reason: { type: string, minLength: 5, maxLength: 1000, description: Obligatorio al editar una oferta publicada, pausada o agotada; queda en el historial y auditoría de la transición a revisión }
+    ProducerProduct:
+      type: object
+      required: [id, title, slug, status, listing_expired, listing_expires_at]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        slug: { type: string }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        listing_expired: { type: boolean, description: Indica si la oferta publicada superó la vigencia configurada }
+        listing_expires_at: { type: [string, 'null'], format: date-time, description: Fecha calculada de expiración; null cuando la expiración está desactivada o no hay fecha de publicación }
+        latest_moderation_decision: { oneOf: [{ $ref: '#/components/schemas/ModerationFeedback' }, { type: 'null' }] }
+    ModerationFeedback:
+      type: object
+      required: [from_status, to_status, reason, created_at]
+      properties:
+        from_status: { $ref: '#/components/schemas/ProductStatus' }
+        to_status: { type: string, enum: [changes_requested, rejected] }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+        created_at: { type: string, format: date-time }
+    ProductImage:
+      type: object
+      required: [id, url, thumbnail_url, alt_text, position]
+      properties:
+        id: { type: integer }
+        url: { type: string, format: uri }
+        thumbnail_url: { type: string, format: uri, description: Variante derivada de hasta 480 px; usa la misma autorización que la imagen original y equivale a url para fotografías anteriores a esta migración. }
+        alt_text: { type: [string, 'null'], maxLength: 160 }
+        position: { type: integer, minimum: 0, maximum: 4 }
+    ProducerPublic:
+      type: object
+      required: [id, slug, public_name, location, products]
+      properties:
+        id: { type: integer, description: Identificador numérico público del perfil }
+        slug: { type: string }
+        public_name: { type: string }
+        activity: { type: [string, 'null'] }
+        contact_level: { type: string, enum: [contact_confirmed, identity_reviewed, producer_validated, unverified] }
+        phone_public: { type: [string, 'null'], pattern: '^\\+[1-9][0-9]{7,14}$', description: Número E.164 válido y confirmado; se omite si no puede normalizarse. }
+        location: { $ref: '#/components/schemas/Location' }
+        products: { type: array, items: { $ref: '#/components/schemas/Product' } }
+    ProducerSummary:
+      type: object
+      required: [id, slug, public_name, contact_level, location]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        public_name: { type: string }
+        activity: { type: [string, 'null'] }
+        contact_level: { type: string, enum: [contact_confirmed, identity_reviewed, producer_validated, unverified] }
+        phone_public: { type: [string, 'null'], pattern: '^\\+[1-9][0-9]{7,14}$', description: Número E.164 válido y confirmado; se omite si no puede normalizarse. }
+        location: { $ref: '#/components/schemas/Location' }
+    Category:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        parent_id: { type: [integer, 'null'] }
+    Location:
+      type: object
+      description: Slug de filtro estable para esta localidad. En localidades inferiores incluye el nombre del padre vigente al crearse; los cambios posteriores de nombre o padre no regeneran el slug.
+      required: [id, name, slug, level, parent_id]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        level: { type: string, enum: [province, district, corregimiento] }
+        parent_id: { type: [integer, 'null'] }
+        parent:
+          oneOf:
+            - $ref: '#/components/schemas/Location'
+            - type: 'null'
+    AdminLocationWrite:
+      type: object
+      required: [name, level, parent_id, active]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        level: { type: string, enum: [province, district, corregimiento] }
+        parent_id: { type: [integer, 'null'], minimum: 1, description: Obligatorio como campo; debe ser null para provincia y una ubicación activa del nivel superior para distrito/corregimiento. }
+        active: { type: boolean }
+    PaginatedProducts:
+      type: object
+      required: [data, current_page, last_page, per_page, total]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    PaginatedModerationQueue:
+      type: object
+      required: [data, current_page, last_page, per_page, total]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ModerationQueueItem' }
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    ModerationQueueItem:
+      type: object
+      required: [id, title, description, unit, status, category, producer, images]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        status: { type: string, const: pending }
+        category:
+          type: object
+          required: [id, name, active, parent]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            active: { type: boolean }
+            parent:
+              oneOf:
+                - type: object
+                  required: [id, active]
+                  properties:
+                    id: { type: integer }
+                    active: { type: boolean }
+                - type: 'null'
+        producer:
+          type: object
+          required: [id, public_name, profile_status, contact_verified]
+          properties:
+            id: { type: integer }
+            public_name: { type: string }
+            profile_status: { type: string, enum: [pending, active, suspended] }
+            contact_verified: { type: boolean, description: Derivado de phone_verified_at; no expone el teléfono ni la fecha privada de verificación. }
+        images:
+          type: array
+          items:
+            type: object
+            required: [id, alt_text, position, is_public, url]
+            properties:
+              id: { type: integer }
+              alt_text: { type: [string, 'null'] }
+              position: { type: integer, minimum: 0, maximum: 4 }
+              is_public: { type: boolean }
+              url: { type: string, format: uri, description: URL de acceso privado de moderación; requiere permiso products.review. }
+    PaginatedReportCases:
+      type: object
+      required: [data, current_page, last_page, per_page, total]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ReportCase' }
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    ReportCase:
+      type: object
+      required: [id, public_reference, resource_type, resource_id, reason_code, description, status, priority, sla_due_at, sla_overdue, created_at, evidence, assignee]
+      properties:
+        id: { type: integer }
+        public_reference: { type: string }
+        resource_type: { type: string, enum: [product, producer] }
+        resource_id: { type: integer }
+        reason_code: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [new, reviewing, resolved, dismissed] }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        assignee_id: { type: [integer, 'null'] }
+        assignee: { oneOf: [{ $ref: '#/components/schemas/StaffSummary' }, { type: 'null' }] }
+        sla_due_at: { type: [string, 'null'], format: date-time }
+        sla_overdue: { type: boolean }
+        created_at: { type: string, format: date-time }
+        evidence: { type: array, items: { $ref: '#/components/schemas/ReportEvidence' } }
+    ReportEvidence:
+      type: object
+      required: [id, mime_type, size_bytes, created_at]
+      properties:
+        id: { type: integer }
+        mime_type: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        size_bytes: { type: integer, minimum: 1, maximum: 5242880 }
+        created_at: { type: string, format: date-time }
+    PaginatedRiskAlerts:
+      type: object
+      required: [data, current_page, last_page, per_page, total]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/RiskAlert' }
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    RiskAlert:
+      type: object
+      required: [id, signal_type, resource_type, resource_id, severity, explanation, evidence, status, assignee_id, assignee, first_seen_at, last_seen_at]
+      properties:
+        id: { type: integer }
+        signal_type: { type: string }
+        resource_type: { type: string, enum: [product, producer] }
+        resource_id: { type: integer }
+        severity: { type: string, enum: [warning] }
+        explanation: { type: string }
+        evidence: { type: object, additionalProperties: true, description: Evidencia explicable agregada; nunca contiene datos del reportante. }
+        status: { type: string, enum: [open, reviewing, resolved, dismissed] }
+        assignee_id: { type: [integer, 'null'] }
+        assignee: { oneOf: [{ $ref: '#/components/schemas/StaffSummary' }, { type: 'null' }] }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+    StaffSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }

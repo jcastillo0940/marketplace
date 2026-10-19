@@ -1,0 +1,34 @@
+:root {
+  --color-primary: #003399;
+  --color-secondary: #1649b8;
+  --color-accent: #ffd400;
+  --color-background: #f3f6fc;
+  --color-surface: #ffffff;
+  --color-text: #18243a;
+  --color-ink: var(--color-text);
+  --color-paper: var(--color-background);
+  --color-muted: #66748d;
+  --color-border: #d6dfef;
+  --color-success: #1649b8;
+  --color-warning: #8b5b0b;
+  --color-danger: #9f3530;
+  --color-focus: #1649b8;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --radius-sm: 0.45rem;
+  --radius-md: 0.8rem;
+  --radius-control: var(--radius-md);
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+  --space-page-max: 78rem;
+  --space-section-gap: 3.5rem;
+  --space-control-height: 2.9rem;
+  --scroll-track: #f3f6fc;
+  --scroll-thumb: #b6c5df;
+  --scroll-thumb-hover: #8097bd;
+}
+
+@media (forced-colors: active) {
+  :focus-visible { outline: 2px solid Highlight; }
+  button, a, input, select, textarea { forced-color-adjust: auto; }
+}

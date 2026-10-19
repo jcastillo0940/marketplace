@@ -1,0 +1,297 @@
+erDiagram
+  USERS ||--o| PRODUCER_PROFILES : owns
+  USERS ||--o{ USER_ROLES : assigned
+  ROLES ||--o{ USER_ROLES : grants
+  ROLES ||--o{ ROLE_PERMISSIONS : includes
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : grants
+  USERS o|--o{ USER_ROLES : assigns
+
+  LOCATIONS o|--o{ LOCATIONS : contains
+  LOCATIONS o|--o{ PRODUCER_PROFILES : locates
+  CATEGORIES o|--o{ CATEGORIES : parent_of
+  CATEGORIES ||--o{ PRODUCTS : classifies
+  PRODUCER_PROFILES ||--o{ PRODUCER_CONSENTS : records
+  USERS o|--o{ PRODUCER_CONSENTS : records
+  USERS o|--o{ PRODUCER_PROFILES : registers
+  PRODUCER_PROFILES ||--o{ PRODUCER_APPEALS : receives
+  USERS ||--o{ PRODUCER_APPEALS : submits
+  USERS o|--o{ PRODUCER_APPEALS : reviews
+  PRODUCER_PROFILES ||--o{ PRODUCER_VERIFICATIONS : verifies
+  PRODUCER_VERIFICATIONS ||--o{ VERIFICATION_ATTEMPTS : attempts
+
+  PRODUCER_PROFILES ||--o{ PRODUCTS : publishes
+  USERS ||--o{ PRODUCTS : creates
+  PRODUCTS ||--o{ PRODUCT_IMAGES : has
+  PRODUCTS ||--o{ PRODUCT_STATUS_HISTORY : tracks
+  USERS o|--o{ PRODUCT_STATUS_HISTORY : acts
+  PRODUCTS o|--o{ CONTACT_EVENTS : receives
+  PRODUCER_PROFILES ||--o{ CONTACT_EVENTS : contacted
+
+  USERS o|--o{ REPORTS : reports
+  USERS o|--o{ REPORTS : assigned
+  REPORTS ||--o{ REPORT_EVIDENCE : contains
+  USERS o|--o{ SECURITY_EVENTS : triggers
+  USERS ||--o{ ACCOUNT_RESTRICTIONS : restricted
+  USERS o|--o{ ACCOUNT_RESTRICTIONS : imposes
+  USERS o|--o{ RISK_SIGNALS : assigned
+  USERS o|--o{ RISK_SIGNALS : reviews
+  USERS o|--o{ AUDIT_LOGS : acts
+  USERS o|--o{ MESSAGE_TEMPLATES : updates
+
+  USERS {
+    bigint id PK
+    string name
+    string email UK
+    timestamp email_verified_at
+    string password
+    text two_factor_secret
+    timestamp two_factor_confirmed_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  ROLES {
+    bigint id PK
+    string name UK
+    string display_name
+    timestamp created_at
+    timestamp updated_at
+  }
+  PERMISSIONS {
+    bigint id PK
+    string name UK
+    string description
+    timestamp created_at
+    timestamp updated_at
+  }
+  USER_ROLES {
+    bigint user_id PK, FK
+    bigint role_id PK, FK
+    bigint assigned_by FK
+    timestamp assigned_at
+  }
+  ROLE_PERMISSIONS {
+    bigint role_id PK, FK
+    bigint permission_id PK, FK
+  }
+  LOCATIONS {
+    bigint id PK
+    bigint parent_id FK
+    string level
+    string name
+    string slug UK
+    boolean active
+    timestamp created_at
+    timestamp updated_at
+  }
+  CATEGORIES {
+    bigint id PK
+    bigint parent_id FK
+    string name
+    string slug UK
+    boolean active
+    smallint position
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCER_PROFILES {
+    bigint id PK
+    bigint user_id FK, UK
+    bigint registered_by FK
+    string registration_method
+    bigint location_id FK
+    string slug UK
+    string public_name
+    string activity
+    string phone_private
+    string phone_public
+    timestamp phone_verified_at
+    string contact_level
+    string profile_status
+    text description
+    text suspension_reason
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCER_CONSENTS {
+    bigint id PK
+    bigint producer_profile_id FK
+    string consent_type
+    string version
+    timestamp accepted_at
+    bigint recorded_by FK
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCER_APPEALS {
+    bigint id PK
+    bigint producer_profile_id FK
+    bigint submitted_by FK
+    bigint reviewed_by FK
+    text reason
+    string status
+    text resolution_note
+    timestamp submitted_at
+    timestamp reviewed_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCER_VERIFICATIONS {
+    bigint id PK
+    bigint producer_profile_id FK
+    string channel
+    string status
+    string code_hash
+    timestamp verified_at
+    timestamp expires_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  VERIFICATION_ATTEMPTS {
+    bigint id PK
+    bigint producer_verification_id FK
+    string result
+    timestamp attempted_at
+  }
+  PRODUCTS {
+    bigint id PK
+    bigint producer_profile_id FK
+    bigint category_id FK
+    bigint created_by FK
+    string slug UK
+    string title
+    text description
+    string unit
+    string price_type
+    decimal price_amount
+    string currency
+    decimal stock_quantity
+    string delivery_method
+    string status
+    timestamp published_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCT_IMAGES {
+    bigint id PK
+    bigint product_id FK
+    string disk
+    string path
+    string thumbnail_path
+    string alt_text
+    tinyint position
+    boolean is_public
+    timestamp created_at
+    timestamp updated_at
+  }
+  PRODUCT_STATUS_HISTORY {
+    bigint id PK
+    bigint product_id FK
+    bigint actor_id FK
+    string from_status
+    string to_status
+    text reason
+    timestamp created_at
+    timestamp updated_at
+  }
+  CONTACT_EVENTS {
+    bigint id PK
+    bigint product_id FK
+    bigint producer_profile_id FK
+    string channel
+    string dedupe_key UK
+    timestamp occurred_at
+  }
+  SEARCH_EVENTS {
+    bigint id PK
+    json filters
+    timestamp occurred_at
+  }
+  REPORTS {
+    bigint id PK
+    uuid public_reference UK
+    bigint reporter_id FK
+    bigint assignee_id FK
+    string resource_type
+    bigint resource_id
+    string reason_code
+    text description
+    string contact_email
+    string status
+    string priority
+    timestamp resolved_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  REPORT_EVIDENCE {
+    bigint id PK
+    bigint report_id FK
+    string private_disk
+    string private_path
+    string mime_type
+    bigint size_bytes
+    timestamp created_at
+    timestamp updated_at
+  }
+  SECURITY_EVENTS {
+    bigint id PK
+    bigint user_id FK
+    string event_type
+    string severity
+    json metadata
+    timestamp created_at
+  }
+  ACCOUNT_RESTRICTIONS {
+    bigint id PK
+    bigint user_id FK
+    bigint imposed_by FK
+    string restriction_type
+    text reason
+    timestamp starts_at
+    timestamp ends_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  RISK_SIGNALS {
+    bigint id PK
+    string signal_key UK
+    string signal_type
+    string resource_type
+    bigint resource_id
+    string severity
+    text explanation
+    json evidence
+    string status
+    bigint assignee_id FK
+    bigint reviewed_by FK
+    text resolution_note
+    timestamp reviewed_at
+    timestamp closed_at
+    timestamp first_seen_at
+    timestamp last_seen_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  AUDIT_LOGS {
+    bigint id PK
+    bigint actor_id FK
+    string action
+    string resource_type
+    bigint resource_id
+    json before_values
+    json after_values
+    text reason
+    timestamp created_at
+  }
+  MESSAGE_TEMPLATES {
+    bigint id PK
+    string key UK
+    text body
+    int version
+    bigint updated_by FK
+    timestamp created_at
+    timestamp updated_at
+  }
+
+%% Polymorphic resource_type/resource_id on reports, risk_signals and audit_logs are not FK constraints.
+%% Laravel infrastructure tables (sessions, cache, jobs, password_reset_tokens, personal_access_tokens) are omitted.
+%% No moderation_actions table exists; product moderation status is recorded in product_status_history and audit_logs.

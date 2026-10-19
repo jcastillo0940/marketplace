@@ -1,0 +1,127 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    working_dir: /var/www/html
+    command: sh -c "composer install --no-interaction && php -S 0.0.0.0:8000 -t public docker-server.php"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:${APP_PORT:-8000}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-marketplace}
+      DB_USERNAME: ${DB_USERNAME:-marketplace}
+      DB_PASSWORD: ${DB_PASSWORD:-marketplace_local}
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      SESSION_LIFETIME: ${SESSION_LIFETIME:-120}
+      SESSION_ENCRYPT: ${SESSION_ENCRYPT:-true}
+      SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-false}
+      SESSION_HTTP_ONLY: "true"
+      SESSION_SAME_SITE: lax
+      QUEUE_CONNECTION: redis
+      FILESYSTEM_DISK: local
+      MEDIA_FILESYSTEM_DISK: ${MEDIA_FILESYSTEM_DISK:-local}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FRONTEND_URL: http://localhost:${WEB_PORT:-5173}
+      SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:5173,127.0.0.1:5173,localhost:8000,127.0.0.1:8000}
+      CONTACT_VERIFICATION_DEV_CODE: ${CONTACT_VERIFICATION_DEV_CODE:-}
+      CONTACT_VERIFICATION_DRIVER: ${CONTACT_VERIFICATION_DRIVER:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      REPORT_SLA_URGENT_HOURS: ${REPORT_SLA_URGENT_HOURS:-4}
+      REPORT_SLA_HIGH_HOURS: ${REPORT_SLA_HIGH_HOURS:-24}
+      REPORT_SLA_NORMAL_HOURS: ${REPORT_SLA_NORMAL_HOURS:-72}
+      REPORT_SLA_LOW_HOURS: ${REPORT_SLA_LOW_HOURS:-168}
+      LISTING_TTL_DAYS: ${LISTING_TTL_DAYS:-90}
+      MFA_ACCOUNT_ATTEMPTS: ${MFA_ACCOUNT_ATTEMPTS:-10}
+      MFA_ACCOUNT_WINDOW_SECONDS: ${MFA_ACCOUNT_WINDOW_SECONDS:-900}
+      MFA_IP_ATTEMPTS: ${MFA_IP_ATTEMPTS:-30}
+      MFA_IP_WINDOW_SECONDS: ${MFA_IP_WINDOW_SECONDS:-900}
+    volumes:
+      - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+      - backend_private_media:/var/www/html/storage/app/private
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+      SITEMAP_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./frontend:/app
+      - ./docs:/docs:ro
+      - ./DESIGN.md:/DESIGN.md:ro
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  mysql:
+    image: mysql:8.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-marketplace}
+      MYSQL_USER: ${DB_USERNAME:-marketplace}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-marketplace_local}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_local_only}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  mysql_data:
+  redis_data:
+  frontend_node_modules:
+  backend_vendor:
+  backend_private_media:

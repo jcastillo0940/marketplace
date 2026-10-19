@@ -1,0 +1,9 @@
+services:
+  api:
+    environment:
+      MYSQL_ATTR_SSL_CA: /run/secrets/mysql-ca.pem
+    volumes:
+      - type: bind
+        source: ${MYSQL_CA_FILE:?Set MYSQL_CA_FILE to the managed MySQL CA certificate path}
+        target: /run/secrets/mysql-ca.pem
+        read_only: true

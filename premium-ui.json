@@ -1,0 +1,9 @@
+{
+  "profile": "marketplace-react",
+  "sourceRoots": ["frontend/src"],
+  "locale": "es-PA",
+  "canonicalMap": "UX-CONTRACT.md",
+  "ownership": {
+    "Select/Listbox": "native"
+  }
+}

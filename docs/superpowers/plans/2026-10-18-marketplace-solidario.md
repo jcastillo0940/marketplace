@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-18-marketplace-solidario-design.md`
 
+## Current implementation status (2026-10-19)
+
+This plan records the original implementation sequence; its task checkboxes are not a live completion signal. The repository now contains the Laravel/React/Docker marketplace flows and the supporting security, operations and Trust & Safety work. Evidence and remaining phase gates are maintained in [`docs/operations/registro-riesgos-y-fases.md`](../../operations/registro-riesgos-y-fases.md), while executable acceptance scenarios and their staging status live in [`docs/uat/plan-piloto.md`](../../uat/plan-piloto.md). Do not mark a historical task complete from code presence alone: tests, CI, provider behavior and business acceptance require their own evidence. Current static checks are run per change; staging UAT, production deployment, external security review, operational ownership and G0–G6 decisions remain open as listed in the phase register.
+
 ## Global Constraints
 
 - Buyers browse and contact without an account.
@@ -49,19 +53,19 @@
 
 **Files:** root Docker/README/env files; `backend/` Laravel 13 scaffold; `frontend/` React + TypeScript scaffold; root ignore/security defaults.
 
-- [ ] Create Laravel 13 and React TypeScript applications with locked dependencies and separate health endpoints.
-- [ ] Configure Compose for API/PHP, web, MySQL 8.4 and Redis, health checks, named data volumes, and no committed secrets.
-- [ ] Document clean install, migrations, seed, test, backup and restore commands in Spanish.
-- [ ] Verify clean startup, service health, and environment-variable overrides.
+- [x] Create Laravel 13 and React TypeScript applications with locked dependencies and separate health endpoints.
+- [x] Configure Compose for API/PHP, web, MySQL 8.4 and Redis, health checks, named data volumes, and no committed secrets.
+- [x] Document clean install, migrations, seed, test, backup and restore commands in Spanish.
+- [x] Verify clean startup, service health, and environment-variable overrides.
 
 ### Task 2: UX contract, design system, routes and API/domain contracts
 
 **Files:** `DESIGN.md`, `UX-CONTRACT.md`, `frontend/src/styles/tokens.css`, shared UI primitives, `docs/api/openapi.yaml`, `docs/data/erd.mmd`.
 
-- [ ] Encode spec palette/type/layout as CSS semantic tokens and create shared navigation, buttons, fields, status messages, product cards, modal, pagination and empty/error/loading states.
-- [ ] Implement route shells for public, producer and admin registers with Spanish Panama formatting and mobile-first layouts.
-- [ ] Define API schemas, pagination/filter semantics, state transitions, role matrix and ERD.
-- [ ] Run design contract lint and frontend typecheck; verify keyboard/focus/reduced-motion behavior.
+- [x] Encode spec palette/type/layout as CSS semantic tokens and create shared navigation, buttons, fields, status messages, product cards, modal, pagination and empty/error/loading states.
+- [x] Implement route shells for public, producer and admin registers with Spanish Panama formatting and mobile-first layouts.
+- [x] Define API schemas, pagination/filter semantics, state transitions, role matrix and ERD.
+- [x] Run design contract lint and frontend typecheck; verify keyboard/focus/reduced-motion behavior.
 
 ### Task 3: Laravel domain, identities, authorization and audit
 

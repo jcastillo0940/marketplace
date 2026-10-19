@@ -1,0 +1,177 @@
+services:
+  api:
+    image: ${API_IMAGE:-marketplace-api:local}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      APP_NAME: Mercado Solidario
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Set a unique Laravel APP_KEY}
+      APP_URL: ${APP_URL:?Set the canonical HTTPS application URL}
+      TRUSTED_PROXIES: "${PROXY_WEB_IP:-10.255.250.2},${EDGE_PROXY_CIDRS:-}"
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_CONNECTION: mysql
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE:?Set the production database name}
+      DB_USERNAME: ${DB_USERNAME:?Set the production database user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set the production database password}
+      MYSQL_ATTR_SSL_CA: ${MYSQL_ATTR_SSL_CA:-}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_SCHEME: ${REDIS_SCHEME:-tcp}
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique Redis password}
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      MFA_ACCOUNT_ATTEMPTS: ${MFA_ACCOUNT_ATTEMPTS:-10}
+      MFA_ACCOUNT_WINDOW_SECONDS: ${MFA_ACCOUNT_WINDOW_SECONDS:-900}
+      MFA_IP_ATTEMPTS: ${MFA_IP_ATTEMPTS:-30}
+      MFA_IP_WINDOW_SECONDS: ${MFA_IP_WINDOW_SECONDS:-900}
+      SESSION_ENCRYPT: "true"
+      SESSION_SECURE_COOKIE: "true"
+      SESSION_HTTP_ONLY: "true"
+      SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
+      QUEUE_CONNECTION: redis
+      FILESYSTEM_DISK: local
+      MEDIA_FILESYSTEM_DISK: ${MEDIA_FILESYSTEM_DISK:-s3}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_BUCKET: ${AWS_BUCKET:-}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-}
+      AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-false}
+      FRONTEND_URL: ${FRONTEND_URL:?Set the canonical HTTPS frontend origin}
+      MAIL_MAILER: smtp
+      MAIL_HOST: ${MAIL_HOST:?Set the production SMTP host}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+      MAIL_USERNAME: ${MAIL_USERNAME:?Set the production SMTP username}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?Set the production SMTP password}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set the verified production sender address}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Marketplace Solidario}
+      SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:?Set the approved stateful hostnames}
+      CONTACT_VERIFICATION_DRIVER: twilio
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:?Set the production Twilio account SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:?Set the production Twilio auth token}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:?Set the production Twilio sender}
+      REPORT_SLA_URGENT_HOURS: ${REPORT_SLA_URGENT_HOURS:-4}
+      REPORT_SLA_HIGH_HOURS: ${REPORT_SLA_HIGH_HOURS:-24}
+      REPORT_SLA_NORMAL_HOURS: ${REPORT_SLA_NORMAL_HOURS:-72}
+      REPORT_SLA_LOW_HOURS: ${REPORT_SLA_LOW_HOURS:-168}
+      LISTING_TTL_DAYS: ${LISTING_TTL_DAYS:-90}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      private: {}
+      proxy:
+        ipv4_address: ${PROXY_API_IP:-10.255.250.3}
+    volumes:
+      - backend_private_media:/var/www/html/storage/app/private
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",9000); exit($$s ? 0 : 1);'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/www/html/storage/framework/cache/data:size=16m,uid=33,gid=33,mode=0700
+      - /var/www/html/storage/framework/sessions:size=16m,uid=33,gid=33,mode=0700
+      - /var/www/html/storage/framework/views:size=16m,uid=33,gid=33,mode=0700
+      - /var/www/html/bootstrap/cache:size=4m,uid=33,gid=33,mode=0700
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    image: ${WEB_IMAGE:-marketplace-web:local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      proxy:
+        ipv4_address: ${PROXY_WEB_IP:-10.255.250.2}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/api/ready | grep -q '\"status\":\"ready\"'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  mysql:
+    image: mysql:8.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:?Set the production database name}
+      MYSQL_USER: ${DB_USERNAME:?Set the production database user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set the production database password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set a unique MySQL root password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+    networks:
+      - private
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set a unique Redis password}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique Redis password}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - private
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mysql_data:
+  redis_data:
+  backend_private_media:
+
+networks:
+  private:
+    driver: bridge
+  proxy:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${PROXY_NETWORK_SUBNET:-10.255.250.0/29}
