@@ -805,6 +805,7 @@ export function AccessPage({ title, description }: { title: string; description:
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
+  const [regCedula, setRegCedula] = useState('')
   const [regPublicName, setRegPublicName] = useState('')
   const [regActivity, setRegActivity] = useState('')
   const [regPhone, setRegPhone] = useState('')
@@ -834,7 +835,7 @@ export function AccessPage({ title, description }: { title: string; description:
   async function submitRegistration() {
     setRegSubmitting(true)
     setFormMessage('')
-    const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
     try {
       const xsrf = await csrfToken()
       const response = await fetch(`${apiBase}/auth/register`, {
@@ -843,7 +844,7 @@ export function AccessPage({ title, description }: { title: string; description:
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
         body: JSON.stringify({
           name: regName, email: regEmail, password: regPassword,
-          public_name: regPublicName, activity: regActivity || null,
+          cedula: regCedula.toUpperCase(), public_name: regPublicName, activity: regActivity || null,
           phone: regPhone, location_id: regLocationId,
           terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
           terms_confirmed: '1', privacy_confirmed: '1',
@@ -863,7 +864,7 @@ export function AccessPage({ title, description }: { title: string; description:
   async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
     try {
       const xsrf = await csrfToken()
       const response = await fetch(`${apiBase}/auth/login`, {
@@ -931,9 +932,12 @@ export function AccessPage({ title, description }: { title: string; description:
                 <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(2) }}>
                   <div className="form-row-2">
                     <label>Tu nombre completo<input name="name" type="text" autoComplete="name" required value={regName} onChange={e => setRegName(e.target.value)} /></label>
-                    <label>Correo electrónico<input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /></label>
+                    <label>Cédula de identidad<input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><small>Formato: 8-123-4567. Extranjero: E-8-12345.</small></label>
                   </div>
-                  <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={12} required value={regPassword} onChange={e => setRegPassword(e.target.value)} /><small>Mínimo 12 caracteres.</small></label>
+                  <div className="form-row-2">
+                    <label>Correo electrónico<input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /></label>
+                    <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={12} required value={regPassword} onChange={e => setRegPassword(e.target.value)} /><small>Mínimo 12 caracteres.</small></label>
+                  </div>
                   <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
                   <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
                 </ValidatedForm>
@@ -973,6 +977,7 @@ export function AccessPage({ title, description }: { title: string; description:
                 <div className="auth-form reg-step-form">
                   <div className="reg-review">
                     <div className="reg-review__row"><span>Nombre</span><strong>{regName}</strong></div>
+                    <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
                     <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
                     <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
                     {regActivity && <div className="reg-review__row"><span>Actividad</span><strong>{regActivity}</strong></div>}

@@ -12,9 +12,9 @@ class ProducerProfile extends Model
 {
     use HasFactory;
 
-    protected $hidden = ['user_id', 'registered_by', 'registration_method', 'phone_private', 'phone_verified_at', 'suspension_reason'];
+    protected $hidden = ['user_id', 'registered_by', 'registration_method', 'phone_private', 'phone_verified_at', 'suspension_reason', 'cedula'];
 
-    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description'];
+    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description', 'cedula'];
 
     public function registeredBy(): BelongsTo
     {

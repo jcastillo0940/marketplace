@@ -38,6 +38,7 @@ class RegisterProducerRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:12'],
+            'cedula' => ['required', 'string', 'max:30', 'regex:/^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i'],
             'public_name' => ['required', 'string', 'max:120'],
             'activity' => ['nullable', Rule::in(collect(config('activities'))->flatten()->all())],
             'location_id' => ['required', 'integer', new ValidActiveLocationHierarchy],

@@ -53,7 +53,7 @@ class AuthController extends Controller
             $user = User::create(['name' => $data['name'], 'email' => $data['email'], 'password' => $data['password']]);
             $user->roles()->attach(Role::where('name', 'producer')->value('id'));
             $assisted = ($data['registration_method'] ?? 'self') === 'assisted';
-            $profile = ProducerProfile::create(['user_id' => $user->id, 'registered_by' => $assisted ? $operator?->id : null, 'registration_method' => $assisted ? 'assisted' : 'self', 'slug' => Str::slug($data['public_name']).'-'.Str::lower(Str::random(6)), 'public_name' => $data['public_name'], 'activity' => $data['activity'] ?? null, 'location_id' => $data['location_id'], 'phone_private' => $data['phone'], 'contact_level' => 'unverified', 'profile_status' => 'pending']);
+            $profile = ProducerProfile::create(['user_id' => $user->id, 'registered_by' => $assisted ? $operator?->id : null, 'registration_method' => $assisted ? 'assisted' : 'self', 'slug' => Str::slug($data['public_name']).'-'.Str::lower(Str::random(6)), 'public_name' => $data['public_name'], 'activity' => $data['activity'] ?? null, 'location_id' => $data['location_id'], 'phone_private' => $data['phone'], 'cedula' => strtoupper($data['cedula']), 'contact_level' => 'unverified', 'profile_status' => 'pending']);
             $profile->consents()->createMany([
                 ['consent_type' => 'terms', 'version' => config('marketplace.consent_versions.terms'), 'accepted_at' => now()],
                 ['consent_type' => 'privacy', 'version' => config('marketplace.consent_versions.privacy'), 'accepted_at' => now()],

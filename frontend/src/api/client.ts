@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 export type ContactMessageTemplates = { product: string; producer: string }
 export const DEFAULT_CONTACT_MESSAGE_TEMPLATES: ContactMessageTemplates = {
