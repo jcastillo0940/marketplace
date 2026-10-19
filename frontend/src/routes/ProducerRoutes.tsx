@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
@@ -331,7 +331,7 @@ function ProducerRoutes() {
       <Route path="/mis-productos/nuevo" element={<ProducerProductForm />} />
       <Route path="/mis-productos/:id/editar" element={<ProducerProductForm editing />} />
       <Route path="/mi-perfil" element={<ProducerProfilePage />} />
-      <Route path="/verificar" element={<ProducerProfilePage verificationOnly />} />
+      <Route path="/verificar" element={<Navigate to="/mi-perfil" replace />} />
       <Route path="*" element={<InfoPage title="No encontramos esta página" description="Revisa la dirección o vuelve al catálogo para explorar las ofertas." />} />
     </Routes>
   )

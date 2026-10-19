@@ -11,7 +11,7 @@ const AdminRoutes = lazy(() => import('./routes/AdminRoutes'))
 export default function App() {
   const { pathname } = useLocation()
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
-  const isProducer = ['/mi-panel', '/mi-perfil', '/verificar', '/mis-productos'].includes(pathname)
+  const isProducer = ['/mi-panel', '/mi-perfil', '/mis-productos'].includes(pathname)
     || pathname.startsWith('/mis-productos/')
   const Group = isAdmin ? AdminRoutes : isProducer ? ProducerRoutes : PublicRoutes
 
