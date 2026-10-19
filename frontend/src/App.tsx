@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { useLocation } from 'react-router-dom'
 import './App.css'
+import './styles/public-redesign.css'
 import { RouteGroupErrorBoundary } from './routes/RouteGroupErrorBoundary'
 import RouteLoadingState from './routes/RouteLoadingState'
 
