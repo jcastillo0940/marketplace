@@ -32,13 +32,24 @@ class RegisterProducerRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    public function messages(): array
+    {
+        return [
+            'password.min'   => 'La contraseña debe tener al menos 6 caracteres.',
+            'password.regex' => 'La contraseña debe incluir al menos una letra, un número y un carácter especial.',
+            'cedula.regex'   => 'Formato de cédula inválido. Ejemplo: 8-123-4567 o E-8-12345.',
+            'cedula.unique'  => 'Ya existe una cuenta registrada con esa cédula.',
+            'email.unique'   => 'Ya existe una cuenta registrada con ese correo electrónico.',
+        ];
+    }
+
     public function rules(): array
     {
         return [
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:12'],
-            'cedula' => ['required', 'string', 'max:30', 'regex:/^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i'],
+            'password' => ['required', 'string', 'min:6', 'regex:/^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).+$/'],
+            'cedula' => ['required', 'string', 'max:30', 'regex:/^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i', Rule::unique('producer_profiles', 'cedula')],
             'public_name' => ['required', 'string', 'max:120'],
             'activity' => ['nullable', Rule::in(collect(config('activities'))->flatten()->all())],
             'location_id' => ['required', 'integer', new ValidActiveLocationHierarchy],

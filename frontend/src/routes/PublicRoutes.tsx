@@ -641,7 +641,7 @@ export function AboutProjectPage() {
         <section className="guide-card"><span className="guide-card__step">EL MERCADO</span><h2>Ofertas de quienes producen</h2><p>Cada productor crea y mantiene sus publicaciones. El equipo revisa las ofertas antes de mostrarlas en el catálogo.</p></section>
         <section className="guide-card"><span className="guide-card__step">CONTACTO DIRECTO</span><h2>Consulta con la persona que publica</h2><p>Compradores y productores acuerdan directamente disponibilidad, precio, pago y forma de entrega.</p></section>
         <section className="guide-card guide-card--report"><span className="guide-card__step">LÍMITES DEL SERVICIO</span><h2>Sin pagos ni entregas dentro del sitio</h2><p>La plataforma no procesa pagos ni organiza entregas. Las publicaciones y los acuerdos se gestionan directamente entre comprador y productor.</p></section>
-        <section className="guide-card"><span className="guide-card__step">PUBLICACIÓN MANUAL</span><h2>La IA no es necesaria</h2><p>Los productores pueden completar perfiles y ofertas manualmente. Cualquier asistencia de IA sería opcional, revisable y contratada como una fase aparte.</p></section>
+        <section className="guide-card"><span className="guide-card__step">TU CUENTA</span><h2>Registro gratuito y directo</h2><p>Productores y emprendedores del interior de Panamá pueden crear su cuenta y publicar sus ofertas sin costo.</p></section>
       </div>
       <div className="guide-actions"><Link className="button button--primary" to="/productos">Explorar ofertas <ArrowRight size={16} /></Link><Link className="text-link" to="/seguridad">Leer consejos de seguridad <ArrowRight size={15} /></Link><Link className="text-link" to="/ayuda">Ver ayuda <ArrowRight size={15} /></Link></div>
     </GuidePage>
@@ -650,7 +650,7 @@ export function AboutProjectPage() {
 
 export function ProducerHelpPage() {
   return (
-    <GuidePage title="Publica tus productos paso a paso" intro="En esta versión completas todo manualmente. No necesitas inteligencia artificial para crear ni administrar tus publicaciones.">
+    <GuidePage title="Publica tus productos paso a paso" intro="Completa tu perfil y crea tus publicaciones directamente desde tu cuenta de productor.">
       <ol className="guide-steps">
         <li><span>1</span><div><h2>Crea tu cuenta y perfil</h2><p>Regístrate, completa tu nombre público, actividad y ubicación. Verifica tu teléfono para habilitar el contacto confirmado.</p></div></li>
         <li><span>2</span><div><h2>Prepara la oferta</h2><p>Agrega fotografías, título, categoría y una descripción clara. Indica unidad, precio si aplica, disponibilidad y detalles de entrega.</p></div></li>
@@ -802,17 +802,19 @@ export function AccessPage({ title, description }: { title: string; description:
   const [locationsRetry, setLocationsRetry] = useState(0)
   // multi-step registration state
   const [regStep, setRegStep] = useState(1)
-  const [regName, setRegName] = useState('')
+  const [regFirstName, setRegFirstName] = useState('')
+  const [regLastName, setRegLastName] = useState('')
+  const [regCedula, setRegCedula] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
-  const [regCedula, setRegCedula] = useState('')
+  const [regPhone, setRegPhone] = useState('')
   const [regPublicName, setRegPublicName] = useState('')
   const [regActivity, setRegActivity] = useState('')
-  const [regPhone, setRegPhone] = useState('')
   const [regLocationId, setRegLocationId] = useState<number | null>(null)
   const [regTerms, setRegTerms] = useState(false)
   const [regPrivacy, setRegPrivacy] = useState(false)
   const [regSubmitting, setRegSubmitting] = useState(false)
+  const [regStep1Error, setRegStep1Error] = useState('')
 
   useEffect(() => {
     if (!isRegister) return
@@ -843,7 +845,8 @@ export function AccessPage({ title, description }: { title: string; description:
         credentials: 'include',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
         body: JSON.stringify({
-          name: regName, email: regEmail, password: regPassword,
+          name: `${regFirstName.trim()} ${regLastName.trim()}`,
+          email: regEmail, password: regPassword,
           cedula: regCedula.toUpperCase(), public_name: regPublicName, activity: regActivity || null,
           phone: regPhone, location_id: regLocationId,
           terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
@@ -914,7 +917,7 @@ export function AccessPage({ title, description }: { title: string; description:
           ) : isRegister ? (
             <div className="reg-wizard">
               <nav className="reg-steps" aria-label="Pasos del registro">
-                {[['1','Tu cuenta'],['2','Emprendimiento'],['3','Ubicación'],['4','Confirmar']].map(([n, lbl]) => (
+                {[['1','Tus datos'],['2','Emprendimiento'],['3','Ubicación'],['4','Confirmar']].map(([n, lbl]) => (
                   <button key={n} type="button"
                     className={`reg-step-dot${regStep === Number(n) ? ' reg-step-dot--active' : ''}${regStep > Number(n) ? ' reg-step-dot--done' : ''}`}
                     onClick={() => { if (regStep > Number(n)) setRegStep(Number(n)) }}
@@ -929,15 +932,31 @@ export function AccessPage({ title, description }: { title: string; description:
               </nav>
 
               {regStep === 1 && (
-                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(2) }}>
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => {
+                  e.preventDefault()
+                  const hasLetter = /[a-zA-Z]/.test(regPassword)
+                  const hasNumber = /[0-9]/.test(regPassword)
+                  const hasSpecial = /[^a-zA-Z0-9]/.test(regPassword)
+                  if (!hasLetter || !hasNumber || !hasSpecial) {
+                    setRegStep1Error('La contraseña debe incluir al menos una letra, un número y un carácter especial.')
+                    return
+                  }
+                  setRegStep1Error('')
+                  setRegStep(2)
+                }}>
                   <div className="form-row-2">
-                    <label>Tu nombre completo<input name="name" type="text" autoComplete="name" required value={regName} onChange={e => setRegName(e.target.value)} /></label>
-                    <label>Cédula de identidad<input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><small>Formato: 8-123-4567. Extranjero: E-8-12345.</small></label>
+                    <label>Nombre<input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /></label>
+                    <label>Apellido<input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /></label>
                   </div>
                   <div className="form-row-2">
+                    <label>Cédula de identidad<input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><small>Ej: 8-123-4567 · Extranjero: E-8-12345</small></label>
                     <label>Correo electrónico<input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /></label>
-                    <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={12} required value={regPassword} onChange={e => setRegPassword(e.target.value)} /><small>Mínimo 12 caracteres.</small></label>
                   </div>
+                  <div className="form-row-2">
+                    <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><small>Mín. 6 caracteres con letra, número y símbolo.</small></label>
+                    <label>Teléfono de contacto<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><small>Ej: 6000-1234</small></label>
+                  </div>
+                  {regStep1Error && <p role="alert" style={{ color: 'var(--color-error, #c0392b)', fontSize: '.875rem', margin: '0' }}>{regStep1Error}</p>}
                   <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
                   <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
                 </ValidatedForm>
@@ -965,10 +984,9 @@ export function AccessPage({ title, description }: { title: string; description:
                     {!locationsLoading && !locationsError && <LocationPicker locations={registrationLocations} idPrefix="registration-location" required value={regLocationId} onChange={setRegLocationId} />}
                     <small>Elige provincia, distrito o corregimiento. No compartas una dirección exacta.</small>
                   </fieldset>
-                  <label>Teléfono de contacto<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><small>Panamá: ocho dígitos, por ejemplo 6000-1234. Para otro país incluye el prefijo internacional.</small></label>
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" onClick={() => setRegStep(2)}>Atrás</button>
-                    <button className="button button--primary" type="button" disabled={!regLocationId || !regPhone} onClick={() => setRegStep(4)}>Continuar <ArrowRight size={16} /></button>
+                    <button className="button button--primary" type="button" disabled={!regLocationId} onClick={() => setRegStep(4)}>Continuar <ArrowRight size={16} /></button>
                   </div>
                 </div>
               )}
@@ -976,19 +994,19 @@ export function AccessPage({ title, description }: { title: string; description:
               {regStep === 4 && (
                 <div className="auth-form reg-step-form">
                   <div className="reg-review">
-                    <div className="reg-review__row"><span>Nombre</span><strong>{regName}</strong></div>
+                    <div className="reg-review__row"><span>Nombre</span><strong>{regFirstName} {regLastName}</strong></div>
                     <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
                     <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
+                    <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>
                     <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
                     {regActivity && <div className="reg-review__row"><span>Actividad</span><strong>{regActivity}</strong></div>}
-                    {regPhone && <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>}
                   </div>
                   <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
                   <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
                   {formMessage && <p role="alert">{formMessage}</p>}
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" disabled={regSubmitting} onClick={() => setRegStep(3)}>Atrás</button>
-                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Registrando…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
+                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
                   </div>
                   <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
                 </div>
@@ -997,7 +1015,6 @@ export function AccessPage({ title, description }: { title: string; description:
           ) : (
             <div className="access-card__actions"><Link className="button button--primary" to="/ingresar">Ingresar <ArrowRight size={16} /></Link><Link className="text-link" to="/registro">Crear una cuenta de productor</Link></div>
           )}
-          <p className="access-card__manual"><Leaf size={15} /> Puedes registrarte y publicar manualmente. La asistencia de IA, si se contrata, se ofrecerá por separado.</p>
         </div>
       </main>
       <SiteFooter />
