@@ -1,14 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { ArrowUpRight, Menu, X } from 'lucide-react';
+import { ArrowUpRight, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
 
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+import { clearSessionCache, getSessionUser, logoutUser, type SessionUser } from '../../api/client';
 import superCarnesLogo from '../../assets/super-carnes-logo.png';
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [session, setSession] = useState<SessionUser | null | 'loading'>('loading')
   const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    void getSessionUser().then(setSession)
+  }, [location.pathname])
+
+  function closeMenu() { setMenuOpen(false) }
+
+  async function handleLogout() {
+    closeMenu()
+    try {
+      await logoutUser()
+      clearSessionCache()
+      setSession(null)
+      navigate('/')
+    } catch {
+      clearSessionCache()
+      setSession(null)
+      navigate('/')
+    }
+  }
+
+  const firstName = session && session !== 'loading' ? session.name.split(' ')[0] : ''
 
   return (
     <>
@@ -43,13 +68,28 @@ export function SiteHeader() {
             className={`site-nav${menuOpen ? ' site-nav--open' : ''}`}
             aria-label="Navegación principal"
           >
-            <Link to="/productos" onClick={() => setMenuOpen(false)}>Productos</Link>
-            <Link to="/productores" aria-current={location.pathname === '/productores' ? 'page' : undefined} onClick={() => setMenuOpen(false)}>Productores</Link>
-            <a href="/#como-funciona" onClick={() => setMenuOpen(false)}>Cómo funciona</a>
-            <Link to="/seguridad" onClick={() => setMenuOpen(false)}>Seguridad</Link>
-            <Link className="button button--small button--outline" to="/registro" onClick={() => setMenuOpen(false)}>
-              Soy productor <ArrowUpRight size={15} />
-            </Link>
+            <Link to="/productos" onClick={closeMenu}>Productos</Link>
+            <Link to="/productores" aria-current={location.pathname === '/productores' ? 'page' : undefined} onClick={closeMenu}>Productores</Link>
+            <a href="/#como-funciona" onClick={closeMenu}>Cómo funciona</a>
+            <Link to="/seguridad" onClick={closeMenu}>Seguridad</Link>
+
+            {session && session !== 'loading' ? (
+              <>
+                <span className="site-nav__welcome">Bienvenido, <strong>{firstName}</strong></span>
+                <Link className="site-nav__icon-link" to="/mi-panel" onClick={closeMenu} aria-label="Mi panel">
+                  <LayoutDashboard size={16} aria-hidden="true" />
+                  Mi panel
+                </Link>
+                <button type="button" className="site-nav__icon-link site-nav__logout" onClick={handleLogout}>
+                  <LogOut size={16} aria-hidden="true" />
+                  Cerrar sesión
+                </button>
+              </>
+            ) : session === null ? (
+              <Link className="button button--small button--outline" to="/registro" onClick={closeMenu}>
+                Soy productor <ArrowUpRight size={15} />
+              </Link>
+            ) : null}
           </nav>
         </div>
       </header>

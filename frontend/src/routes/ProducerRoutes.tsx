@@ -45,6 +45,18 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const [initial, setInitial] = useState<Awaited<ReturnType<typeof getProducerProduct>> | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [removedImageIds, setRemovedImageIds] = useState<number[]>([])
+
+  // ── Preview state ─────────────────────────────────────────────────────────
+  const [pvTitle, setPvTitle] = useState('')
+  const [pvDesc, setPvDesc] = useState('')
+  const [pvUnit, setPvUnit] = useState('')
+  const [pvPrice, setPvPrice] = useState('')
+  const [pvCurrency, setPvCurrency] = useState('PAB')
+  const [pvPriceType, setPvPriceType] = useState('contact')
+  const [pvNewImgUrls, setPvNewImgUrls] = useState<string[]>([])
+  const [pvImgIdx, setPvImgIdx] = useState(0)
+  const pvObjUrls = useRef<string[]>([])
+
   useEffect(() => { if (editing) void getProducerProduct(id).then((product) => { setInitial(product); setSelectedCategoryId(String(product.category_id)) }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'No pudimos cargar esta publicación.')) }, [editing, id])
   useEffect(() => {
     let current = true
@@ -59,6 +71,21 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
     })
     return () => { current = false }
   }, [categoriesRetry])
+
+  // Sync preview when initial product loads (edit mode)
+  useEffect(() => {
+    if (initial) {
+      setPvTitle(initial.title)
+      setPvDesc(initial.description ?? '')
+      setPvUnit(initial.unit)
+      setPvPrice(initial.price_amount != null ? String(initial.price_amount) : '')
+      setPvCurrency(initial.currency ?? 'PAB')
+      setPvPriceType(initial.price_type ?? 'contact')
+    }
+  }, [initial])
+
+  // Revoke object URLs on unmount
+  useEffect(() => () => { pvObjUrls.current.forEach(URL.revokeObjectURL) }, [])
 
   function validatePhotos(input: HTMLInputElement): string {
     const files = Array.from(input.files ?? [])
@@ -75,7 +102,32 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
     return error
   }
 
-  return <div className="app-shell"><SiteHeader /><main className="access-page page-shell"><ValidatedForm className="access-card auth-form producer-product-form" onSubmit={async (event) => {
+  function handlePhotosChange(input: HTMLInputElement) {
+    pvObjUrls.current.forEach(URL.revokeObjectURL)
+    const urls = Array.from(input.files ?? []).map((f) => URL.createObjectURL(f))
+    pvObjUrls.current = urls
+    setPvNewImgUrls(urls)
+    setPvImgIdx(0)
+    setMessage('')
+    validatePhotos(input)
+  }
+
+  // ── Preview computed values ───────────────────────────────────────────────
+  const existingImgUrls = (initial?.images ?? []).map((img) => img.url)
+  const allPvImgs = [...existingImgUrls, ...pvNewImgUrls]
+  const clampedIdx = Math.min(pvImgIdx, Math.max(0, allPvImgs.length - 1))
+  const currentPvImg = allPvImgs[clampedIdx] ?? null
+  const pvCategoryName = categoriesFromApi.find((c) => String(c.id) === selectedCategoryId)?.name ?? ''
+
+  function pvPriceLabel() {
+    if (pvPriceType === 'contact' || !pvPrice) return 'Consultar'
+    const n = parseFloat(pvPrice)
+    if (isNaN(n)) return 'Consultar'
+    const prefix = pvCurrency === 'USD' ? 'US$' : 'B/.'
+    return pvPriceType === 'from' ? `Desde ${prefix} ${n.toFixed(2)}` : `${prefix} ${n.toFixed(2)}`
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formElement = event.currentTarget
     const photoInput = formElement.elements.namedItem('images[]') as HTMLInputElement | null
@@ -115,33 +167,213 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
         setInitial(updated)
         setRemovedImageIds([])
         setMessage(updated.status === 'pending' ? 'Guardamos los cambios y enviamos la oferta a revisión. No aparecerá en el catálogo hasta que el equipo la apruebe.' : 'Guardamos los cambios. Puedes enviar la publicación a revisión desde tu panel.')
+      } else {
+        await saveProductDraft(form)
+        setMessage('Guardamos tu borrador. Se publicará después de revisión humana.')
+        formElement.reset()
+        if (photoInput) photoInput.value = ''
+        setPvTitle(''); setPvDesc(''); setPvUnit(''); setPvPrice('')
+        setPvPriceType('contact'); setPvNewImgUrls([]); setPvImgIdx(0)
       }
-      else { await saveProductDraft(form); setMessage('Guardamos tu borrador. Se publicará después de revisión humana.'); formElement.reset(); if (photoInput) photoInput.value = '' }
-    } catch (error) { const detail = error instanceof Error ? error.message : 'No se pudo guardar el borrador.'; setSaveError(detail); setMessage('No pudimos guardar los cambios. Tu información y las fotos siguen en este formulario; comprueba la conexión y reintenta.') }
-    finally { setSaving(false) }
-  }} aria-busy={saving}>
-    <p className="eyebrow eyebrow--quiet">PUBLICACIÓN MANUAL</p><h1>{editing ? 'Edita tu producto' : 'Publica un producto'}</h1><p>Completa la información manualmente y guarda un borrador para continuar luego. La asistencia de IA es una opción futura que se cotizará por separado.</p>
-    {!editing || initial ? <>
-    <label>Nombre del producto<input name="title" defaultValue={initial?.title} minLength={3} maxLength={120} required /></label>
-    <label>Categoría<select name="category_id" value={selectedCategoryId} onChange={(event) => setSelectedCategoryId(event.currentTarget.value)} disabled={categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0} required><option value="">{categoriesLoading ? 'Cargando categorías…' : categoriesFromApi.length ? 'Selecciona una categoría' : 'No hay categorías disponibles'}</option>{categoriesFromApi.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-    {categoriesLoading && <p role="status">Cargando categorías disponibles…</p>}
-    {categoriesLoadError && <div className="catalog-reference-error" role="alert"><span>No pudimos cargar las categorías. {categoriesLoadError}</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((attempt) => attempt + 1)}>Reintentar</button></div>}
-    {!categoriesLoading && !categoriesLoadError && categoriesFromApi.length === 0 && <div className="catalog-reference-error" role="alert"><span>No hay categorías activas para publicar todavía.</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((attempt) => attempt + 1)}>Volver a consultar</button></div>}
-    <label>Descripción<textarea name="description" defaultValue={initial?.description} minLength={20} maxLength={3000} required rows={5} className="resize-none" style={{ resize: 'none' }} /></label>
-    <div className="form-row"><label>Unidad de venta<input name="unit" defaultValue={initial?.unit} placeholder="libra, docena…" maxLength={40} required /></label><label>Stock disponible (opcional)<input name="stock_quantity" defaultValue={initial?.stock_quantity ?? ''} type="number" min="0" step="0.01" /><small>Déjalo vacío si prefieres no indicar cantidad.</small></label></div>
-    <div className="form-row"><label>Precio (opcional)<input name="price_amount" defaultValue={initial?.price_amount ?? ''} type="number" min="0" step="0.01" /></label><label>Moneda<select name="currency" defaultValue={initial?.currency ?? 'PAB'}><option value="PAB">B/. · Balboa</option><option value="USD">US$ · Dólar estadounidense</option></select></label></div>
-    <label>Tipo de precio<select name="price_type" defaultValue={initial?.price_type ?? 'contact'}><option value="contact">Consultar</option><option value="fixed">Precio fijo</option><option value="from">Desde este precio</option></select></label>
-    <label>Entrega o recogida<input name="delivery_method" defaultValue={initial?.delivery_method} maxLength={120} required /></label>
-    {editing && initial && ['published', 'paused', 'sold_out'].includes(initial.status) && <div className="moderation-feedback"><strong>La oferta dejará de aparecer temporalmente.</strong><p>Al guardar, el equipo revisará los cambios y la oferta volverá al catálogo solo después de aprobarla. La fecha de vigencia actual se conserva.</p><label>Motivo del cambio<textarea name="reason" minLength={5} maxLength={1000} required rows={3} className="resize-none" style={{ resize: 'none' }} onChange={(event) => event.currentTarget.setCustomValidity('')} /><small>Explica qué cambió y por qué. Mínimo 5 caracteres.</small></label></div>}
-    {editing && initial && initial.images.length > 0 && <section className="existing-product-photos" aria-label="Fotografías actuales"><h2>Fotografías actuales</h2><div className="existing-product-photos__grid">{initial.images.map((image) => <figure className="existing-product-photo" key={image.id}><img src={image.url} alt={image.alt_text ?? initial.title} /><button className="button button--quiet button--small" type="button" aria-label={`Quitar fotografía ${image.position + 1}`} onClick={() => { setRemovedImageIds((ids) => [...ids, image.id]); setInitial((current) => current ? { ...current, images: current.images.filter((item) => item.id !== image.id) } : current) }}>Quitar</button></figure>)}</div><small>Conserva al menos una fotografía para enviar la publicación a revisión.</small></section>}
-    <label>Fotografías {editing ? '(opcional: hasta cinco en total)' : '(1 a 5)'}<input name="images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple required={!editing} aria-describedby="product-photos-help product-photos-error" onChange={(event) => { setMessage(''); validatePhotos(event.currentTarget) }} /><small id="product-photos-help">JPG, PNG o WebP · hasta cinco fotografías · máximo 5 MB por archivo. Las optimizamos al guardar.</small>{photoError && <span id="product-photos-error" role="alert">{photoError}</span>}</label>
-    {!editing && <p className="form-help">La publicación se guarda como borrador privado. Envíala a revisión cuando esté lista; solo se hará pública después de la aprobación del equipo.</p>}
-    </> : <p role="status">Cargando publicación…</p>}
-    {saving && <p role="status" aria-live="polite">Preparando y guardando tus fotografías… Mantén esta página abierta mientras terminamos.</p>}
-    {saveError && <p className="producer-product-form__error" role="alert">{message} <span className="sr-only">Detalle: {saveError}</span></p>}
-    {!saveError && message && <p role="status">{message}</p>}
-    <button className="button button--primary" type="submit" disabled={saving || (editing && !initial) || categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0} aria-busy={saving}>{saving ? 'Guardando…' : saveError ? 'Reintentar guardado' : editing ? 'Guardar cambios' : 'Guardar borrador'}</button>
-  </ValidatedForm></main><SiteFooter /></div>
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'No se pudo guardar el borrador.'
+      setSaveError(detail)
+      setMessage('No pudimos guardar los cambios. Tu información y las fotos siguen en este formulario; comprueba la conexión y reintenta.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const formDisabled = saving || (editing && !initial) || categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0
+
+  return (
+    <div className="app-shell">
+      <SiteHeader />
+      <main className="product-form-page page-shell">
+        <div className="product-form-layout">
+
+          {/* ── Left column: form ── */}
+          <section className="product-form-col">
+            <p className="eyebrow eyebrow--quiet">PORTAL DE PRODUCTORES</p>
+            <h1 className="product-form-col__title">{editing ? 'Edita tu oferta' : 'Publica un producto'}</h1>
+            <ValidatedForm className="auth-form producer-product-form" onSubmit={handleSubmit} aria-busy={saving}>
+              {!editing || initial ? (
+                <>
+                  <label>Nombre del producto
+                    <input name="title" defaultValue={initial?.title} minLength={3} maxLength={120} required
+                      onChange={(e) => setPvTitle(e.currentTarget.value)} />
+                  </label>
+
+                  <label>Categoría
+                    <select name="category_id" value={selectedCategoryId}
+                      onChange={(e) => setSelectedCategoryId(e.currentTarget.value)}
+                      disabled={categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0} required>
+                      <option value="">{categoriesLoading ? 'Cargando categorías…' : categoriesFromApi.length ? 'Selecciona una categoría' : 'No hay categorías disponibles'}</option>
+                      {categoriesFromApi.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    </select>
+                  </label>
+                  {categoriesLoading && <p role="status">Cargando categorías disponibles…</p>}
+                  {categoriesLoadError && <div className="catalog-reference-error" role="alert"><span>No pudimos cargar las categorías. {categoriesLoadError}</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((n) => n + 1)}>Reintentar</button></div>}
+                  {!categoriesLoading && !categoriesLoadError && categoriesFromApi.length === 0 && <div className="catalog-reference-error" role="alert"><span>No hay categorías activas para publicar todavía.</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((n) => n + 1)}>Volver a consultar</button></div>}
+
+                  <label>Descripción
+                    <textarea name="description" defaultValue={initial?.description} minLength={20} maxLength={3000} required rows={5}
+                      className="resize-none" style={{ resize: 'none' }}
+                      onChange={(e) => setPvDesc(e.currentTarget.value)} />
+                  </label>
+
+                  <div className="form-row">
+                    <label>Unidad de venta
+                      <input name="unit" defaultValue={initial?.unit} placeholder="libra, docena…" maxLength={40} required
+                        onChange={(e) => setPvUnit(e.currentTarget.value)} />
+                    </label>
+                    <label>Stock disponible (opcional)
+                      <input name="stock_quantity" defaultValue={initial?.stock_quantity ?? ''} type="number" min="0" step="0.01" />
+                      <small>Déjalo vacío si prefieres no indicar cantidad.</small>
+                    </label>
+                  </div>
+
+                  <div className="form-row">
+                    <label>Precio (opcional)
+                      <input name="price_amount" defaultValue={initial?.price_amount ?? ''} type="number" min="0" step="0.01"
+                        onChange={(e) => setPvPrice(e.currentTarget.value)} />
+                    </label>
+                    <label>Moneda
+                      <select name="currency" defaultValue={initial?.currency ?? 'PAB'}
+                        onChange={(e) => setPvCurrency(e.currentTarget.value)}>
+                        <option value="PAB">B/. · Balboa</option>
+                        <option value="USD">US$ · Dólar estadounidense</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label>Tipo de precio
+                    <select name="price_type" defaultValue={initial?.price_type ?? 'contact'}
+                      onChange={(e) => setPvPriceType(e.currentTarget.value)}>
+                      <option value="contact">Consultar</option>
+                      <option value="fixed">Precio fijo</option>
+                      <option value="from">Desde este precio</option>
+                    </select>
+                  </label>
+
+                  <label>Entrega o recogida
+                    <input name="delivery_method" defaultValue={initial?.delivery_method} maxLength={120} required />
+                  </label>
+
+                  {editing && initial && ['published', 'paused', 'sold_out'].includes(initial.status) && (
+                    <div className="moderation-feedback">
+                      <strong>La oferta dejará de aparecer temporalmente.</strong>
+                      <p>Al guardar, el equipo revisará los cambios y la oferta volverá al catálogo solo después de aprobarla. La fecha de vigencia actual se conserva.</p>
+                      <label>Motivo del cambio
+                        <textarea name="reason" minLength={5} maxLength={1000} required rows={3}
+                          className="resize-none" style={{ resize: 'none' }}
+                          onChange={(e) => e.currentTarget.setCustomValidity('')} />
+                        <small>Explica qué cambió y por qué. Mínimo 5 caracteres.</small>
+                      </label>
+                    </div>
+                  )}
+
+                  {editing && initial && initial.images.length > 0 && (
+                    <section className="existing-product-photos" aria-label="Fotografías actuales">
+                      <h2>Fotografías actuales</h2>
+                      <div className="existing-product-photos__grid">
+                        {initial.images.map((image) => (
+                          <figure className="existing-product-photo" key={image.id}>
+                            <img src={image.url} alt={image.alt_text ?? initial.title} />
+                            <button className="button button--quiet button--small" type="button"
+                              aria-label={`Quitar fotografía ${image.position + 1}`}
+                              onClick={() => {
+                                setRemovedImageIds((ids) => [...ids, image.id])
+                                setInitial((cur) => cur ? { ...cur, images: cur.images.filter((item) => item.id !== image.id) } : cur)
+                              }}>Quitar</button>
+                          </figure>
+                        ))}
+                      </div>
+                      <small>Conserva al menos una fotografía para enviar la publicación a revisión.</small>
+                    </section>
+                  )}
+
+                  <label>Fotografías {editing ? '(opcional: hasta cinco en total)' : '(1 a 5)'}
+                    <input name="images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple required={!editing}
+                      aria-describedby="product-photos-help product-photos-error"
+                      onChange={(e) => handlePhotosChange(e.currentTarget)} />
+                    <small id="product-photos-help">JPG, PNG o WebP · hasta cinco fotografías · máximo 5 MB por archivo. Las optimizamos al guardar.</small>
+                    {photoError && <span id="product-photos-error" role="alert">{photoError}</span>}
+                  </label>
+
+                  {!editing && <p className="form-help">La publicación se guarda como borrador privado. Envíala a revisión cuando esté lista; solo se hará pública después de la aprobación del equipo.</p>}
+                </>
+              ) : (
+                <p role="status">Cargando publicación…</p>
+              )}
+
+              {saving && <p role="status" aria-live="polite">Preparando y guardando tus fotografías… Mantén esta página abierta mientras terminamos.</p>}
+              {saveError && <p className="producer-product-form__error" role="alert">{message} <span className="sr-only">Detalle: {saveError}</span></p>}
+              {!saveError && message && <p role="status">{message}</p>}
+              <button className="button button--primary" type="submit" disabled={formDisabled} aria-busy={saving}>
+                {saving ? 'Guardando…' : saveError ? 'Reintentar guardado' : editing ? 'Guardar cambios' : 'Guardar borrador'}
+              </button>
+            </ValidatedForm>
+          </section>
+
+          {/* ── Right column: live preview ── */}
+          <aside className="product-preview-col" aria-label="Vista previa del anuncio">
+            <p className="eyebrow eyebrow--quiet">VISTA PREVIA</p>
+            <p className="product-preview-intro">Así verán tu anuncio los compradores</p>
+
+            <div className="product-preview-card">
+              <div className="product-preview-card__image">
+                {currentPvImg ? (
+                  <img src={currentPvImg} alt="Vista previa de la fotografía del producto" />
+                ) : (
+                  <div className="product-preview-card__placeholder">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    <span>Agrega una foto</span>
+                  </div>
+                )}
+                <span className="harvest-label" aria-hidden="true">Cosecha local</span>
+                {allPvImgs.length > 1 && (
+                  <div className="product-preview-card__thumbs">
+                    {allPvImgs.map((url, i) => (
+                      <button key={i} type="button" aria-label={`Ver foto ${i + 1}`}
+                        className={i === clampedIdx ? 'active' : ''}
+                        onClick={() => setPvImgIdx(i)}>
+                        <img src={url} alt="" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="product-preview-card__body">
+                {pvCategoryName && <div className="product-card__category">{pvCategoryName}</div>}
+                <h3 className="product-preview-card__title">
+                  {pvTitle || <span className="product-preview-card__empty">Nombre del producto</span>}
+                </h3>
+                {pvDesc && (
+                  <p className="product-preview-card__desc">
+                    {pvDesc.length > 140 ? pvDesc.slice(0, 140) + '…' : pvDesc}
+                  </p>
+                )}
+                <div className="product-card__footer" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e4eaf5' }}>
+                  <p className="product-price">
+                    <strong>{pvPriceLabel()}</strong>
+                    {pvPriceType !== 'contact' && pvPrice && pvUnit && <span>por {pvUnit}</span>}
+                  </p>
+                  <span className="text-link" aria-hidden="true">Ver oferta →</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="product-preview-hint">
+              La vista previa es orientativa. Tu publicación deberá ser aprobada antes de aparecer en el catálogo.
+            </p>
+          </aside>
+
+        </div>
+      </main>
+      <SiteFooter />
+    </div>
+  )
 }
 
 function ProducerDashboard() {

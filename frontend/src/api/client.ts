@@ -633,3 +633,31 @@ export async function setAdminUserRoles(id: number, roles: string[], reason: str
     throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudieron actualizar los roles.')
   }
 }
+
+// ── Auth session ──────────────────────────────────────────────────────────────
+
+export type SessionUser = { name: string; email: string }
+
+let sessionCache: SessionUser | null | 'unknown' = 'unknown'
+
+export async function getSessionUser(): Promise<SessionUser | null> {
+  if (sessionCache !== 'unknown') return sessionCache
+  try {
+    const response = await fetch(`${API_BASE}/me`, { credentials: 'include', headers: { Accept: 'application/json' } })
+    if (!response.ok) { sessionCache = null; return null }
+    const data = (await response.json() as { data: SessionUser }).data
+    sessionCache = data
+    return data
+  } catch {
+    sessionCache = null
+    return null
+  }
+}
+
+export function clearSessionCache(): void { sessionCache = 'unknown' }
+
+export async function logoutUser(): Promise<void> {
+  const token = await csrfToken()
+  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token } })
+  sessionCache = null
+}
