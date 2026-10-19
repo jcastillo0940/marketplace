@@ -944,19 +944,15 @@ export function AccessPage({ title, description }: { title: string; description:
                   setRegStep1Error('')
                   setRegStep(2)
                 }}>
-                  <div className="form-row-2">
-                    <label>Nombre<input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /></label>
-                    <label>Apellido<input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /></label>
+                  <div className="reg-form-grid">
+                    <label className="form-field"><span className="form-field__label">Nombre</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Apellido</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Cédula de identidad</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span></label>
+                    <label className="form-field"><span className="form-field__label">Correo electrónico</span><input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Contraseña</span><input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><span className="form-field__hint">Mín. 6 caracteres con letra, número y símbolo.</span></label>
+                    <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><span className="form-field__hint">Ej: 6000-1234</span></label>
                   </div>
-                  <div className="form-row-2">
-                    <label>Cédula de identidad<input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><small>Ej: 8-123-4567 · Extranjero: E-8-12345</small></label>
-                    <label>Correo electrónico<input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /></label>
-                  </div>
-                  <div className="form-row-2">
-                    <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><small>Mín. 6 caracteres con letra, número y símbolo.</small></label>
-                    <label>Teléfono de contacto<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><small>Ej: 6000-1234</small></label>
-                  </div>
-                  {regStep1Error && <p role="alert" style={{ color: 'var(--color-error, #c0392b)', fontSize: '.875rem', margin: '0' }}>{regStep1Error}</p>}
+                  {regStep1Error && <p className="form-field__error" role="alert">{regStep1Error}</p>}
                   <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
                   <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
                 </ValidatedForm>
@@ -964,9 +960,9 @@ export function AccessPage({ title, description }: { title: string; description:
 
               {regStep === 2 && (
                 <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(3) }}>
-                  <div className="form-row-2">
-                    <label>Nombre público del emprendimiento<input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /></label>
-                    <label>Actividad principal<ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /></label>
+                  <div className="reg-form-grid">
+                    <label className="form-field"><span className="form-field__label">Nombre público del emprendimiento</span><input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Actividad principal</span><ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /><span className="form-field__hint" aria-hidden="true" /></label>
                   </div>
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" onClick={() => setRegStep(1)}>Atrás</button>
