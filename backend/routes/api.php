@@ -24,7 +24,7 @@ Route::get('/ready', function () {
         abort_unless(Cache::get('health:readiness') === 'ok', 503);
         Redis::connection()->ping();
         $referenceDataReady = Category::query()->where('active', true)->exists();
-        foreach (['Herrera' => 44, 'Los Santos' => 75, 'Coclé' => 40, 'Veraguas' => 95] as $provinceName => $expectedCorregimientos) {
+        foreach (['Bocas del Toro' => 35, 'Chiriquí' => 95, 'Coclé' => 40, 'Colón' => 38, 'Darién' => 20, 'Herrera' => 44, 'Los Santos' => 75, 'Panamá' => 50, 'Veraguas' => 95] as $provinceName => $expectedCorregimientos) {
             $province = Location::query()->where('active', true)->where('level', 'province')
                 ->where('slug', Str::slug($provinceName))->first();
             if ($province === null) {
@@ -37,7 +37,7 @@ Route::get('/ready', function () {
                 ->where('parent_id', $province->id)->get(['id']);
             $corregimientoCount = Location::query()->where('active', true)->where('level', 'corregimiento')
                 ->whereIn('parent_id', $districts->pluck('id'))->count();
-            $minDistricts = match ($provinceName) { 'Veraguas' => 12, default => 6 };
+            $minDistricts = match ($provinceName) { 'Chiriquí' => 14, 'Veraguas' => 12, 'Bocas del Toro' => 4, 'Darién' => 3, default => 5 };
             $referenceDataReady = $referenceDataReady && $districts->count() >= $minDistricts
                 && $corregimientoCount >= $expectedCorregimientos;
         }

@@ -3,8 +3,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { PublicLocation } from '../api/client'
 
-const PANAMA_CENTER: [number, number] = [8.1, -80.9]
-const PANAMA_BOUNDS: [[number, number], [number, number]] = [[7.0, -82.5], [9.5, -79.5]]
+const PANAMA_CENTER: [number, number] = [8.4, -80.1]
+const PANAMA_BOUNDS: [[number, number], [number, number]] = [[6.8, -83.2], [9.8, -77.0]]
 
 // ── GeoJSON types ────────────────────────────────────────────────────────────
 type GeoProps = { provincia: string; distrito: string; corregimiento: string; id: string }
@@ -91,7 +91,6 @@ export default function LocationPicker({
   locations, value, onChange, name = 'location_id', required = false, disabled = false, idPrefix,
 }: LocationPickerProps) {
   const [selectedId, setSelectedId] = useState(value ? String(value) : '')
-  const [showMap, setShowMap] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
   const [mapNote, setMapNote] = useState<string | null>(null)
   const mapRef = useRef<HTMLDivElement>(null)
@@ -121,11 +120,87 @@ export default function LocationPicker({
     onChange?.(locationId ? Number(locationId) : null)
   }
 
-  // Pre-warm the geo cache when the map toggle is visible
+  // ── Shared geocode logic ────────────────────────────────────────────────────
+  async function resolveCoords(lat: number, lng: number) {
+    if (markerRef.current) {
+      markerRef.current.setLatLng([lat, lng])
+    } else if (leafletRef.current) {
+      markerRef.current = L.circleMarker([lat, lng], {
+        radius: 9, color: '#fff', weight: 2, fillColor: '#16a34a', fillOpacity: 1,
+      }).addTo(leafletRef.current)
+    }
+
+    const geo = await loadGeo()
+    const match = geocodeLocal(lat, lng, geo)
+
+    if (!match) {
+      setMapNote('Ubicación fuera del área cubierta. Selecciónala manualmente.')
+      return
+    }
+
+    const provinces = locations.filter((l) => l.level === 'province')
+    const matchedProvince = findMatch(provinces, match.provincia)
+    if (!matchedProvince) {
+      setMapNote('Provincia no encontrada. Selecciónala manualmente.')
+      return
+    }
+
+    const districtCandidates = locations.filter(
+      (l) => l.level === 'district' && l.parent_id === matchedProvince.id,
+    )
+    const matchedDistrict = findMatch(districtCandidates, match.distrito)
+
+    const corregimientoCandidates = matchedDistrict
+      ? locations.filter((l) => l.level === 'corregimiento' && l.parent_id === matchedDistrict.id)
+      : []
+    const matchedCorregimiento = matchedDistrict
+      ? findMatch(corregimientoCandidates, match.corregimiento)
+      : undefined
+
+    const best = matchedCorregimiento ?? matchedDistrict ?? matchedProvince
+    choose(String(best.id))
+    setMapNote(
+      matchedCorregimiento
+        ? `✓ ${matchedCorregimiento.name} · ${matchedDistrict?.name ?? ''} · ${matchedProvince.name}`
+        : matchedDistrict
+          ? `${matchedDistrict.name} · ${matchedProvince.name} — elige el corregimiento si lo deseas`
+          : `${matchedProvince.name} — elige distrito y corregimiento`,
+    )
+  }
+
+  // ── "Mi ubicación" button ───────────────────────────────────────────────────
+  function handleMyLocation() {
+    if (!navigator.geolocation) {
+      setMapNote('Tu navegador no soporta geolocalización.')
+      return
+    }
+    setGeocoding(true)
+    setMapNote(null)
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: { latitude: lat, longitude: lng } }) => {
+        try {
+          if (leafletRef.current) leafletRef.current.setView([lat, lng], 13)
+          await resolveCoords(lat, lng)
+        } catch {
+          setMapNote('No se pudo detectar la ubicación.')
+        } finally {
+          setGeocoding(false)
+        }
+      },
+      () => {
+        setGeocoding(false)
+        setMapNote('No pudimos obtener tu ubicación. Verifica los permisos del navegador.')
+      },
+      { timeout: 10000, maximumAge: 60000 },
+    )
+  }
+
+  // Pre-warm the geo cache
   useEffect(() => { void loadGeo() }, [])
 
+  // ── Map init ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!showMap || !mapRef.current || leafletRef.current) return
+    if (!mapRef.current || leafletRef.current) return
 
     const map = L.map(mapRef.current, { zoomControl: true }).setView(PANAMA_CENTER, 8)
     map.setMaxBounds(PANAMA_BOUNDS)
@@ -137,54 +212,10 @@ export default function LocationPicker({
 
     map.on('click', async (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng
-
-      if (markerRef.current) {
-        markerRef.current.setLatLng([lat, lng])
-      } else {
-        markerRef.current = L.circleMarker([lat, lng], {
-          radius: 9, color: '#fff', weight: 2, fillColor: '#16a34a', fillOpacity: 1,
-        }).addTo(map)
-      }
-
       setGeocoding(true)
       setMapNote(null)
       try {
-        const geo = await loadGeo()
-        const match = geocodeLocal(lat, lng, geo)
-
-        if (!match) {
-          setMapNote('Ubicación fuera del área cubierta. Selecciónala manualmente desde los desplegables.')
-          return
-        }
-
-        const provinces = locations.filter((l) => l.level === 'province')
-        const matchedProvince = findMatch(provinces, match.provincia)
-        if (!matchedProvince) {
-          setMapNote('Provincia no encontrada en el directorio. Selecciónala manualmente.')
-          return
-        }
-
-        const districtCandidates = locations.filter(
-          (l) => l.level === 'district' && l.parent_id === matchedProvince.id,
-        )
-        const matchedDistrict = findMatch(districtCandidates, match.distrito)
-
-        const corregimientoCandidates = matchedDistrict
-          ? locations.filter((l) => l.level === 'corregimiento' && l.parent_id === matchedDistrict.id)
-          : []
-        const matchedCorregimiento = matchedDistrict
-          ? findMatch(corregimientoCandidates, match.corregimiento)
-          : undefined
-
-        const best = matchedCorregimiento ?? matchedDistrict ?? matchedProvince
-        choose(String(best.id))
-        setMapNote(
-          matchedCorregimiento
-            ? `✓ ${matchedCorregimiento.name} · ${matchedDistrict?.name ?? ''} · ${matchedProvince.name}`
-            : matchedDistrict
-              ? `${matchedDistrict.name} · ${matchedProvince.name} — elige el corregimiento si lo deseas`
-              : `${matchedProvince.name} — elige distrito y corregimiento`,
-        )
+        await resolveCoords(lat, lng)
       } catch {
         setMapNote('No se pudo detectar la ubicación. Selecciónala manualmente.')
       } finally {
@@ -193,58 +224,57 @@ export default function LocationPicker({
     })
 
     leafletRef.current = map
+    setTimeout(() => map.invalidateSize(), 100)
+
     return () => {
       map.remove()
       leafletRef.current = null
       markerRef.current = null
     }
-  }, [showMap]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (showMap && leafletRef.current) {
-      setTimeout(() => leafletRef.current?.invalidateSize(), 50)
-    }
-  }, [showMap])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="location-picker">
-      <label htmlFor={`${idPrefix}-province`}>Provincia
-        <select id={`${idPrefix}-province`} value={province?.id ?? ''} required={required} disabled={disabled} onChange={(e) => choose(e.currentTarget.value)}>
-          <option value="">{required ? 'Selecciona una provincia' : 'Sin ubicación'}</option>
-          {locations.filter((l) => l.level === 'province').map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-      </label>
-      <label htmlFor={`${idPrefix}-district`}>Distrito
-        <select id={`${idPrefix}-district`} value={district?.id ?? ''} disabled={disabled || !province} onChange={(e) => choose(e.currentTarget.value || String(province?.id ?? ''))}>
-          <option value="">{province ? 'Toda la provincia' : 'Selecciona primero una provincia'}</option>
-          {districts.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-      </label>
-      <label htmlFor={`${idPrefix}-corregimiento`}>Corregimiento
-        <select id={`${idPrefix}-corregimiento`} value={selected?.level === 'corregimiento' ? selected.id : ''} disabled={disabled || !district} onChange={(e) => choose(e.currentTarget.value || String(district?.id ?? ''))}>
-          <option value="">{district ? 'Todo el distrito' : 'Selecciona primero un distrito'}</option>
-          {corregimientos.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-      </label>
+    <div className="location-picker location-picker--split">
+      {/* ── Left: map + geo button ── */}
+      <div className="location-picker__map-col">
+        {!disabled && (
+          <button
+            type="button"
+            className="button button--outline button--small location-picker__geo-btn"
+            onClick={handleMyLocation}
+            disabled={geocoding}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            {geocoding ? 'Detectando…' : 'Mi ubicación'}
+          </button>
+        )}
+        <div ref={mapRef} className="location-picker__map" aria-label="Mapa para seleccionar ubicación" />
+        {geocoding && <p className="location-picker__map-status" role="status">Detectando ubicación…</p>}
+        {mapNote && <p className="location-picker__map-status">{mapNote}</p>}
+        <small className="location-picker__map-hint">Haz clic en el mapa para detectar tu ubicación automáticamente.</small>
+      </div>
 
-      {!disabled && (
-        <button
-          type="button"
-          className="text-link location-picker__map-toggle"
-          onClick={() => setShowMap((v) => !v)}
-        >
-          {showMap ? 'Ocultar mapa' : 'Seleccionar en el mapa'}
-        </button>
-      )}
-
-      {showMap && (
-        <div className="location-picker__map-wrapper">
-          <div ref={mapRef} className="location-picker__map" aria-label="Mapa para seleccionar ubicación" />
-          {geocoding && <p className="location-picker__map-status" role="status">Detectando ubicación…</p>}
-          {mapNote && <p className="location-picker__map-status">{mapNote}</p>}
-          <small className="location-picker__map-hint">Haz clic en el mapa para detectar provincia, distrito y corregimiento automáticamente.</small>
-        </div>
-      )}
+      {/* ── Right: selects ── */}
+      <div className="location-picker__selects-col">
+        <label htmlFor={`${idPrefix}-province`}>Provincia
+          <select id={`${idPrefix}-province`} value={province?.id ?? ''} required={required} disabled={disabled} onChange={(e) => choose(e.currentTarget.value)}>
+            <option value="">{required ? 'Selecciona una provincia' : 'Sin ubicación'}</option>
+            {locations.filter((l) => l.level === 'province').map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+        <label htmlFor={`${idPrefix}-district`}>Distrito
+          <select id={`${idPrefix}-district`} value={district?.id ?? ''} disabled={disabled || !province} onChange={(e) => choose(e.currentTarget.value || String(province?.id ?? ''))}>
+            <option value="">{province ? 'Toda la provincia' : 'Selecciona primero una provincia'}</option>
+            {districts.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+        <label htmlFor={`${idPrefix}-corregimiento`}>Corregimiento
+          <select id={`${idPrefix}-corregimiento`} value={selected?.level === 'corregimiento' ? selected.id : ''} disabled={disabled || !district} onChange={(e) => choose(e.currentTarget.value || String(district?.id ?? ''))}>
+            <option value="">{district ? 'Todo el distrito' : 'Selecciona primero un distrito'}</option>
+            {corregimientos.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+      </div>
 
       <input type="hidden" name={name} value={selectedId} />
     </div>

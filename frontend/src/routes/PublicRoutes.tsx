@@ -235,7 +235,6 @@ export function HomePage() {
           <div className="hero__visual">
             <img src={heroPhoto} alt="Productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca" fetchPriority="high" decoding="async" />
             <div className="hero-photo-caption">
-              <span className="hero-photo-caption__tag">DESDE AZUERO, CON ORGULLO</span>
               <span>Manos que cultivan futuro</span>
             </div>
             <div className="hero-seal" aria-label="Cosecha y emprendimiento local">
