@@ -31,14 +31,14 @@ class MessageTemplateTest extends TestCase
     public function test_public_contact_templates_keep_manual_fallback_messages_available(): void
     {
         $this->getJson('/api/message-templates')->assertOk()
-            ->assertJsonPath('data.product', 'Hola, vi tu oferta de {product_title} en Mercado Solidario. ¿Sigue disponible?')
-            ->assertJsonPath('data.producer', 'Hola, encontré el perfil de {producer_name} en Mercado Solidario. ¿Me puedes contar sobre tus ofertas?');
+            ->assertJsonPath('data.product', 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?')
+            ->assertJsonPath('data.producer', 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?');
     }
 
     public function test_authorized_admin_updates_a_versioned_template_and_public_clients_receive_the_new_text(): void
     {
         $admin = $this->confirmedAdmin();
-        $body = 'Hola, vi {product_title} de {producer_name} en Mercado Solidario. ¿Sigue disponible?';
+        $body = 'Hola, vi {product_title} de {producer_name} en El Empujoncito. ¿Sigue disponible?';
 
         $this->actingAs($admin)->putJson('/api/admin/message-templates/product', ['body' => $body])
             ->assertOk()

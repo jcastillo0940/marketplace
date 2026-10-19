@@ -413,8 +413,9 @@ class ProducerProductController extends Controller
 
             return [$profile, $phone, $verification];
         });
+        $destination = ($driver === 'email') ? (string) $request->user()->email : $phone;
         try {
-            $sender->send($phone, $code);
+            $sender->send($destination, $code);
         } catch (\Throwable $exception) {
             $verification->forceFill(['status' => 'delivery_failed', 'code_hash' => null])->save();
             Log::warning('No se pudo entregar el código de verificación.', ['provider' => $driver, 'verification_id' => $verification->id, 'producer_profile_id' => $profile->id, 'exception' => $exception::class]);

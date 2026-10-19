@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Validation\Rule;
 use App\Http\Requests\RegisterProducerRequest;
 use App\Models\AuditLog;
 use App\Models\ProducerProfile;
@@ -263,7 +264,7 @@ class AuthController extends Controller
         $profile = $request->user()->producerProfile()->firstOrFail();
         $data = $request->validate([
             'public_name' => ['required', 'string', 'min:2', 'max:120'],
-            'activity' => ['nullable', 'string', 'max:120'],
+            'activity' => ['nullable', Rule::in(collect(config('activities'))->flatten()->all())],
             'description' => ['nullable', 'string', 'max:2000'],
             'location_id' => ['sometimes', 'nullable', 'integer', new ValidActiveLocationHierarchy],
             'phone_private' => ['required', 'string', 'max:40', new ValidContactPhone],

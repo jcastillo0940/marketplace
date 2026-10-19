@@ -14,16 +14,16 @@ export function SiteHeader() {
     <>
       <div className="initiative-bar">
         <span className="initiative-bar__dot" aria-hidden="true" />
-        Una iniciativa para apoyar a productores de Azuero
+        Una iniciativa para apoyar a productores de Coclé, Veraguas, Herrera y Los Santos
         <span className="initiative-bar__partner">con el respaldo de Super Carnes</span>
       </div>
       <header className="site-header">
         <div className="site-header__inner page-shell">
-          <Link className="brand" to="/" aria-label="Mercado Solidario, inicio">
+          <Link className="brand" to="/" aria-label="El Empujoncito, inicio">
             <img className="brand__logo" src={superCarnesLogo} alt="Super Carnes" />
             <span className="brand__type">
-              <span>Mercado</span>
-              <strong>Solidario</strong>
+              <span>El</span>
+              <strong>Empujoncito</strong>
             </span>
           </Link>
 
@@ -63,9 +63,9 @@ export function SiteFooter() {
       <div className="site-footer__inner page-shell">
         <Link className="brand brand--footer" to="/">
           <img className="brand__logo" src={superCarnesLogo} alt="Super Carnes" />
-          <span className="brand__type"><span>Mercado</span><strong>Solidario</strong></span>
+          <span className="brand__type"><span>El</span><strong>Empujoncito</strong></span>
         </Link>
-        <p>Una iniciativa de apoyo a productores y emprendedores de Azuero.</p>
+        <p>Una iniciativa de apoyo a productores y emprendedores del interior de Panamá.</p>
         <nav aria-label="Enlaces del pie de página">
           <Link to="/sobre-el-proyecto">Sobre el proyecto</Link>
           <Link to="/seguridad">Seguridad</Link>
@@ -73,7 +73,7 @@ export function SiteFooter() {
           <Link to="/terminos">Términos y condiciones</Link>
           <Link to="/privacidad">Política de privacidad</Link>
         </nav>
-        <small>© 2026 Mercado Solidario · Super Carnes apoya esta iniciativa</small>
+        <small>© 2026 El Empujoncito · Super Carnes apoya esta iniciativa</small>
       </div>
     </footer>
   )

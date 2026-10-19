@@ -5,8 +5,8 @@ import { useLocation } from 'react-router-dom';
 export function useSeoMetadata(title: string, description: string, image?: string, type: 'website' | 'product' | 'profile' = 'website') {
   const location = useLocation()
   useEffect(() => {
-    const defaultTitle = 'Mercado Solidario · Azuero produce, Panamá conecta'
-    const defaultDescription = 'Encuentra productos y emprendimientos de productores locales de Azuero. Contacta directamente y apoya lo local.'
+    const defaultTitle = 'El Empujoncito · El interior produce, Panamá conecta'
+    const defaultDescription = 'Encuentra productos y emprendimientos de productores locales de Coclé, Veraguas, Herrera y Los Santos. Contacta directamente y apoya lo local.'
     const setMeta = (selector: string, attribute: string, value: string) => {
       let element = document.head.querySelector<HTMLMetaElement>(selector)
       if (!element) {

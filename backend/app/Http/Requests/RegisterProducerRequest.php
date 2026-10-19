@@ -39,7 +39,7 @@ class RegisterProducerRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:12'],
             'public_name' => ['required', 'string', 'max:120'],
-            'activity' => ['nullable', 'string', 'max:120'],
+            'activity' => ['nullable', Rule::in(collect(config('activities'))->flatten()->all())],
             'location_id' => ['required', 'integer', new ValidActiveLocationHierarchy],
             'phone' => ['required', 'string', 'max:40', new ValidContactPhone],
             'terms_version' => ['required', 'string', 'max:40', Rule::in([config('marketplace.consent_versions.terms')])],

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 
 class ContactVerificationSender
@@ -17,13 +18,26 @@ class ContactVerificationSender
         return $hash !== null && hash_equals($hash, $this->hashCode($code));
     }
 
-    public function send(string $phone, string $code): void
+    public function send(string $destination, string $code): void
     {
         $driver = config('services.contact_verification.driver') ?: (app()->environment(['local', 'testing']) ? 'fake' : 'twilio');
         if ($driver === 'fake') {
             if (! app()->environment(['local', 'testing'])) {
                 throw new RuntimeException('El proveedor simulado solo está permitido fuera de producción.');
             }
+
+            return;
+        }
+        if ($driver === 'email') {
+            if ($destination === '') {
+                throw new RuntimeException('No hay correo disponible para enviar el código de verificación.');
+            }
+            Mail::html(
+                '<p>Tu código de verificación para <strong>El Empujoncito</strong> es:</p>'
+                .'<h2 style="letter-spacing:0.2em">'.$code.'</h2>'
+                .'<p>Vence en 10 minutos. No lo compartas.</p>',
+                fn ($m) => $m->to($destination)->subject('Código de verificación - El Empujoncito')
+            );
 
             return;
         }
@@ -42,9 +56,9 @@ class ContactVerificationSender
             ->withBasicAuth($sid, $token)
             ->timeout(10)
             ->post("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json", [
-                'To' => $phone,
+                'To' => $destination,
                 'From' => $from,
-                'Body' => "Tu código de Mercado Solidario es {$code}. Vence en 10 minutos. No lo compartas.",
+                'Body' => "Tu código de El Empujoncito es {$code}. Vence en 10 minutos. No lo compartas.",
             ])
             ->throw();
     }

@@ -788,7 +788,7 @@ class ProducerOwnershipTest extends TestCase
         $user = User::factory()->create();
         $profile = $user->producerProfile()->create(['slug' => 'profile-phone-change', 'public_name' => 'Finca Teléfono', 'phone_private' => '+50760001234', 'phone_public' => '+50760001234', 'phone_verified_at' => now(), 'contact_level' => 'contact_confirmed']);
         $verification = $profile->verifications()->create(['channel' => 'sms', 'status' => 'pending', 'code_hash' => app(ContactVerificationSender::class)->hashCode('123456'), 'expires_at' => now()->addMinutes(10)]);
-        $response = $this->actingAs($user)->putJson('/api/me/profile', ['public_name' => $profile->public_name, 'activity' => 'Cultivo', 'description' => 'Finca familiar.', 'location_id' => null, 'phone_private' => '+50760009999'])->assertOk();
+        $response = $this->actingAs($user)->putJson('/api/me/profile', ['public_name' => $profile->public_name, 'activity' => 'Cultivo de maíz', 'description' => 'Finca familiar.', 'location_id' => null, 'phone_private' => '+50760009999'])->assertOk();
         $profile->refresh();
         $this->assertSame('+50760009999', $profile->phone_private);
         $this->assertNull($profile->phone_verified_at);
@@ -1674,7 +1674,7 @@ class ProducerOwnershipTest extends TestCase
         $user = User::factory()->create();
         $profile = $user->producerProfile()->create(['slug' => 'profile-edit', 'public_name' => 'Finca Original', 'phone_private' => '+50760001000', 'phone_public' => '+50760001000', 'phone_verified_at' => now(), 'contact_level' => 'contact_confirmed']);
         $pendingVerification = $profile->verifications()->create(['channel' => 'sms', 'status' => 'pending', 'code_hash' => app(ContactVerificationSender::class)->hashCode('123456'), 'expires_at' => now()->addMinutes(10)]);
-        $this->actingAs($user)->putJson('/api/me/profile', ['public_name' => 'Finca Nueva', 'activity' => 'Agricultura', 'description' => 'Cultivamos productos frescos en familia.', 'phone_private' => '+50760002000'])->assertOk()->assertJsonPath('data.contact_level', 'unverified');
+        $this->actingAs($user)->putJson('/api/me/profile', ['public_name' => 'Finca Nueva', 'activity' => 'Cultivo de hortalizas y vegetales', 'description' => 'Cultivamos productos frescos en familia.', 'phone_private' => '+50760002000'])->assertOk()->assertJsonPath('data.contact_level', 'unverified');
         $this->assertNull($profile->fresh()->phone_public);
         $this->assertNull($profile->fresh()->phone_verified_at);
         $this->assertDatabaseHas('producer_profiles', ['id' => $profile->id, 'public_name' => 'Finca Nueva']);

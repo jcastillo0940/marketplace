@@ -2,8 +2,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api
 
 export type ContactMessageTemplates = { product: string; producer: string }
 export const DEFAULT_CONTACT_MESSAGE_TEMPLATES: ContactMessageTemplates = {
-  product: 'Hola, vi tu oferta de {product_title} en Mercado Solidario. ¿Sigue disponible?',
-  producer: 'Hola, encontré el perfil de {producer_name} en Mercado Solidario. ¿Me puedes contar sobre tus ofertas?',
+  product: 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?',
+  producer: 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?',
 }
 let publicTemplatesRequest: Promise<ContactMessageTemplates> | null = null
 export function clearContactMessageTemplatesCache(): void { publicTemplatesRequest = null }

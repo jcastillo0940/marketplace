@@ -23,7 +23,7 @@ class SharePreviewController extends Controller
         $description = Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags($product->description)) ?? ''), 200);
 
         return response()->view('seo.product-share', [
-            'title' => $product->title.' · Mercado Solidario',
+            'title' => $product->title.' · El Empujoncito',
             'description' => $description,
             'canonicalUrl' => $canonicalUrl,
             'imageUrl' => $imageUrl,

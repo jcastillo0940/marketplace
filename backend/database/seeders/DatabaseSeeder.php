@@ -35,8 +35,8 @@ class DatabaseSeeder extends Seeder
             $role->permissions()->sync(Permission::whereIn('name', $config['permissions'])->pluck('id'));
         }
         foreach ([
-            'product' => 'Hola, vi tu oferta de {product_title} en Mercado Solidario. ¿Sigue disponible?',
-            'producer' => 'Hola, encontré el perfil de {producer_name} en Mercado Solidario. ¿Me puedes contar sobre tus ofertas?',
+            'product' => 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?',
+            'producer' => 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?',
         ] as $key => $body) {
             MessageTemplate::query()->firstOrCreate(['key' => $key], ['body' => $body]);
         }
@@ -59,7 +59,7 @@ class DatabaseSeeder extends Seeder
                     ['parent_id' => $province->id, 'level' => 'district', 'name' => $districtName, 'active' => true],
                 );
                 if ($district->level !== 'district' || (int) $district->parent_id !== (int) $province->id) {
-                    throw new \RuntimeException("La localidad {$districtSlug} ya existe fuera de la jerarquía de Azuero.");
+                    throw new \RuntimeException("La localidad {$districtSlug} ya existe fuera de la jerarquía esperada.");
                 }
                 foreach ($corregimientos as $corregimientoName) {
                     $corregimientoSlug = $district->slug.'-'.Str::slug($corregimientoName);
@@ -68,7 +68,7 @@ class DatabaseSeeder extends Seeder
                         ['parent_id' => $district->id, 'level' => 'corregimiento', 'name' => $corregimientoName, 'active' => true],
                     );
                     if ($corregimiento->level !== 'corregimiento' || (int) $corregimiento->parent_id !== (int) $district->id) {
-                        throw new \RuntimeException("La localidad {$corregimientoSlug} ya existe fuera de la jerarquía de Azuero.");
+                        throw new \RuntimeException("La localidad {$corregimientoSlug} ya existe fuera de la jerarquía esperada.");
                     }
                 }
             }

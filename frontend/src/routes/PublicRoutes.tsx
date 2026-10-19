@@ -10,6 +10,7 @@ import yucaImage from '../assets/yuca.svg';
 import termsText from '../legal-terms.md?raw';
 import privacyText from '../legal-privacy.md?raw';
 
+import ActivitySelect from '../components/ActivitySelect';
 import LocationPicker from '../components/LocationPicker';
 
 import ValidatedForm from '../components/ValidatedForm';
@@ -94,7 +95,7 @@ export function useContactTemplates() {
 export function ApiProductCard({ product }: { product: ApiProduct }) {
   const image = product.images[0]
   const imageUrl = image?.thumbnail_url ?? image?.url ?? yucaImage
-  const location = publicLocationLabel(product.producer.location) || 'Azuero, Panamá'
+  const location = publicLocationLabel(product.producer.location) || 'Panamá'
   const price = productPrice(product)
   const availability = product.stock_quantity === null ? 'Consulta disponibilidad' : `Stock indicado: ${Number(product.stock_quantity).toLocaleString('es-PA')} ${product.unit}`
   return <ProductCard product={{ id: product.slug, title: product.title, producer: product.producer.public_name, location, category: product.category.name, price, unit: product.unit, availability, image: imageUrl, imageAlt: image?.alt_text ?? product.title, initials: product.producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA'), imageClass: '', verified: product.producer.contact_level !== 'unverified', verificationLevel: product.producer.verification_level, verificationLabel: product.producer.verification_label }} />
@@ -140,7 +141,7 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
   const contactLinkRef = useRef<HTMLAnchorElement>(null)
   const telephoneLinkRef = useRef<HTMLAnchorElement>(null)
   const lastContactChannel = useRef<DirectContactChannel | null>(null)
-  useSeoMetadata(`${product.title} · Mercado Solidario`, `${product.description} · ${product.producer.public_name}, ${publicLocationLabel(product.producer.location) || 'Azuero'}, Panamá.`, image?.url, 'product')
+  useSeoMetadata(`${product.title} · El Empujoncito`, `${product.description} · ${product.producer.public_name}, ${publicLocationLabel(product.producer.location) || 'Panamá'}.`, image?.url, 'product')
   const phone = product.producer.contact_level === 'unverified' ? null : product.producer.phone_public
   const whatsappMessage = templates.product.replaceAll('{product_title}', product.title).replaceAll('{producer_name}', product.producer.public_name)
   const whatsappUrl = phone ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}` : undefined
@@ -150,7 +151,7 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
     const url = new URL(`/compartir/producto/${encodeURIComponent(product.slug)}`, window.location.origin).toString()
     try {
       if (navigator.share) {
-        await navigator.share({ title: product.title, text: `Oferta de ${product.producer.public_name} en Mercado Solidario`, url })
+        await navigator.share({ title: product.title, text: `Oferta de ${product.producer.public_name} en El Empujoncito`, url })
         setShareStatus('Oferta compartida.')
       } else {
         await navigator.clipboard.writeText(url)
@@ -215,7 +216,7 @@ export function HomePage() {
       <main>
         <section className="hero page-shell" aria-labelledby="hero-title">
           <div className="hero__copy">
-            <p className="eyebrow"><span className="eyebrow__line" />Azuero produce, Panamá conecta</p>
+            <p className="eyebrow"><span className="eyebrow__line" />El interior produce, Panamá conecta</p>
             <h1 id="hero-title">El mercado de <em>nuestra tierra.</em></h1>
             <p className="hero__description">
               Encuentra productos y el trabajo de productores locales. Pregunta directamente, conoce su historia y acuerda con ellos.
@@ -232,7 +233,7 @@ export function HomePage() {
             </div>
           </div>
           <div className="hero__visual">
-            <img src={heroPhoto} alt="Productor de Azuero con yuca, plátanos y tomates cosechados en su finca" fetchPriority="high" decoding="async" />
+            <img src={heroPhoto} alt="Productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca" fetchPriority="high" decoding="async" />
             <div className="hero-photo-caption">
               <span className="hero-photo-caption__tag">DESDE AZUERO, CON ORGULLO</span>
               <span>Manos que cultivan futuro</span>
@@ -273,7 +274,7 @@ export function HomePage() {
             <Link className="button button--primary search-panel__submit" to={`/productos${query ? `?q=${encodeURIComponent(query)}` : ''}`}>
               Buscar <ArrowRight size={16} />
             </Link>
-            <div className="search-panel__location"><span aria-hidden="true">◉</span> Azuero, Panamá</div>
+            <div className="search-panel__location"><span aria-hidden="true">◉</span> Coclé, Veraguas, Herrera y Los Santos</div>
           </ValidatedForm>
         </section>
 
@@ -494,7 +495,7 @@ export function CatalogPage() {
         <div className="catalog-heading">
           <div>
             <p className="eyebrow eyebrow--quiet">EL MERCADO LOCAL</p>
-            <h1>Productos locales de Azuero</h1>
+            <h1>Productos locales</h1>
             <p>Encuentra ofertas y conversa directamente con quien las produce.</p>
           </div>
           {visibleApiProducts === null && !visibleApiError && <span className="catalog-sample-note" role="status">Cargando ofertas…</span>}
@@ -553,7 +554,7 @@ export function CatalogPage() {
         </ValidatedForm>
         <div className="catalog-result-line" aria-live="polite">
           <span>{visibleApiError ? 'No pudimos consultar el catálogo' : visibleApiProducts ? `${pagination.total} ${pagination.total === 1 ? 'oferta publicada' : 'ofertas publicadas'}` : 'Consultando el catálogo…'}</span>
-          <span>{province ? selectedProvince?.name ?? 'Provincia seleccionada' : 'Azuero y alrededores'}{district ? ` · ${selectedDistrict?.name ?? 'Distrito seleccionado'}` : ''}{corregimiento ? ` · ${locationsFromApi.find((item) => item.slug === corregimiento)?.name ?? 'Corregimiento seleccionado'}` : ''}</span>
+          <span>{province ? selectedProvince?.name ?? 'Provincia seleccionada' : 'Todas las provincias'}{district ? ` · ${selectedDistrict?.name ?? 'Distrito seleccionado'}` : ''}{corregimiento ? ` · ${locationsFromApi.find((item) => item.slug === corregimiento)?.name ?? 'Corregimiento seleccionado'}` : ''}</span>
         </div>
         {visibleApiError ? (
           <div className="empty-products catalog-empty" role="alert"><strong>No pudimos cargar las ofertas publicadas</strong><span>{visibleApiError}</span><div className="detail-actions"><button className="button button--outline" type="button" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>Intentar de nuevo</button><button className="text-link" type="button" onClick={() => { if (searchInputRef.current) searchInputRef.current.value = ''; setSearchParams({}) }}>Limpiar búsqueda y filtros</button></div></div>
@@ -586,8 +587,8 @@ export function ProductDetailPage() {
   const [apiProduct, setApiProduct] = useState<ApiProduct | null>(null)
   const [apiChecked, setApiChecked] = useState(false)
   useSeoMetadata(
-    apiProduct ? `${apiProduct.title} · Mercado Solidario` : 'Ofertas locales · Mercado Solidario',
-    apiProduct ? `${apiProduct.description} · ${apiProduct.producer.public_name}. Contacta directamente con productores locales de Azuero.` : 'Encuentra y contacta directamente a productores locales de Azuero.',
+    apiProduct ? `${apiProduct.title} · El Empujoncito` : 'Ofertas locales · El Empujoncito',
+    apiProduct ? `${apiProduct.description} · ${apiProduct.producer.public_name}. Contacta directamente con productores locales del interior de Panamá.` : 'Encuentra y contacta directamente a productores locales del interior de Panamá.',
     apiProduct?.images[0]?.url,
     'product',
   )
@@ -603,7 +604,7 @@ export function ProductDetailPage() {
 }
 
 export function GuidePage({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
-  useSeoMetadata(`${title} · Mercado Solidario`, intro)
+  useSeoMetadata(`${title} · El Empujoncito`, intro)
   return (
     <div className="app-shell">
       <SiteHeader />
@@ -635,7 +636,7 @@ export function SafetyGuidePage() {
 
 export function AboutProjectPage() {
   return (
-    <GuidePage title="Sobre el proyecto" intro="Un espacio digital para dar visibilidad a productores, artesanos y emprendimientos locales de Azuero.">
+    <GuidePage title="Sobre el proyecto" intro="Un espacio digital para dar visibilidad a productores, artesanos y emprendimientos locales del interior de Panamá.">
       <div className="guide-grid">
         <section className="guide-card"><span className="guide-card__step">EL MERCADO</span><h2>Ofertas de quienes producen</h2><p>Cada productor crea y mantiene sus publicaciones. El equipo revisa las ofertas antes de mostrarlas en el catálogo.</p></section>
         <section className="guide-card"><span className="guide-card__step">CONTACTO DIRECTO</span><h2>Consulta con la persona que publica</h2><p>Compradores y productores acuerdan directamente disponibilidad, precio, pago y forma de entrega.</p></section>
@@ -710,13 +711,13 @@ export function PublicProducerPage() {
   const [profile, setProfile] = useState<ProducerPublicProfile | null>(null)
   const [error, setError] = useState('')
   useSeoMetadata(
-    profile ? `${profile.public_name} · Productores de Azuero` : 'Productores locales · Mercado Solidario',
-    profile ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${profile.description ?? ''} ${publicLocationLabel(profile.location) || 'Azuero'}, Panamá. Explora sus ofertas y contacta directamente.` : 'Conoce productores locales de Azuero y explora sus ofertas.',
+    profile ? `${profile.public_name} · El Empujoncito` : 'Productores locales · El Empujoncito',
+    profile ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${profile.description ?? ''} ${publicLocationLabel(profile.location) || 'Panamá'}. Explora sus ofertas y contacta directamente.` : 'Conoce productores locales del interior de Panamá y explora sus ofertas.',
     undefined,
     'profile',
   )
   useEffect(() => { void getPublicProducer(slug).then(setProfile).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No se pudo cargar el perfil.')) }, [slug])
-  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><Link className="back-link" to="/productos">← Volver a productos</Link>{error ? <div className="empty-products" role="alert"><strong>{error}</strong></div> : !profile ? <p role="status">Cargando perfil…</p> : <><section className="producer-profile-card"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{profile.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL</p><h1>{profile.public_name}</h1><VerificationBadge level={profile.verification_level} label={profile.verification_label} /><p className="verification-explainer">Este nivel describe las comprobaciones de contacto o identidad realizadas. No garantiza calidad, disponibilidad, pago ni entrega.</p>{profile.activity && <p><strong>{profile.activity}</strong></p>}<p>{publicLocationLabel(profile.location) || 'Azuero, Panamá'}</p>{profile.description && <p>{profile.description}</p>}<PublicProducerContact profile={profile} /><Link className="text-link" to={`/reportar/productor/${profile.id}`}>Reportar este perfil</Link></div></section><section className="featured-section"><h2>Ofertas publicadas</h2>{profile.products.length ? <div className="product-grid">{profile.products.map((product) => <ApiProductCard key={product.id} product={product} />)}</div> : <p>Este productor aún no tiene ofertas publicadas.</p>}</section></>}</main><SiteFooter /></div>
+  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><Link className="back-link" to="/productos">← Volver a productos</Link>{error ? <div className="empty-products" role="alert"><strong>{error}</strong></div> : !profile ? <p role="status">Cargando perfil…</p> : <><section className="producer-profile-card"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{profile.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL</p><h1>{profile.public_name}</h1><VerificationBadge level={profile.verification_level} label={profile.verification_label} /><p className="verification-explainer">Este nivel describe las comprobaciones de contacto o identidad realizadas. No garantiza calidad, disponibilidad, pago ni entrega.</p>{profile.activity && <p><strong>{profile.activity}</strong></p>}<p>{publicLocationLabel(profile.location) || 'Panamá'}</p>{profile.description && <p>{profile.description}</p>}<PublicProducerContact profile={profile} /><Link className="text-link" to={`/reportar/productor/${profile.id}`}>Reportar este perfil</Link></div></section><section className="featured-section"><h2>Ofertas publicadas</h2>{profile.products.length ? <div className="product-grid">{profile.products.map((product) => <ApiProductCard key={product.id} product={product} />)}</div> : <p>Este productor aún no tiene ofertas publicadas.</p>}</section></>}</main><SiteFooter /></div>
 }
 
 export function PublicProducerDirectoryPage() {
@@ -739,7 +740,7 @@ export function PublicProducerDirectoryPage() {
     setQuerySource(query)
     setQueryDraft(query)
   }
-  useSeoMetadata('Productores locales de Azuero · Mercado Solidario', 'Conoce a productores de Azuero, filtra por actividad y ubicación y explora sus ofertas disponibles.', undefined, 'profile')
+  useSeoMetadata('Productores locales · El Empujoncito', 'Conoce a productores del interior de Panamá, filtra por actividad y ubicación y explora sus ofertas disponibles.', undefined, 'profile')
   useEffect(() => {
     if (composing || queryDraft.trim() === query) return
     const timer = window.setTimeout(() => {
@@ -783,7 +784,7 @@ export function PublicProducerDirectoryPage() {
     setSearchParams(next)
   }
 
-  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell producer-directory"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">Productores</span></nav><header className="catalog-heading producer-directory__heading"><div><p className="eyebrow eyebrow--quiet">PERSONAS Y OFICIOS DE AZUERO</p><h1>Productores locales de Azuero</h1><p>Conoce a quienes ofrecen productos y trabajo hecho en la región.</p></div><span className="producer-directory__stamp"><Sprout size={19} aria-hidden="true" /><span>ORIGEN<br />LOCAL</span></span></header><ValidatedForm className="catalog-toolbar producer-directory__filters" role="search" noValidate onSubmit={(event) => { event.preventDefault(); updateFilter('q', queryDraft.trim()) }}><label className="catalog-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productores</span><input type="search" aria-label="Buscar productores" placeholder="Nombre o actividad" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={(event) => { setComposing(false); setQueryDraft(event.currentTarget.value) }} /><button type="button" aria-label="Limpiar búsqueda" onClick={() => { setQueryDraft(''); updateFilter('q', '') }}><X size={16} /></button></label><label className="catalog-filter"><span>Producto</span><select aria-label="Filtrar por producto" value={category} onChange={(event) => updateFilter('category', event.currentTarget.value)}><option value="">Todas las categorías</option>{categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Provincia</span><select aria-label="Filtrar por provincia" value={province} onChange={(event) => updateFilter('province', event.currentTarget.value)}><option value="">Todas</option>{locations.filter((item) => item.level === 'province').map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Distrito</span><select aria-label="Filtrar por distrito" value={district} disabled={!province} onChange={(event) => updateFilter('district', event.currentTarget.value)}><option value="">Todos</option>{districts.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Corregimiento</span><select aria-label="Filtrar por corregimiento" value={corregimiento} disabled={!district} onChange={(event) => updateFilter('corregimiento', event.currentTarget.value)}><option value="">Todos</option>{corregimientos.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label></ValidatedForm><div className="catalog-result-line" aria-live="polite"><span>{currentPage ? `${currentPage.total} ${currentPage.total === 1 ? 'productor con ofertas' : 'productores con ofertas'}` : 'Productores locales'}</span><span>{[selectedDistrict?.name, selectedProvince?.name].filter(Boolean).join(' · ') || 'Azuero y alrededores'}</span></div>{error ? <div className="empty-products catalog-empty" role="alert"><strong>No pudimos cargar el directorio</strong><span>{error}</span><button className="button button--outline" type="button" onClick={() => { setFailure(null); setRetry((value) => value + 1) }}>Intentar de nuevo</button>{paramsKey && <button className="button button--quiet" type="button" onClick={() => { setFailure(null); setQueryDraft(""); setSearchParams({}) }}>Limpiar filtros y volver al directorio</button>}</div> : !currentPage ? <p className="producer-directory__loading" role="status">Buscando productores…</p> : currentPage.data.length ? <section className="producer-directory__grid" aria-label="Productores encontrados">{currentPage.data.map((producer: PublicProducerSummary) => <article className="producer-directory-card" key={producer.id}><div className="producer-directory-card__identity"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL{producer.contact_level !== 'unverified' ? ' · CONTACTO CONFIRMADO' : ''}</p><h2><Link to={`/productores/${producer.slug}`}>{producer.public_name}</Link></h2></div></div><p className="producer-directory-card__activity">{producer.activity ?? 'Productor local'}</p><p className="producer-directory-card__description">{producer.description ?? 'Conoce sus ofertas disponibles y consulta los detalles directamente.'}</p><p className="producer-directory-card__location">{[producer.location?.name, producer.location?.parent?.name].filter(Boolean).join(' · ') || 'Azuero, Panamá'}</p><div className="producer-directory-card__footer"><span>{producer.products_count} {producer.products_count === 1 ? 'oferta disponible' : 'ofertas disponibles'}</span><Link className="text-link" to={`/productores/${producer.slug}`}>Conocer productor <ArrowRight size={15} /></Link></div></article>)}</section> : <div className="empty-products catalog-empty" role="status"><Search size={21} /><strong>No encontramos productores con esos filtros</strong><span>Prueba otra actividad o amplía la ubicación.</span><button className="text-link" type="button" onClick={() => { setQueryDraft(''); setSearchParams({}) }}>Limpiar filtros <ArrowRight size={15} /></button></div>}{currentPage && currentPage.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={currentPage.current_page <= 1} onClick={() => movePage(currentPage.current_page - 1)}>Anterior</button><span aria-live="polite">Página {currentPage.current_page} de {currentPage.last_page}</span><button className="button button--outline button--small" disabled={currentPage.current_page >= currentPage.last_page} onClick={() => movePage(currentPage.current_page + 1)}>Siguiente</button></nav>}<aside className="catalog-safety-note"><ShieldCheck size={18} /><p>El contacto confirmado indica acceso al número, no certifica la calidad del producto ni garantiza una compraventa.</p><Link to="/seguridad">Consejos de seguridad</Link></aside></main><SiteFooter /></div>
+  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell producer-directory"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">Productores</span></nav><header className="catalog-heading producer-directory__heading"><div><p className="eyebrow eyebrow--quiet">PERSONAS Y OFICIOS DEL INTERIOR</p><h1>Productores locales</h1><p>Conoce a quienes ofrecen productos y trabajo hecho en la región.</p></div><span className="producer-directory__stamp"><Sprout size={19} aria-hidden="true" /><span>ORIGEN<br />LOCAL</span></span></header><ValidatedForm className="catalog-toolbar producer-directory__filters" role="search" noValidate onSubmit={(event) => { event.preventDefault(); updateFilter('q', queryDraft.trim()) }}><label className="catalog-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productores</span><input type="search" aria-label="Buscar productores" placeholder="Nombre o actividad" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={(event) => { setComposing(false); setQueryDraft(event.currentTarget.value) }} /><button type="button" aria-label="Limpiar búsqueda" onClick={() => { setQueryDraft(''); updateFilter('q', '') }}><X size={16} /></button></label><label className="catalog-filter"><span>Producto</span><select aria-label="Filtrar por producto" value={category} onChange={(event) => updateFilter('category', event.currentTarget.value)}><option value="">Todas las categorías</option>{categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Provincia</span><select aria-label="Filtrar por provincia" value={province} onChange={(event) => updateFilter('province', event.currentTarget.value)}><option value="">Todas</option>{locations.filter((item) => item.level === 'province').map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Distrito</span><select aria-label="Filtrar por distrito" value={district} disabled={!province} onChange={(event) => updateFilter('district', event.currentTarget.value)}><option value="">Todos</option>{districts.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Corregimiento</span><select aria-label="Filtrar por corregimiento" value={corregimiento} disabled={!district} onChange={(event) => updateFilter('corregimiento', event.currentTarget.value)}><option value="">Todos</option>{corregimientos.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label></ValidatedForm><div className="catalog-result-line" aria-live="polite"><span>{currentPage ? `${currentPage.total} ${currentPage.total === 1 ? 'productor con ofertas' : 'productores con ofertas'}` : 'Productores locales'}</span><span>{[selectedDistrict?.name, selectedProvince?.name].filter(Boolean).join(' · ') || 'Todas las provincias'}</span></div>{error ? <div className="empty-products catalog-empty" role="alert"><strong>No pudimos cargar el directorio</strong><span>{error}</span><button className="button button--outline" type="button" onClick={() => { setFailure(null); setRetry((value) => value + 1) }}>Intentar de nuevo</button>{paramsKey && <button className="button button--quiet" type="button" onClick={() => { setFailure(null); setQueryDraft(""); setSearchParams({}) }}>Limpiar filtros y volver al directorio</button>}</div> : !currentPage ? <p className="producer-directory__loading" role="status">Buscando productores…</p> : currentPage.data.length ? <section className="producer-directory__grid" aria-label="Productores encontrados">{currentPage.data.map((producer: PublicProducerSummary) => <article className="producer-directory-card" key={producer.id}><div className="producer-directory-card__identity"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL{producer.contact_level !== 'unverified' ? ' · CONTACTO CONFIRMADO' : ''}</p><h2><Link to={`/productores/${producer.slug}`}>{producer.public_name}</Link></h2></div></div><p className="producer-directory-card__activity">{producer.activity ?? 'Productor local'}</p><p className="producer-directory-card__description">{producer.description ?? 'Conoce sus ofertas disponibles y consulta los detalles directamente.'}</p><p className="producer-directory-card__location">{[producer.location?.name, producer.location?.parent?.name].filter(Boolean).join(' · ') || 'Panamá'}</p><div className="producer-directory-card__footer"><span>{producer.products_count} {producer.products_count === 1 ? 'oferta disponible' : 'ofertas disponibles'}</span><Link className="text-link" to={`/productores/${producer.slug}`}>Conocer productor <ArrowRight size={15} /></Link></div></article>)}</section> : <div className="empty-products catalog-empty" role="status"><Search size={21} /><strong>No encontramos productores con esos filtros</strong><span>Prueba otra actividad o amplía la ubicación.</span><button className="text-link" type="button" onClick={() => { setQueryDraft(''); setSearchParams({}) }}>Limpiar filtros <ArrowRight size={15} /></button></div>}{currentPage && currentPage.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={currentPage.current_page <= 1} onClick={() => movePage(currentPage.current_page - 1)}>Anterior</button><span aria-live="polite">Página {currentPage.current_page} de {currentPage.last_page}</span><button className="button button--outline button--small" disabled={currentPage.current_page >= currentPage.last_page} onClick={() => movePage(currentPage.current_page + 1)}>Siguiente</button></nav>}<aside className="catalog-safety-note"><ShieldCheck size={18} /><p>El contacto confirmado indica acceso al número, no certifica la calidad del producto ni garantiza una compraventa.</p><Link to="/seguridad">Consejos de seguridad</Link></aside></main><SiteFooter /></div>
 }
 
 export function AccessPage({ title, description }: { title: string; description: string }) {
@@ -799,6 +800,19 @@ export function AccessPage({ title, description }: { title: string; description:
   const [locationsLoading, setLocationsLoading] = useState(isRegister)
   const [locationsError, setLocationsError] = useState(false)
   const [locationsRetry, setLocationsRetry] = useState(0)
+  // multi-step registration state
+  const [regStep, setRegStep] = useState(1)
+  const [regName, setRegName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const [regPublicName, setRegPublicName] = useState('')
+  const [regActivity, setRegActivity] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regLocationId, setRegLocationId] = useState<number | null>(null)
+  const [regTerms, setRegTerms] = useState(false)
+  const [regPrivacy, setRegPrivacy] = useState(false)
+  const [regSubmitting, setRegSubmitting] = useState(false)
+
   useEffect(() => {
     if (!isRegister) return
     let active = true
@@ -817,17 +831,46 @@ export function AccessPage({ title, description }: { title: string; description:
     return () => { active = false }
   }, [isRegister, locationsRetry])
 
-  async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
+  async function submitRegistration() {
+    setRegSubmitting(true)
+    setFormMessage('')
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+    try {
+      const xsrf = await csrfToken()
+      const response = await fetch(`${apiBase}/auth/register`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
+        body: JSON.stringify({
+          name: regName, email: regEmail, password: regPassword,
+          public_name: regPublicName, activity: regActivity || null,
+          phone: regPhone, location_id: regLocationId,
+          terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
+          terms_confirmed: '1', privacy_confirmed: '1',
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || 'No pudimos completar el registro. Revisa los datos e inténtalo de nuevo.')
+      }
+      window.location.assign('/verificar')
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio. Inténtalo de nuevo.')
+      setRegSubmitting(false)
+    }
+  }
+
+  async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
     try {
       const xsrf = await csrfToken()
-      const response = await fetch(`${apiBase}/auth/${isRegister ? 'register' : 'login'}`, {
+      const response = await fetch(`${apiBase}/auth/login`, {
         method: 'POST',
         credentials: 'include',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
-        body: JSON.stringify(isRegister ? { ...Object.fromEntries(form), activity: form.get('activity'), location_id: Number(form.get('location_id')), terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10' } : Object.fromEntries(form)),
+        body: JSON.stringify(Object.fromEntries(form)),
       })
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
@@ -838,11 +881,9 @@ export function AccessPage({ title, description }: { title: string; description:
         setFormMessage('Ingresa el código actual de tu aplicación autenticadora.')
         return
       }
-      if (!isRegister) {
-        const result = await response.json().catch(() => ({})) as { mfa_setup_required?: boolean }
-        if (result.mfa_setup_required) { window.location.assign('/admin/mfa'); return }
-      }
-      window.location.assign(isRegister ? '/verificar' : '/mi-panel')
+      const result = await response.json().catch(() => ({})) as { mfa_setup_required?: boolean }
+      if (result.mfa_setup_required) { window.location.assign('/admin/mfa'); return }
+      window.location.assign('/mi-panel')
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio. Inténtalo de nuevo.')
     }
@@ -861,7 +902,7 @@ export function AccessPage({ title, description }: { title: string; description:
               <h2>Solicita recuperar tu autenticador</h2><p>Dos revisores distintos verificarán tu identidad. La administración quedará bloqueada hasta volver a registrar MFA. No incluyas documentos ni números de identidad en el motivo.</p><label htmlFor="mfa-recovery-request-reason">Motivo de la solicitud<textarea id="mfa-recovery-request-reason" name="reason" className="resize-none" style={{ resize: 'none' }} value={mfaRecoveryReason} onChange={(event) => setMfaRecoveryReason(event.currentTarget.value)} minLength={10} maxLength={1000} rows={4} required /></label>{formMessage && <p role="alert">{formMessage}</p>}<button className="button button--primary" type="submit" disabled={mfaRecoveryBusy} aria-busy={mfaRecoveryBusy}>{mfaRecoveryBusy ? 'Enviando solicitud…' : 'Solicitar recuperación'}</button><button className="button button--quiet" type="button" onClick={() => { setMfaRecoveryOpen(false); setFormMessage('') }} disabled={mfaRecoveryBusy}>Volver al código MFA</button>
             </ValidatedForm> : <ValidatedForm key="mfa-challenge" className="auth-form" onSubmit={async (event) => { event.preventDefault(); const code = String(new FormData(event.currentTarget).get('code')); try { await completeAdminMfaChallenge(code); window.location.assign('/admin') } catch (error) { if (error instanceof Error && 'status' in error && (error.status === 401 || error.status === 429)) setMfaChallenge(false); setFormMessage(error instanceof Error ? error.message : 'No se pudo completar el segundo paso.') } }}>
               <h2>Verificación en dos pasos</h2><label>Código de autenticación<input name="code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete="one-time-code" required /></label>{formMessage && <p role="status">{formMessage}</p>}<button className="button button--primary" type="submit">Verificar e ingresar</button><button className="button button--quiet" type="button" onClick={() => { setMfaRecoveryOpen(true); setFormMessage('') }}>Perdí mi autenticador</button>
-            </ValidatedForm> : <ValidatedForm key="sign-in" className="auth-form" onSubmit={submitAuth}>
+            </ValidatedForm> : <ValidatedForm key="sign-in" className="auth-form" onSubmit={submitLogin}>
               <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
               <label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label>
               {formMessage && <p role="alert">{formMessage}</p>}
@@ -870,22 +911,84 @@ export function AccessPage({ title, description }: { title: string; description:
               <Link className="text-link" to="/registro">Crear una cuenta de productor</Link>
             </ValidatedForm>
           ) : isRegister ? (
-            <ValidatedForm className="auth-form" onSubmit={submitAuth}>
-              <label>Tu nombre<input name="name" type="text" autoComplete="name" required /></label>
-              <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
-              <label>Nombre público de tu emprendimiento<input name="public_name" type="text" autoComplete="organization" required /></label>
-              <label>Actividad principal<input name="activity" type="text" maxLength={120} placeholder="Cultivo, artesanía, emprendimiento…" /></label>
-              <fieldset className="location-fieldset"><legend>Ubicación de tu emprendimiento</legend><LocationPicker locations={registrationLocations} idPrefix="registration-location" required disabled={locationsLoading || locationsError || registrationLocations.length === 0} /></fieldset>
-              {locationsError && <div role="alert"><p>No pudimos cargar las localidades.</p><button className="button button--outline" type="button" onClick={() => setLocationsRetry((attempt) => attempt + 1)}>Intentar de nuevo</button></div>}
-              {!locationsLoading && !locationsError && registrationLocations.length === 0 && <p role="alert">No hay localidades disponibles para el registro. Inténtalo más tarde.</p>}
-              <label>Teléfono de contacto<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required /><small>Panamá: ocho dígitos, por ejemplo 6000-1234. Para otro país, incluye el prefijo internacional.</small></label>
-              <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={12} required /></label>
-              <label className="auth-consent"><input name="terms_confirmed" type="checkbox" value="1" required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
-              <label className="auth-consent"><input name="privacy_confirmed" type="checkbox" value="1" required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
-              {formMessage && <p role="alert">{formMessage}</p>}
-              <button className="button button--primary" type="submit" disabled={locationsLoading || locationsError || registrationLocations.length === 0}>Continuar con registro <ArrowRight size={16} /></button>
-              <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
-            </ValidatedForm>
+            <div className="reg-wizard">
+              <nav className="reg-steps" aria-label="Pasos del registro">
+                {[['1','Tu cuenta'],['2','Emprendimiento'],['3','Ubicación'],['4','Confirmar']].map(([n, lbl]) => (
+                  <button key={n} type="button"
+                    className={`reg-step-dot${regStep === Number(n) ? ' reg-step-dot--active' : ''}${regStep > Number(n) ? ' reg-step-dot--done' : ''}`}
+                    onClick={() => { if (regStep > Number(n)) setRegStep(Number(n)) }}
+                    disabled={regStep <= Number(n)}
+                    aria-label={`Paso ${n}: ${lbl}`}
+                    aria-current={regStep === Number(n) ? 'step' : undefined}
+                  >
+                    <span className="reg-step-dot__num">{regStep > Number(n) ? '✓' : n}</span>
+                    <span className="reg-step-dot__lbl">{lbl}</span>
+                  </button>
+                ))}
+              </nav>
+
+              {regStep === 1 && (
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(2) }}>
+                  <div className="form-row-2">
+                    <label>Tu nombre completo<input name="name" type="text" autoComplete="name" required value={regName} onChange={e => setRegName(e.target.value)} /></label>
+                    <label>Correo electrónico<input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /></label>
+                  </div>
+                  <label>Contraseña<input name="password" type="password" autoComplete="new-password" minLength={12} required value={regPassword} onChange={e => setRegPassword(e.target.value)} /><small>Mínimo 12 caracteres.</small></label>
+                  <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
+                  <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
+                </ValidatedForm>
+              )}
+
+              {regStep === 2 && (
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(3) }}>
+                  <div className="form-row-2">
+                    <label>Nombre público del emprendimiento<input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /></label>
+                    <label>Actividad principal<ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /></label>
+                  </div>
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" onClick={() => setRegStep(1)}>Atrás</button>
+                    <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
+                  </div>
+                </ValidatedForm>
+              )}
+
+              {regStep === 3 && (
+                <div className="auth-form reg-step-form">
+                  <fieldset className="location-fieldset">
+                    <legend>Ubicación de tu emprendimiento</legend>
+                    {locationsLoading && <p role="status">Cargando localidades…</p>}
+                    {locationsError && <div role="alert"><p>No pudimos cargar las localidades.</p><button className="button button--outline" type="button" onClick={() => setLocationsRetry(a => a + 1)}>Intentar de nuevo</button></div>}
+                    {!locationsLoading && !locationsError && <LocationPicker locations={registrationLocations} idPrefix="registration-location" required value={regLocationId} onChange={setRegLocationId} />}
+                    <small>Elige provincia, distrito o corregimiento. No compartas una dirección exacta.</small>
+                  </fieldset>
+                  <label>Teléfono de contacto<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><small>Panamá: ocho dígitos, por ejemplo 6000-1234. Para otro país incluye el prefijo internacional.</small></label>
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" onClick={() => setRegStep(2)}>Atrás</button>
+                    <button className="button button--primary" type="button" disabled={!regLocationId || !regPhone} onClick={() => setRegStep(4)}>Continuar <ArrowRight size={16} /></button>
+                  </div>
+                </div>
+              )}
+
+              {regStep === 4 && (
+                <div className="auth-form reg-step-form">
+                  <div className="reg-review">
+                    <div className="reg-review__row"><span>Nombre</span><strong>{regName}</strong></div>
+                    <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
+                    <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
+                    {regActivity && <div className="reg-review__row"><span>Actividad</span><strong>{regActivity}</strong></div>}
+                    {regPhone && <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>}
+                  </div>
+                  <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
+                  <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
+                  {formMessage && <p role="alert">{formMessage}</p>}
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" disabled={regSubmitting} onClick={() => setRegStep(3)}>Atrás</button>
+                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Registrando…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
+                  </div>
+                  <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="access-card__actions"><Link className="button button--primary" to="/ingresar">Ingresar <ArrowRight size={16} /></Link><Link className="text-link" to="/registro">Crear una cuenta de productor</Link></div>
           )}

@@ -24,7 +24,7 @@ Route::get('/ready', function () {
         abort_unless(Cache::get('health:readiness') === 'ok', 503);
         Redis::connection()->ping();
         $referenceDataReady = Category::query()->where('active', true)->exists();
-        foreach (['Herrera' => 49, 'Los Santos' => 81] as $provinceName => $expectedCorregimientos) {
+        foreach (['Herrera' => 49, 'Los Santos' => 81, 'Coclé' => 30, 'Veraguas' => 55] as $provinceName => $expectedCorregimientos) {
             $province = Location::query()->where('active', true)->where('level', 'province')
                 ->where('slug', Str::slug($provinceName))->first();
             if ($province === null) {
@@ -37,7 +37,8 @@ Route::get('/ready', function () {
                 ->where('parent_id', $province->id)->get(['id']);
             $corregimientoCount = Location::query()->where('active', true)->where('level', 'corregimiento')
                 ->whereIn('parent_id', $districts->pluck('id'))->count();
-            $referenceDataReady = $referenceDataReady && $districts->count() >= 7
+            $minDistricts = match ($provinceName) { 'Veraguas' => 12, default => 6 };
+            $referenceDataReady = $referenceDataReady && $districts->count() >= $minDistricts
                 && $corregimientoCount >= $expectedCorregimientos;
         }
     } catch (Throwable) {
@@ -55,6 +56,7 @@ Route::get('/message-templates', [MessageTemplateController::class, 'public']);
 Route::post('/search-events', [PublicCatalogController::class, 'recordNoResultSearch'])->middleware('throttle:public-actions');
 Route::get('/products/{slug}', [PublicCatalogController::class, 'product']);
 Route::get('/products/{slug}/images/{imageId}', [PublicCatalogController::class, 'image'])->whereNumber('imageId');
+Route::get('/activities', fn () => response()->json(['data' => config('activities')]));
 Route::get('/categories', [PublicCatalogController::class, 'categories']);
 Route::get('/locations', [PublicCatalogController::class, 'locations']);
 Route::get('/producers', [PublicCatalogController::class, 'producers']);

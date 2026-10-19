@@ -15,8 +15,8 @@ class MessageTemplateController
     private const LABELS = ['product' => 'producto', 'producer' => 'productor'];
 
     private const DEFAULTS = [
-        'product' => 'Hola, vi tu oferta de {product_title} en Mercado Solidario. ¿Sigue disponible?',
-        'producer' => 'Hola, encontré el perfil de {producer_name} en Mercado Solidario. ¿Me puedes contar sobre tus ofertas?',
+        'product' => 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?',
+        'producer' => 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?',
     ];
 
     public function public(): JsonResponse

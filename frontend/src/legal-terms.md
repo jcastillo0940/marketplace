@@ -2,7 +2,7 @@
 
 ## 1. Aceptación y quién opera el servicio
 
-Estos términos regulan el acceso y uso del sitio web, directorio, formularios, perfiles, publicaciones y funciones de contacto de Super Carnes Marketplace Solidario (el **“Marketplace”**). El servicio es operado por la entidad que se identifique en los datos anteriores (**“Super Carnes”**, **“nosotros”** o **“Operador”**). Al navegar se aceptan las reglas aplicables al uso; para crear una cuenta o publicar, el usuario debe aceptar expresamente la versión vigente de estos términos y reconocer el aviso de privacidad.
+Estos términos regulan el acceso y uso del sitio web, directorio, formularios, perfiles, publicaciones y funciones de contacto de El Empujoncito (el **”Marketplace”**). El servicio es operado por la entidad que se identifique en los datos anteriores (**“Super Carnes”**, **“nosotros”** o **“Operador”**). Al navegar se aceptan las reglas aplicables al uso; para crear una cuenta o publicar, el usuario debe aceptar expresamente la versión vigente de estos términos y reconocer el aviso de privacidad.
 
 Si el usuario no acepta, debe dejar de usar las funciones que requieran cuenta. Los cambios sustanciales se anunciarán por un medio razonable y, cuando corresponda, se solicitará nueva aceptación antes de continuar usando funciones afectadas. Se conservará evidencia de la versión, fecha y forma de aceptación.
 

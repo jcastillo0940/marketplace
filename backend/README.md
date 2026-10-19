@@ -1,4 +1,4 @@
-# API del Marketplace Solidario
+# API de El Empujoncito
 
 API REST del marketplace con Laravel 13, Sanctum y MySQL 8.4. El frontend React y los servicios de desarrollo se coordinan desde el Compose raíz; esta carpeta no es un stack independiente.
 

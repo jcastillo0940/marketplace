@@ -1,9 +1,11 @@
 <?php
 
 /**
- * División política administrativa de Herrera y Los Santos, Censos 2023.
- * Fuente: INEC, cuadros de Lugares Poblados, filas de corregimiento (columna C).
- * Las filas “(Continuación)” repiten corregimientos y se excluyen.
+ * División político-administrativa de Herrera, Los Santos, Coclé y Veraguas.
+ * Fuente de referencia: INEC, División Político-Administrativa de la República de Panamá 2023.
+ * Herrera y Los Santos verificados con cuadros de Lugares Poblados, Censos 2023.
+ * Coclé y Veraguas: estructura distrital según INEC; corregimientos requieren
+ * verificación final contra cuadros de Lugares Poblados 2023.
  * https://www.inec.gob.pa/archivos/P053342420240202111819Herrera.xlsx
  * https://www.inec.gob.pa/archivos/P0289562520240201164821Los%20Santos.xlsx
  */
@@ -25,5 +27,27 @@ return [
         'Pedasí' => ['Pedasí', 'Los Asientos', 'Mariabé', 'Purio', 'Oria Arriba'],
         'Pocrí' => ['Pocrí', 'El Cañafístulo', 'Lajamina', 'Paraíso', 'Paritilla'],
         'Tonosí' => ['Tonosí', 'Altos de Güera', 'Cañas', 'El Bebedero', 'El Cacao', 'El Cortezo', 'Flores', 'Guánico', 'La Tronosa', 'Cambutal', 'Isla de Cañas'],
+    ],
+    'Coclé' => [
+        'Aguadulce' => ['Aguadulce', 'El Limón', 'El Roble', 'Los Llanos', 'Pocrí', 'Río Grande'],
+        'Antón' => ['Antón', 'El Chirú', 'El Valle', 'Juan Díaz', 'Llano Grande', 'Musquí', 'Río Hato'],
+        'La Pintada' => ['El Copé', 'El Harino', 'La Loma', 'La Pintada', 'Llano Grande'],
+        'Natá' => ['Capellanía', 'El Caño', 'Guzmán', 'Llanito', 'Natá'],
+        'Olá' => ['El Picacho', 'Olá', 'Tulú'],
+        'Penonomé' => ['Caimito', 'Coclé del Norte', 'El Coco', 'El Pedregoso', 'La Pava', 'Pajonal', 'Penonomé', 'Río Grande', 'Río Indio', 'Toabre', 'La Posada'],
+    ],
+    'Veraguas' => [
+        'Atalaya' => ['Atalaya', 'Los Valles', 'Ponuga'],
+        'Calobre' => ['Barnizal', 'Calobre', 'El Cacao', 'El Cocla', 'El Marañón', 'Las Guías', 'San Francisco'],
+        'Cañazas' => ['Cañazas', 'El Aromillo', 'El Picador', 'Las Cruces', 'San José'],
+        'La Mesa' => ['El Cuay', 'La Mesa', 'La Raya de Calobre', 'Llano Grande', 'Lucha Franco'],
+        'Las Palmas' => ['Las Palmas', 'El Palmar', 'La Montañuela', 'Los Hatillos', 'Mariato', 'Quebrada de Oro', 'Quebro', 'San Martín de Porres'],
+        'Montijo' => ['Gobea', 'Llano Grande', 'Montijo', 'Pilón', 'Quebrada de Oro', 'Trinidad'],
+        'Río de Jesús' => ['Rodeo Viejo', 'Río de Jesús', 'San Pedro del Espino'],
+        'San Francisco' => ['La Raya de Santa María', 'La Soledad', 'San Francisco', 'San José'],
+        'Santa Fé' => ['Calovébora', 'El Alto', 'Gatú', 'Quebrada del Rosario', 'Santa Fé'],
+        'Santiago' => ['La Colorada', 'La Peña', 'La Raya de la Arena', 'La Ye', 'Llano Grande', 'Ponuga', 'San Pedro', 'Santiago'],
+        'Soná' => ['Cativé', 'La Colorada', 'La Soledad', 'La Tronosa', 'Quebrada de Oro', 'Rodeo Viejo', 'San José', 'San Pablo Viejo', 'Soná', 'Trinidad'],
+        'Unión Chocó' => ['Gobernadora', 'Unión Chocó'],
     ],
 ];
