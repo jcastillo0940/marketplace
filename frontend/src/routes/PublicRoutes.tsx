@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
-import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, CircleHelp, Leaf, Search, ShieldCheck, Sprout, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Flag, Handshake, HeartHandshake, Leaf, Lock, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, Users, X } from 'lucide-react';
 
-import { Link, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import heroPhoto from '../assets/azuero-harvest.webp';
 
@@ -18,6 +18,11 @@ import ValidatedForm from '../components/ValidatedForm';
 import VerificationBadge from '../components/VerificationBadge';
 
 import { completeAdminMfaChallenge, csrfToken, getContactMessageTemplates, DEFAULT_CONTACT_MESSAGE_TEMPLATES, getPublicProducer, getPublicProducers, getProduct, listCategories, listLocations, listProducts, recordContact, recordNoResultSearch, requestAdminMfaRecovery, requestPasswordReset, resetPassword, submitReport, type ApiProduct, type ProducerPublicProfile, type PublicLocation, type PublicProducerSummary, type ProducerVerificationLevel } from '../api/client';
+
+import { TESTIMONIALS, TESTIMONIAL_DESIGN_SAMPLE, type Testimonial } from '../content/testimonials';
+
+import { BrushStrokes, FavoriteButton, WhatsAppIcon } from './shared/MarketUi';
+import { CATEGORY_PHOTOS, categoryVisual } from './shared/marketVisuals';
 
 import { SiteFooter, SiteHeader } from './shared/SiteChrome';
 
@@ -43,34 +48,33 @@ type FeaturedProduct = {
 }
 
 export function ProductCard({ product }: { product: FeaturedProduct }) {
+  const hasPrice = product.price !== 'Consultar'
   return (
     <article className="product-card">
-      <Link className="product-card__image-link" to={`/productos/${product.id}`} aria-label={`Ver ${product.title}`}>
-        <div className={`product-card__image ${product.imageClass}`}>
-          <img src={product.image} alt={product.imageAlt} loading="lazy" decoding="async" />
-          <span className="harvest-label">Cosecha local</span>
-          <span className="product-card__arrow" aria-hidden="true"><ArrowUpRight size={17} /></span>
-        </div>
-      </Link>
+      <div className="product-card__media">
+        <Link className="product-card__image-link" to={`/productos/${product.id}`} aria-label={`Ver ${product.title}`}>
+          <div className={`product-card__image ${product.imageClass}`}>
+            <img src={product.image} alt={product.imageAlt} loading="lazy" decoding="async" />
+          </div>
+        </Link>
+        <FavoriteButton id={product.id} title={product.title} className="product-card__favorite" />
+      </div>
       <div className="product-card__body">
-        <div className="product-card__category">{product.category}</div>
         <h3><Link to={`/productos/${product.id}`}>{product.title}</Link></h3>
-        <div className="producer-line">
-          <span className="producer-avatar" aria-hidden="true">{product.initials}</span>
-          <span className="producer-line__name">{product.producer}</span>
+        <p className="product-card__location"><MapPin size={14} aria-hidden="true" /> {product.location}</p>
+        <p className="product-card__producer">
+          <span>{product.producer}</span>
           {product.verified && product.verificationLevel && <VerificationBadge level={product.verificationLevel} label={product.verificationLabel} />}
-        </div>
-        <p className="product-card__location"><span aria-hidden="true">·</span> {product.location}</p>
+        </p>
+        <p className="product-price">
+          <strong>{hasPrice ? product.price : 'Precio a consultar'}</strong>
+          {hasPrice && <span>por {product.unit}</span>}
+        </p>
         <p className="product-card__availability">{product.availability}</p>
-        <div className="product-card__footer">
-          <p className="product-price">
-            <strong>{product.price}</strong>
-            {product.price !== 'Consultar' && <span>{product.unit}</span>}
-          </p>
-          <Link className="text-link" to={`/productos/${product.id}`}>
-            Ver oferta <ChevronRight size={15} />
-          </Link>
-        </div>
+        <Link className="contact-chip" to={`/productos/${product.id}#contactar`} aria-label={`Contactar sobre ${product.title}`}>
+          <span className="contact-chip__icon"><WhatsAppIcon size={16} /></span>
+          Contactar
+        </Link>
       </div>
     </article>
   )
@@ -83,7 +87,8 @@ export function productPrice(product: Pick<ApiProduct, 'price_type' | 'price_amo
 }
 
 export function publicLocationLabel(location?: { name: string; parent?: { name: string; parent?: { name: string } } } | null): string {
-  return [location?.name, location?.parent?.name, location?.parent?.parent?.name].filter(Boolean).join(', ')
+  const parts = [location?.name, location?.parent?.name, location?.parent?.parent?.name].filter((part): part is string => Boolean(part))
+  return parts.filter((part, index) => part !== parts[index - 1]).join(', ')
 }
 
 export function useContactTemplates() {
@@ -129,6 +134,136 @@ export function DirectContactConfirmation({ channel, href, message, onCancel, on
   return <div className="contact-confirmation-backdrop"><section ref={dialogRef} className="contact-confirmation" role="dialog" aria-modal="true" aria-labelledby="contact-confirmation-title" tabIndex={-1}><p className="eyebrow eyebrow--quiet">CONTACTO DIRECTO</p><h2 id="contact-confirmation-title">{channel === 'whatsapp' ? 'Antes de continuar a WhatsApp' : 'Antes de iniciar la llamada'}</h2><p>Confirma disponibilidad, precio y entrega directamente con el productor. No compartas contraseñas ni códigos de verificación.</p><ul className="contact-confirmation__safety"><li>No envíes dinero por adelantado sin verificar al productor y acordar las condiciones.</li><li>Antes de abrir un enlace de pago, confirma la solicitud por un canal independiente. Nunca compartas contraseñas ni OTP.</li><li>Confirma el pago directamente en tu cuenta; no confíes solo en capturas o comprobantes enviados por otra persona.</li><li>Acuerda entrega y lugar de encuentro directamente. No compartas códigos de acceso ni OTP.</li></ul>{channel === 'whatsapp' && message && <label className="text-area-field"><span>Mensaje para el productor · puedes editarlo</span><textarea rows={3} maxLength={1000} className="resize-none" style={{ resize: 'none' }} value={editableMessage} onChange={(event) => setEditableMessage(event.currentTarget.value)} /></label>}<p>El marketplace no procesa pagos ni organiza entregas. Registraremos este clic como intención de contacto, no como una venta.</p><div className="contact-confirmation__actions"><button className="button button--quiet" type="button" onClick={onCancel}>Volver</button><a className="button button--primary" href={outgoingHref} target={channel === 'whatsapp' ? '_blank' : undefined} rel={channel === 'whatsapp' ? 'noreferrer' : undefined} onClick={onContinue}>{channel === 'whatsapp' ? 'Continuar a WhatsApp' : 'Iniciar llamada'} <ArrowUpRight size={16} /></a></div></section></div>
 }
 
+type DetailTab = 'productor' | 'historia' | 'ubicacion' | 'preguntas'
+const DETAIL_TABS: Array<{ id: DetailTab; label: string }> = [
+  { id: 'productor', label: 'Productor' },
+  { id: 'historia', label: 'Historia' },
+  { id: 'ubicacion', label: 'Ubicación' },
+  { id: 'preguntas', label: 'Preguntas' },
+]
+
+function useProductNeighbors(product: ApiProduct) {
+  const [state, setState] = useState<{ slug: string; previous?: ApiProduct; next?: ApiProduct }>({ slug: '' })
+  useEffect(() => {
+    const controller = new AbortController()
+    listProducts(new URLSearchParams({ category: product.category.slug, per_page: '48' }), controller.signal)
+      .then((result) => {
+        const items = Array.isArray(result?.data) ? result.data : []
+        const index = items.findIndex((item) => item.slug === product.slug)
+        if (index === -1 || items.length < 2) return
+        setState({ slug: product.slug, previous: items[index - 1], next: items[index + 1] })
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [product.slug, product.category.slug])
+  return state.slug === product.slug ? state : { slug: '' }
+}
+
+function useProducerProfile(slug: string) {
+  const [state, setState] = useState<{ slug: string; profile: ProducerPublicProfile } | null>(null)
+  useEffect(() => {
+    let active = true
+    getPublicProducer(slug).then((result) => { if (active && result && typeof result === 'object') setState({ slug, profile: result }) }).catch(() => undefined)
+    return () => { active = false }
+  }, [slug])
+  return state?.slug === slug ? state.profile : null
+}
+
+function DetailTabs({ product, profile, location }: { product: ApiProduct; profile: ProducerPublicProfile | null; location: string }) {
+  const [active, setActive] = useState<DetailTab>('productor')
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const producer = product.producer
+  const initials = producer.public_name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA')
+  const otherProducts = (Array.isArray(profile?.products) ? profile.products : []).filter((item) => item.slug !== product.slug)
+  const publishedCount = Array.isArray(profile?.products) ? profile.products.length : null
+  const story = profile?.description?.trim()
+  const province = product.producer.location?.parent?.parent?.name ?? product.producer.location?.parent?.name ?? product.producer.location?.name
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    const target = event.key === 'Home' ? 0 : event.key === 'End' ? DETAIL_TABS.length - 1 : delta ? (index + delta + DETAIL_TABS.length) % DETAIL_TABS.length : -1
+    if (target < 0) return
+    event.preventDefault()
+    setActive(DETAIL_TABS[target].id)
+    tabRefs.current[target]?.focus()
+  }
+  return (
+    <section className="detail-tabs page-shell" aria-label="Más información">
+      <div className="detail-tabs__list" role="tablist" aria-label="Información del producto">
+        {DETAIL_TABS.map((tab, index) => (
+          <button
+            key={tab.id}
+            ref={(element) => { tabRefs.current[index] = element }}
+            id={`detail-tab-${tab.id}`}
+            type="button"
+            role="tab"
+            aria-selected={active === tab.id}
+            aria-controls={`detail-panel-${tab.id}`}
+            tabIndex={active === tab.id ? 0 : -1}
+            onClick={() => setActive(tab.id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div id="detail-panel-productor" role="tabpanel" aria-labelledby="detail-tab-productor" hidden={active !== 'productor'} className="detail-producer-panel">
+        <div className="detail-producer-panel__profile">
+          <span className="detail-producer-panel__avatar" aria-hidden="true">{initials}</span>
+          <div>
+            <h2>{producer.public_name}</h2>
+            {profile?.activity && <p className="detail-producer-panel__activity">{profile.activity}</p>}
+            <p className="detail-producer-panel__location"><MapPin size={16} aria-hidden="true" /> {location}</p>
+            {producer.verification_level && <VerificationBadge level={producer.verification_level} label={producer.verification_label} />}
+            <p className="detail-producer-panel__story">{story || 'Este productor todavía no ha compartido su historia. Escríbele para conocer más sobre su trabajo.'}</p>
+            <Link className="button button--outline" to={`/productores/${producer.slug}`}>Ver más productos de este productor <ArrowRight size={16} /></Link>
+          </div>
+        </div>
+        <ul className="detail-producer-panel__facts">
+          <li><Store size={22} aria-hidden="true" /><strong>{publishedCount ?? '—'}</strong><span>{publishedCount === 1 ? 'publicación activa' : 'publicaciones activas'}</span></li>
+          <li><MapPin size={22} aria-hidden="true" /><strong>{province ?? 'Panamá'}</strong><span>zona de producción</span></li>
+          <li><BadgeCheck size={22} aria-hidden="true" /><strong>{producer.verification_label ?? (producer.contact_level === 'unverified' ? 'Sin verificar' : 'Contacto confirmado')}</strong><span>nivel de verificación</span></li>
+          <li><HeartHandshake size={22} aria-hidden="true" /><strong>Trato directo</strong><span>sin intermediarios</span></li>
+        </ul>
+      </div>
+
+      <div id="detail-panel-historia" role="tabpanel" aria-labelledby="detail-tab-historia" hidden={active !== 'historia'} className="detail-text-panel">
+        <h2>La historia de {producer.public_name}</h2>
+        <p>{story || 'Este productor todavía no ha compartido su historia.'}</p>
+        <h3>Sobre este producto</h3>
+        <p>{product.description}</p>
+      </div>
+
+      <div id="detail-panel-ubicacion" role="tabpanel" aria-labelledby="detail-tab-ubicacion" hidden={active !== 'ubicacion'} className="detail-text-panel">
+        <h2>Ubicación</h2>
+        <p className="detail-text-panel__location"><MapPin size={18} aria-hidden="true" /> {location}</p>
+        <p>Por seguridad mostramos solo la zona general del productor. Acuerda el lugar de entrega o recogida directamente con él.</p>
+        <p><strong>Entrega o recogida:</strong> {product.delivery_method}</p>
+      </div>
+
+      <div id="detail-panel-preguntas" role="tabpanel" aria-labelledby="detail-tab-preguntas" hidden={active !== 'preguntas'} className="detail-text-panel detail-faq">
+        <h2>Preguntas frecuentes</h2>
+        <details><summary>¿Cómo compro este producto?</summary><p>Contacta al productor por WhatsApp o teléfono y acuerda con él cantidad, precio final, pago y entrega.</p></details>
+        <details><summary>¿Puedo pagar en la plataforma?</summary><p>No. El Empujoncito no procesa pagos. Acuerda el método de pago directamente y verifica antes de enviar dinero.</p></details>
+        <details><summary>¿Quién revisa las publicaciones?</summary><p>El equipo revisa cada publicación antes de mostrarla. La verificación no garantiza la calidad del producto ni la transacción.</p></details>
+        <details><summary>¿Algo no está bien con esta oferta?</summary><p>Puedes <Link to={`/reportar/producto/${product.id}`}>reportar esta oferta</Link> y el equipo revisará el caso.</p></details>
+      </div>
+
+      {otherProducts.length > 0 && (
+        <div className="detail-more">
+          <div className="home-section__heading">
+            <h2>Más productos de este productor</h2>
+            <Link className="text-link" to={`/productores/${producer.slug}`}>Ver todos <ArrowRight size={15} /></Link>
+          </div>
+          <div className="product-grid product-grid--four">
+            {otherProducts.slice(0, 4).map((item) => <ApiProductCard key={item.id} product={{ ...item, producer: item.producer ?? product.producer, category: item.category ?? product.category, images: item.images ?? [] }} />)}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function ApiProductDetail({ product }: { product: ApiProduct }) {
   const templates = useContactTemplates()
   const [activeImageIndex, setActiveImageIndex] = useState(0)
@@ -141,7 +276,12 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
   const contactLinkRef = useRef<HTMLAnchorElement>(null)
   const telephoneLinkRef = useRef<HTMLAnchorElement>(null)
   const lastContactChannel = useRef<DirectContactChannel | null>(null)
-  useSeoMetadata(`${product.title} · El Empujoncito`, `${product.description} · ${product.producer.public_name}, ${publicLocationLabel(product.producer.location) || 'Panamá'}.`, image?.url, 'product')
+  const location = publicLocationLabel(product.producer.location) || 'Panamá'
+  const province = product.producer.location?.parent?.parent?.name ?? product.producer.location?.parent?.name ?? product.producer.location?.name ?? 'Panamá'
+  useSeoMetadata(`${product.title} · El Empujoncito`, `${product.description} · ${product.producer.public_name}, ${location}.`, image?.url, 'product')
+  useScrollToHash()
+  const neighbors = useProductNeighbors(product)
+  const profile = useProducerProfile(product.producer.slug)
   const phone = product.producer.contact_level === 'unverified' ? null : product.producer.phone_public
   const whatsappMessage = templates.product.replaceAll('{product_title}', product.title).replaceAll('{producer_name}', product.producer.public_name)
   const whatsappUrl = phone ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}` : undefined
@@ -180,26 +320,158 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
     setContactConfirmation(null)
   }
   useEffect(() => setActiveImageIndex(0), [product.id])
-  return <div className="app-shell"><SiteHeader /><main className="detail-page page-shell"><Link className="back-link" to="/productos">← Volver a productos</Link><div className="detail-card"><div className="product-gallery"><img className="product-gallery__main" src={imageUrl} alt={image?.alt_text ?? product.title} fetchPriority="high" decoding="async" />{product.images.length > 1 && <><div className="product-gallery__controls"><button className="button button--outline button--small" type="button" aria-label="Ver foto anterior" onClick={() => setActiveImageIndex((index) => (index - 1 + product.images.length) % product.images.length)}><ChevronLeft size={17} /> Anterior</button><span aria-live="polite">Foto {activeImageIndex + 1} de {product.images.length}</span><button className="button button--outline button--small" type="button" aria-label="Ver foto siguiente" onClick={() => setActiveImageIndex((index) => (index + 1) % product.images.length)}>Siguiente <ChevronRight size={17} /></button></div><div className="product-gallery__thumbnails" role="group" aria-label="Seleccionar fotografía">{product.images.map((photo, index) => <button key={photo.id} type="button" aria-label={`Ver foto ${index + 1}`} aria-pressed={activeImageIndex === index} onClick={() => setActiveImageIndex(index)}><img src={photo.thumbnail_url ?? photo.url} alt="" loading="lazy" decoding="async" /></button>)}</div></>}</div><div><p className="eyebrow eyebrow--quiet">{product.category.name}</p><h1>{product.title}</h1><p className="detail-producer">Publicado por <Link to={`/productores/${product.producer.slug}`}>{product.producer.public_name}</Link></p><p className="detail-price">{price} {price !== 'Consultar' && <span>por {product.unit}</span>}</p><p className="detail-availability">{availability}</p><p className="detail-availability"><strong>Entrega o recogida:</strong> {product.delivery_method}</p><p className="detail-description">{product.description}</p>{contactError && <p role="status">{contactError}</p>}<div className="detail-actions"><a ref={contactLinkRef} className="button button--primary" href={whatsappUrl} aria-disabled={!phone} onClick={(event) => { if (!phone) { event.preventDefault(); return } event.preventDefault(); lastContactChannel.current = 'whatsapp'; setContactConfirmation('whatsapp') }}>{phone ? 'Consultar por WhatsApp' : 'Contacto disponible pronto'}</a>{phone && <a ref={telephoneLinkRef} className="button button--outline" href={telephoneUrl} onClick={(event) => { event.preventDefault(); lastContactChannel.current = 'phone'; setContactConfirmation('phone') }}>Llamar por teléfono</a>}<button className="button button--outline" type="button" onClick={() => void shareProduct()}>Compartir oferta</button><Link className="button button--outline" to={`/reportar/producto/${product.id}`}>Reportar esta oferta</Link><Link className="text-link" to="/seguridad">Recomendaciones de seguridad <ArrowRight size={15} /></Link></div>{shareStatus && <p role="status">{shareStatus}</p>}</div></div>{contactConfirmation && <DirectContactConfirmation channel={contactConfirmation} href={contactConfirmation === 'whatsapp' ? whatsappUrl! : telephoneUrl!} message={contactConfirmation === 'whatsapp' ? whatsappMessage : undefined} onCancel={cancelContactConfirmation} onContinue={confirmContact} />}</main><SiteFooter /></div>
+  const imageCount = product.images.length
+  const showImage = (step: number) => setActiveImageIndex((index) => (index + step + imageCount) % imageCount)
+
+  return (
+    <div className="app-shell">
+      <SiteHeader />
+      <main className="product-page">
+        <div className="product-page__hero">
+        <div className="product-page__crumbs page-shell">
+          <nav className="breadcrumbs" aria-label="Ruta de navegación">
+            <Link to="/">Inicio</Link><ChevronRight size={14} aria-hidden="true" />
+            <Link to={`/productos?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link><ChevronRight size={14} aria-hidden="true" />
+            <span aria-current="page">{product.title}</span>
+          </nav>
+          {(neighbors.previous || neighbors.next) && (
+            <nav className="product-page__siblings" aria-label="Productos de la misma categoría">
+              {neighbors.previous && <Link to={`/productos/${neighbors.previous.slug}`}><ArrowLeft size={15} aria-hidden="true" /> Producto anterior</Link>}
+              {neighbors.previous && neighbors.next && <span aria-hidden="true">|</span>}
+              {neighbors.next && <Link to={`/productos/${neighbors.next.slug}`}>Siguiente producto <ArrowRight size={15} aria-hidden="true" /></Link>}
+            </nav>
+          )}
+        </div>
+
+        <div className="product-page__top page-shell">
+          <div className="product-gallery">
+            <div className="product-gallery__stage">
+              <img className="product-gallery__main" src={imageUrl} alt={image?.alt_text ?? product.title} fetchPriority="high" decoding="async" />
+              <FavoriteButton id={product.slug} title={product.title} className="product-gallery__favorite" />
+              {imageCount > 1 && (
+                <>
+                  <button className="carousel-arrow carousel-arrow--prev" type="button" aria-label="Ver foto anterior" onClick={() => showImage(-1)}><ChevronLeft size={20} /></button>
+                  <button className="carousel-arrow carousel-arrow--next" type="button" aria-label="Ver foto siguiente" onClick={() => showImage(1)}><ChevronRight size={20} /></button>
+                  <span className="product-gallery__counter" aria-live="polite">Foto {activeImageIndex + 1} de {imageCount}</span>
+                </>
+              )}
+            </div>
+            {imageCount > 1 && (
+              <div className="product-gallery__thumbnails" role="group" aria-label="Seleccionar fotografía">
+                {product.images.map((photo, index) => <button key={photo.id} type="button" aria-label={`Ver foto ${index + 1}`} aria-pressed={activeImageIndex === index} onClick={() => setActiveImageIndex(index)}><img src={photo.thumbnail_url ?? photo.url} alt="" loading="lazy" decoding="async" /></button>)}
+              </div>
+            )}
+          </div>
+
+          <div className="product-info">
+            <span className="product-info__category">{product.category.name}</span>
+            <h1>{product.title}</h1>
+            <p className="product-info__byline">Publicado por <Link to={`/productores/${product.producer.slug}`}>{product.producer.public_name}</Link> · {location}</p>
+            <p className="product-info__price"><strong>{price}</strong>{price !== 'Consultar' && <span>por {product.unit}</span>}</p>
+            <p className="product-info__description">{product.description}</p>
+
+            <ul className="product-info__highlights">
+              <li><Leaf size={24} aria-hidden="true" /><span>Producto local<br />de {province}</span></li>
+              <li><MessageCircle size={24} aria-hidden="true" /><span>Contacto directo<br />con quien lo produce</span></li>
+              <li><BadgeCheck size={24} aria-hidden="true" /><span>Publicación revisada<br />por el equipo</span></li>
+            </ul>
+
+            <div className="product-info__contact" id="contactar">
+              {contactError && <p role="status">{contactError}</p>}
+              <div className="product-info__contact-buttons">
+                <a ref={contactLinkRef} className="button button--whatsapp" href={whatsappUrl} aria-disabled={!phone} onClick={(event) => { event.preventDefault(); if (!phone) return; lastContactChannel.current = 'whatsapp'; setContactConfirmation('whatsapp') }}>
+                  <WhatsAppIcon size={22} /> {phone ? 'Contactar por WhatsApp' : 'Contacto disponible pronto'} {phone && <ArrowRight size={18} aria-hidden="true" />}
+                </a>
+                {phone && <a ref={telephoneLinkRef} className="button button--outline button--call" href={telephoneUrl} onClick={(event) => { event.preventDefault(); lastContactChannel.current = 'phone'; setContactConfirmation('phone') }}><Phone size={18} aria-hidden="true" /> Llamar</a>}
+              </div>
+              <p className="product-info__contact-note">Habla directamente con el productor. Acuerda precio, disponibilidad y entrega.</p>
+            </div>
+
+            <dl className="product-info__meta">
+              <div><dt><Tag size={18} aria-hidden="true" /> Categoría</dt><dd>{product.category.name}</dd></div>
+              <div><dt><MapPin size={18} aria-hidden="true" /> Ubicación</dt><dd>{location}</dd></div>
+              <div><dt><Truck size={18} aria-hidden="true" /> Entrega o recogida</dt><dd>{product.delivery_method}</dd></div>
+              <div><dt><Package size={18} aria-hidden="true" /> Disponibilidad</dt><dd>{availability}</dd></div>
+              <div><dt><CreditCard size={18} aria-hidden="true" /> Pagos</dt><dd>Se acuerdan con el productor. La plataforma no procesa pagos.</dd></div>
+            </dl>
+
+            <div className="product-info__secondary">
+              <button className="text-link" type="button" onClick={() => void shareProduct()}><Share2 size={15} aria-hidden="true" /> Compartir oferta</button>
+              <Link className="text-link" to={`/reportar/producto/${product.id}`}><Flag size={15} aria-hidden="true" /> Reportar esta oferta</Link>
+              <Link className="text-link" to="/seguridad"><ShieldCheck size={15} aria-hidden="true" /> Recomendaciones de seguridad</Link>
+            </div>
+            {shareStatus && <p role="status" className="product-info__status">{shareStatus}</p>}
+          </div>
+        </div>
+        </div>
+
+        <DetailTabs product={product} profile={profile} location={location} />
+
+        {contactConfirmation && <DirectContactConfirmation channel={contactConfirmation} href={contactConfirmation === 'whatsapp' ? whatsappUrl! : telephoneUrl!} message={contactConfirmation === 'whatsapp' ? whatsappMessage : undefined} onCancel={cancelContactConfirmation} onContinue={confirmContact} />}
+      </main>
+      <SiteFooter />
+    </div>
+  )
+}
+
+const POPULAR_SEARCHES = ['Café', 'Miel', 'Huevos', 'Plantas', 'Artesanías', 'Productos de limpieza', 'Ropa', 'Quesos']
+
+function useScrollToHash() {
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash) return
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)))
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [hash])
+}
+
+function TestimonialCarousel({ items, sample }: { items: Testimonial[]; sample: boolean }) {
+  const [index, setIndex] = useState(0)
+  const item = items[index]
+  const go = (step: number) => setIndex((current) => (current + step + items.length) % items.length)
+  return (
+    <section className="home-testimonials page-shell" id="historias" aria-roledescription="carrusel" aria-label="Historias de productores">
+      {sample && <p className="home-testimonials__sample">Ejemplo de diseño · reemplaza este contenido en <code>src/content/testimonials.ts</code></p>}
+      <div className="home-testimonials__card">
+        {items.length > 1 && <button className="carousel-arrow carousel-arrow--prev" type="button" aria-label="Historia anterior" onClick={() => go(-1)}><ChevronLeft size={18} /></button>}
+        <div className="home-testimonials__portrait" aria-hidden="true">
+          {item.photo ? <img src={item.photo} alt="" loading="lazy" decoding="async" /> : <span>{item.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>}
+        </div>
+        <figure className="home-testimonials__body" aria-live="polite">
+          <blockquote>“{item.quote}”</blockquote>
+          <figcaption><strong>{item.name}</strong><span>{item.role}</span></figcaption>
+        </figure>
+        <div className="home-testimonials__leaf" aria-hidden="true"><Leaf size={120} strokeWidth={1.1} /></div>
+        {items.length > 1 && <button className="carousel-arrow carousel-arrow--next" type="button" aria-label="Historia siguiente" onClick={() => go(1)}><ChevronRight size={18} /></button>}
+      </div>
+      {items.length > 1 && (
+        <div className="carousel-dots" role="group" aria-label="Elegir historia">
+          {items.map((_, dot) => <button key={dot} type="button" aria-label={`Historia ${dot + 1}`} aria-pressed={dot === index} onClick={() => setIndex(dot)} />)}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export function HomePage() {
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [activeCategory, setActiveCategory] = useState('')
+  const [province, setProvince] = useState('')
+  const [provinces, setProvinces] = useState<PublicLocation[]>([])
   const [homeProducts, setHomeProducts] = useState<ApiProduct[] | null>(null)
   const [homeCategories, setHomeCategories] = useState<Array<{ id: number; name: string; slug: string }>>([])
   const [homeError, setHomeError] = useState('')
   const [homeRetry, setHomeRetry] = useState(0)
+  useScrollToHash()
 
   useEffect(() => {
-    void listCategories().then(setHomeCategories).catch(() => setHomeCategories([]))
+    void listCategories().then((result) => setHomeCategories(Array.isArray(result) ? result : [])).catch(() => setHomeCategories([]))
+    void listLocations().then((result) => setProvinces(Array.isArray(result) ? result.filter((item) => item.level === 'province') : [])).catch(() => setProvinces([]))
   }, [])
 
   useEffect(() => {
     const controller = new AbortController()
-    const params = new URLSearchParams({ per_page: '3' })
-    if (activeCategory) params.set('category', activeCategory)
-    listProducts(params, controller.signal)
+    listProducts(new URLSearchParams({ per_page: '4' }), controller.signal)
       .then((result) => { setHomeProducts(result.data); setHomeError('') })
       .catch((error: unknown) => {
         if (error instanceof Error && error.name !== 'AbortError') {
@@ -208,174 +480,174 @@ export function HomePage() {
         }
       })
     return () => controller.abort()
-  }, [activeCategory, homeRetry])
+  }, [homeRetry])
+
+  const searchParams = new URLSearchParams()
+  if (query.trim()) searchParams.set('q', query.trim())
+  if (province) searchParams.set('province', province)
+  const searchHref = `/productos${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+  const testimonials = TESTIMONIALS.length ? TESTIMONIALS : import.meta.env.DEV && import.meta.env.MODE !== 'test' ? TESTIMONIAL_DESIGN_SAMPLE : []
 
   return (
     <div className="app-shell">
       <SiteHeader />
-      <main>
-        <section className="hero page-shell" aria-labelledby="hero-title">
-          <div className="hero__copy">
-            <p className="eyebrow"><span className="eyebrow__line" />El interior produce, Panamá conecta</p>
-            <h1 id="hero-title">El mercado de <em>nuestra tierra.</em></h1>
-            <p className="hero__description">
-              Encuentra productos y el trabajo de productores locales. Pregunta directamente, conoce su historia y acuerda con ellos.
-            </p>
-            <div className="hero__actions">
-              <Link className="button button--primary" to="/productos">
-                Explorar productos <ArrowRight size={17} />
-              </Link>
-              <Link className="button button--quiet" to="/registro">Publica tu oferta</Link>
-            </div>
-            <div className="hero__note">
-              <span className="hero__note-icon"><Leaf size={16} /></span>
-              <span>Contacto directo. Sin intermediarios ni pagos en la plataforma.</span>
-            </div>
+      <main className="home">
+        <section className="home-hero" aria-labelledby="hero-title">
+          <div className="home-hero__photo" aria-hidden="true">
+            <img src={heroPhoto} alt="" fetchPriority="high" decoding="async" />
           </div>
-          <div className="hero__visual">
-            <img src={heroPhoto} alt="Productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca" fetchPriority="high" decoding="async" />
-            <div className="hero-photo-caption">
-              <span>Manos que cultivan futuro</span>
+          <div className="home-hero__inner page-shell">
+            <div className="home-hero__copy">
+              <p className="home-eyebrow">Productos locales, personas reales</p>
+              <h1 id="hero-title">Encuentra emprendedores <span>de nuestra tierra.</span></h1>
+              <p className="home-hero__lead">Productos frescos, artesanías, alimentos y más. Conecta directamente con quienes los producen.</p>
             </div>
-            <div className="hero-seal" aria-label="Cosecha y emprendimiento local">
-              <Sprout size={21} />
-              <span>COSECHA<br />LOCAL</span>
-            </div>
+            <p className="home-hero__note" aria-hidden="true">Apoyar lo local<br />también nos alimenta<BrushStrokes className="home-hero__brush" /></p>
           </div>
+          <span className="sr-only">Fotografía: productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca.</span>
         </section>
 
-        <section className="search-band" aria-label="Busca ofertas locales">
-          <ValidatedForm className="search-panel page-shell" role="search" noValidate onSubmit={(event) => event.preventDefault()}>
-            <div className="search-panel__intro">
-              <span className="search-panel__icon"><Search size={18} /></span>
-              <div>
-                <label htmlFor="product-search">¿Qué te gustaría encontrar?</label>
-                <span>Busca por producto, productor o lugar</span>
-              </div>
-            </div>
-            <div className="search-panel__input-wrap">
+        <section className="home-search page-shell" aria-label="Busca productos y emprendedores">
+          <ValidatedForm className="home-search__panel" role="search" noValidate onSubmit={(event) => { event.preventDefault(); navigate(searchHref) }}>
+            <label className="home-search__field home-search__field--query">
+              <Search size={19} aria-hidden="true" />
               <input
                 id="product-search"
                 type="search"
                 role="searchbox"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ej. yuca, huevos, artesanías…"
+                placeholder="¿Qué estás buscando? Ej. café, miel, artesanías…"
                 aria-label="Buscar productos"
                 autoComplete="off"
+                enterKeyHint="search"
               />
               {query && (
                 <button className="search-clear" type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery('')}>
                   <X size={16} />
                 </button>
               )}
-            </div>
-            <Link className="button button--primary search-panel__submit" to={`/productos${query ? `?q=${encodeURIComponent(query)}` : ''}`}>
-              Buscar <ArrowRight size={16} />
+            </label>
+            <label className="home-search__field home-search__field--province">
+              <MapPin size={18} aria-hidden="true" />
+              <select aria-label="Filtrar por provincia" value={province} onChange={(event) => setProvince(event.target.value)}>
+                <option value="">Todas las provincias</option>
+                {provinces.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
+              </select>
+              <ChevronDown className="home-search__chevron" size={16} aria-hidden="true" />
+            </label>
+            <Link className="button button--primary home-search__submit" to={searchHref}>
+              Buscar
             </Link>
-            <div className="search-panel__location"><span aria-hidden="true">◉</span> Coclé, Veraguas, Herrera y Los Santos</div>
           </ValidatedForm>
-        </section>
-
-        <section className="category-section page-shell" aria-labelledby="category-title">
-          <div className="section-heading section-heading--compact">
-            <div>
-              <p className="eyebrow eyebrow--quiet">LO QUE SE PRODUCE AQUÍ</p>
-              <h2 id="category-title">Busca por categoría</h2>
-            </div>
-            <Link className="text-link text-link--large" to="/productos">Ver todas <ArrowRight size={16} /></Link>
-          </div>
-          <div className="category-grid">
-            {homeCategories.map((category, index) => (
-              <button
-                type="button"
-                className={`category-tile${activeCategory === category.slug ? ' category-tile--active' : ''}`}
-                aria-pressed={activeCategory === category.slug}
-                key={category.id}
-                onClick={() => setActiveCategory((current) => current === category.slug ? '' : category.slug)}
-              >
-                <span className={`category-icon ${['category-icon--leaf', 'category-icon--sun', 'category-icon--craft', 'category-icon--other'][index % 4]}`} aria-hidden="true">
-                  {index === 2 ? <Sprout size={21} /> : <Leaf size={21} />}
-                </span>
-                <span className="category-tile__text">
-                  <strong>{category.name}</strong>
-                  <small>Explorar ofertas</small>
-                </span>
-                <ChevronRight className="category-tile__arrow" size={16} aria-hidden="true" />
-              </button>
-            ))}
+          <div className="home-search__popular">
+            <span id="popular-searches-label">Búsquedas populares:</span>
+            <ul aria-labelledby="popular-searches-label">
+              {POPULAR_SEARCHES.map((term) => <li key={term}><Link className="chip" to={`/productos?q=${encodeURIComponent(term)}`}>{term}</Link></li>)}
+            </ul>
           </div>
         </section>
 
-        <section className="featured-section page-shell" aria-labelledby="featured-title">
-          <div className="section-heading">
+        <section className="home-section page-shell" aria-labelledby="category-title">
+          <div className="home-section__heading">
+            <h2 id="category-title">Explora por categoría</h2>
+            <Link className="text-link" to="/productos">Ver todas las categorías <ArrowRight size={15} /></Link>
+          </div>
+          {homeCategories.length > 0 ? (
+            <ul className="category-rail">
+              {homeCategories.map((category) => {
+                const { Icon, tone } = categoryVisual(category.name)
+                const photo = CATEGORY_PHOTOS[category.slug]
+                return (
+                  <li key={category.id}>
+                    <Link className={`category-card category-card--${tone}`} to={`/productos?category=${encodeURIComponent(category.slug)}`}>
+                      <span className="category-card__media" aria-hidden="true">
+                        {photo ? <img src={photo} alt="" loading="lazy" decoding="async" /> : <Icon className="category-card__art" size={58} strokeWidth={1.25} />}
+                      </span>
+                      <span className="category-card__badge" aria-hidden="true"><Icon size={17} /></span>
+                      <span className="category-card__name">{category.name}</span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="home-section__placeholder">Las categorías aparecerán aquí en cuanto estén configuradas.</p>
+          )}
+        </section>
+
+        <section className="home-section page-shell" aria-labelledby="featured-title">
+          <div className="home-section__heading">
             <div>
-            <p className="eyebrow eyebrow--quiet">OFERTAS LOCALES</p>
-              <h2 id="featured-title">De aquí, para compartir</h2>
-              <p className="section-heading__description">Ofertas revisadas y disponibles para consultar directamente.</p>
+              <h2 id="featured-title">Productos destacados</h2>
+              <p>Conoce algunos de los productos que puedes encontrar en nuestra plataforma.</p>
             </div>
-            <Link className="button button--outline featured-all" to="/productos">
-              Explorar el mercado <ArrowRight size={16} />
-            </Link>
+            <Link className="text-link" to="/productos">Ver todos los productos <ArrowRight size={15} /></Link>
           </div>
           {homeError ? (
             <div className="empty-products" role="alert"><strong>No pudimos cargar las ofertas</strong><span>{homeError}</span><button className="text-link" type="button" onClick={() => { setHomeError(''); setHomeProducts(null); setHomeRetry((attempt) => attempt + 1) }}>Intentar de nuevo</button><Link className="text-link" to="/productos">Explorar el catálogo <ArrowRight size={15} /></Link></div>
           ) : homeProducts === null ? (
-            <p role="status">Cargando ofertas locales…</p>
+            <p role="status" className="home-section__placeholder">Cargando productos locales…</p>
           ) : homeProducts.length ? (
-            <div className="product-grid">
+            <div className="product-grid product-grid--four">
               {homeProducts.map((product) => <ApiProductCard key={product.id} product={product} />)}
             </div>
           ) : (
             <div className="empty-products" role="status">
               <Sprout size={21} />
-              <strong>{activeCategory ? 'Aún no hay ofertas en esta categoría' : 'Pronto encontrarás ofertas locales'}</strong>
+              <strong>Pronto encontrarás productos locales</strong>
               <span>Cuando una publicación sea revisada y aprobada aparecerá aquí.</span>
-              {activeCategory && <button className="text-link" type="button" onClick={() => setActiveCategory('')}>Ver todas las ofertas <ArrowRight size={15} /></button>}
             </div>
           )}
         </section>
 
-        <section className="trust-band" id="como-funciona">
-          <div className="trust-band__inner page-shell">
-            <div className="trust-band__intro">
-              <p className="eyebrow eyebrow--light">UN ENCUENTRO MÁS CERCANO</p>
-              <h2>Conoce. Conecta.<br /><em>Apoya lo local.</em></h2>
-              <p>El productor ofrece. Tú preguntas y acuerdas directamente con él.</p>
+        <section className="home-story" id="como-funciona" aria-labelledby="how-title">
+          <div className="home-story__people">
+            <img src={heroPhoto} alt="Productor de Azuero junto a su cosecha de yuca, plátano y tomate" loading="lazy" decoding="async" />
+            <div className="home-story__people-copy">
+              <h2>Personas que hacen que nuestra tierra crezca.</h2>
+              <Link className="button button--ghost-light" to="/productores">Conoce sus historias <ArrowRight size={16} /></Link>
             </div>
-            <div className="trust-steps">
-              <div className="trust-step">
-                <span className="trust-step__icon"><Search size={20} /></span>
-                <div><strong>Encuentra</strong><p>Explora ofertas y conoce quién las produce.</p></div>
-              </div>
-              <div className="trust-step">
-                <span className="trust-step__icon"><ArrowUpRight size={20} /></span>
-                <div><strong>Conversa directo</strong><p>Consulta por WhatsApp o teléfono al productor.</p></div>
-              </div>
-              <div className="trust-step">
-                <span className="trust-step__icon"><ShieldCheck size={20} /></span>
-                <div><strong>Decide con cuidado</strong><p>Acuerda precio, pago y entrega entre ustedes.</p></div>
-              </div>
-            </div>
-            <Link className="trust-band__link" to="/seguridad">Consejos para comprar con confianza <ArrowRight size={16} /></Link>
+          </div>
+          <div className="home-story__how">
+            <h2 id="how-title">¿Cómo funciona?</h2>
+            <p className="home-story__sub">Es muy fácil. Sin intermediarios.</p>
+            <ol className="how-steps">
+              <li><span className="how-steps__icon"><Search size={22} /></span><span className="how-steps__number">1</span><div><strong>Busca productos</strong><p>y encuentra emprendedores de tu región.</p></div></li>
+              <li><span className="how-steps__icon how-steps__icon--whatsapp"><WhatsAppIcon size={22} /></span><span className="how-steps__number">2</span><div><strong>Contacta directamente</strong><p>por WhatsApp o teléfono.</p></div></li>
+              <li><span className="how-steps__icon"><Handshake size={22} /></span><span className="how-steps__number">3</span><div><strong>Acuerda la compra</strong><p>directamente con el productor.</p></div></li>
+            </ol>
+            <Link className="text-link" to="/seguridad">Consejos para comprar con confianza <ArrowRight size={15} /></Link>
           </div>
         </section>
 
-        <section className="producer-cta page-shell">
-          <div className="producer-cta__mark" aria-hidden="true"><Sprout size={27} /></div>
-          <div className="producer-cta__copy">
-            <p className="eyebrow eyebrow--quiet">¿PRODUCES, CULTIVAS O CREAS?</p>
-            <h2>Tu trabajo merece ser visto.</h2>
-            <p>Publica tus productos gratis. Puedes hacerlo todo a mano, paso a paso y a tu ritmo.</p>
+        <section className="home-publish page-shell" aria-labelledby="publish-title">
+          <div className="home-publish__band">
+            <div className="home-publish__copy">
+              <p className="home-eyebrow home-eyebrow--dark">¿Eres productor o emprendedor?</p>
+              <h2 id="publish-title">Publica tu producto gratis.</h2>
+              <p>Llega a más personas y haz crecer tu negocio.</p>
+              <Link className="button button--primary" to="/registro">Publicar ahora <ArrowRight size={16} /></Link>
+            </div>
+            <p className="home-publish__note" aria-hidden="true">Tu talento<br />también<br />empodera<br />comunidades</p>
+            <div className="home-publish__photo" aria-hidden="true">
+              <img src={heroPhoto} alt="" loading="lazy" decoding="async" />
+            </div>
+            <BrushStrokes className="home-publish__brush" />
           </div>
-          <Link className="button button--primary" to="/registro">Quiero publicar <ArrowRight size={16} /></Link>
+          <p className="home-publish__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
         </section>
 
-        <section className="help-strip page-shell">
-          <div className="help-strip__icon"><CircleHelp size={20} /></div>
-          <p>¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Conoce las opciones de apoyo</Link></p>
-          <span>Estamos para orientarte</span>
+        <section className="home-values page-shell" aria-label="Por qué El Empujoncito">
+          <ul>
+            <li><span className="home-values__icon"><Sprout size={24} /></span><div><strong>Una iniciativa con propósito</strong><p>Impulsada por Super Carnes.</p></div></li>
+            <li><span className="home-values__icon"><ShieldCheck size={24} /></span><div><strong>Contacto directo</strong><p>Hablas directamente con el productor.</p></div></li>
+            <li><span className="home-values__icon"><Users size={24} /></span><div><strong>Apoyo a comunidades</strong><p>Compras que generan un impacto real.</p></div></li>
+            <li><span className="home-values__icon"><Lock size={24} /></span><div><strong>Seguro y confiable</strong><p>Revisamos cada publicación antes de que sea visible.</p></div></li>
+          </ul>
         </section>
+
+        {testimonials.length > 0 && <TestimonialCarousel items={testimonials} sample={TESTIMONIALS.length === 0} />}
       </main>
 
       <SiteFooter />

@@ -19,7 +19,7 @@ describe('route group contract', () => {
   it('renders the public home route', async () => {
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: /el mercado de nuestra tierra/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /encuentra emprendedores de nuestra tierra/i })).toBeInTheDocument()
   })
 
   it('renders the public not-found page for unknown paths', async () => {
@@ -64,10 +64,10 @@ describe('route group contract', () => {
     fireEvent.click(menu)
 
     expect(screen.getByLabelText('Cerrar menú')).toHaveAttribute('aria-expanded', 'true')
-    await user.click(within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', { name: 'Productos' }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', { name: 'Explorar' }))
 
     expect(screen.getByLabelText('Abrir menú')).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByRole('link', { name: 'Ayuda' })).toHaveAttribute('href', '/ayuda')
+    expect(footer.getByRole('link', { name: 'Preguntas' })).toHaveAttribute('href', '/ayuda')
   })
 
   it('opens and closes the mobile navigation with keyboard controls', async () => {
@@ -910,9 +910,9 @@ describe('marketplace home', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: /el mercado de nuestra tierra/i }),
+      screen.getByRole('heading', { name: /encuentra emprendedores de nuestra tierra/i }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /explorar productos/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /ver todos los productos/i })).toHaveAttribute(
       'href',
       '/productos',
     )
@@ -981,7 +981,7 @@ describe('marketplace home', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: product }) })
     vi.stubGlobal('fetch', fetchMock)
     render(<MemoryRouter initialEntries={['/productos/tomate-local']}><App /></MemoryRouter>)
-    const contactLink = await screen.findByRole('link', { name: 'Consultar por WhatsApp' })
+    const contactLink = await screen.findByRole('link', { name: 'Contactar por WhatsApp' })
     expect(contactLink).toHaveAttribute('href', expect.stringContaining('wa.me/50760001111'))
     const destination = new URL(contactLink.getAttribute('href')!)
     expect(destination.searchParams.get('text')).toContain('Tomate local')
@@ -1011,7 +1011,7 @@ describe('marketplace home', () => {
       return Promise.resolve({ ok: true, json: async () => data })
     }))
     render(<MemoryRouter initialEntries={['/productos/tomate-local']}><App /></MemoryRouter>)
-    const opener = await screen.findByRole('link', { name: 'Consultar por WhatsApp' })
+    const opener = await screen.findByRole('link', { name: 'Contactar por WhatsApp' })
     await waitFor(() => expect(new URL(opener.getAttribute('href')!).searchParams.get('text')).toBe('Buen día, quisiera consultar Tomate local con Huerto local.'))
     vi.unstubAllGlobals()
   })
@@ -1047,7 +1047,7 @@ describe('marketplace home', () => {
     const product = { id: 4, slug: 'tomate-local', title: 'Tomate local', description: 'Tomates de temporada cultivados en Azuero.', unit: 'libra', price_type: 'fixed', price_amount: '1.25', currency: 'PAB', stock_quantity: null, status: 'published', category: { name: 'Frutas y verduras', slug: 'frutas' }, producer: { public_name: 'Huerto local', slug: 'huerto-local', contact_level: 'contact_confirmed', phone_public: '+50760001111', location: { name: 'Las Tablas', parent: { name: 'Los Santos' } } }, images: [] }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: product }) }))
     render(<MemoryRouter initialEntries={['/productos/tomate-local']}><App /></MemoryRouter>)
-    const opener = await screen.findByRole('link', { name: 'Consultar por WhatsApp' })
+    const opener = await screen.findByRole('link', { name: 'Contactar por WhatsApp' })
     opener.focus()
     await user.keyboard('{Enter}')
     const dialog = await screen.findByRole('dialog', { name: /antes de continuar a whatsapp/i })
@@ -1077,7 +1077,7 @@ describe('marketplace home', () => {
     const product = { id: 4, slug: 'tomate-local', title: 'Tomate local', description: 'Tomates frescos.', unit: 'libra', price_type: 'contact', price_amount: null, currency: 'PAB', stock_quantity: null, status: 'published', category: { name: 'Frutas', slug: 'frutas' }, producer: { public_name: 'Huerto local', slug: 'huerto-local', contact_level: 'contact_confirmed', phone_public: '+50760001111', location: null }, images: [] }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: product }) }))
     render(<MemoryRouter initialEntries={['/productos/tomate-local']}><App /></MemoryRouter>)
-    await user.click(await screen.findByRole('link', { name: 'Llamar por teléfono' }))
+    await user.click(await screen.findByRole('link', { name: 'Llamar' }))
     const dialog = await screen.findByRole('dialog', { name: /antes de iniciar la llamada/i })
     expect(dialog).toHaveTextContent(/no envíes dinero por adelantado/i)
     expect(dialog).toHaveTextContent(/antes de abrir un enlace de pago, confirma la solicitud por un canal independiente/i)
@@ -1734,7 +1734,7 @@ describe('marketplace home', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<MemoryRouter><App /></MemoryRouter>)
-    expect(await screen.findByRole('heading', { name: 'De aquí, para compartir' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Productos destacados' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Tomate local' })).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input]) => new URL(String(input), 'http://localhost:8000').pathname.endsWith('/products'))).toBe(true)
     vi.unstubAllGlobals()
