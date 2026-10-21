@@ -21,7 +21,7 @@ import { completeAdminMfaChallenge, csrfToken, getContactMessageTemplates, DEFAU
 
 import { TESTIMONIALS, TESTIMONIAL_DESIGN_SAMPLE, type Testimonial } from '../content/testimonials';
 
-import { BrushStrokes, FavoriteButton, WhatsAppIcon } from './shared/MarketUi';
+import { FavoriteButton, WhatsAppIcon } from './shared/MarketUi';
 import { CATEGORY_PHOTOS, categoryVisual } from './shared/marketVisuals';
 import { useReveal } from '../hooks/useReveal';
 
@@ -527,7 +527,7 @@ export function HomePage() {
                 <li><span className="home-hero__benefit-icon"><Heart size={20} /></span>Impulsa<br />nuestra economía</li>
               </ul>
             </div>
-            <p className="home-hero__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '480ms' }}>Apoyar lo local<br />también nos alimenta<BrushStrokes className="home-hero__brush" /></p>
+            <p className="home-hero__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '480ms' }}>Apoyar lo local<br />también nos alimenta</p>
           </div>
           <span className="sr-only">Fotografía: productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca.</span>
         </section>
