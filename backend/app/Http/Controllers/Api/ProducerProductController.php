@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminUser;
 use App\Models\AuditLog;
 use App\Models\ContactEvent;
 use App\Models\ProducerProfile;
@@ -104,7 +105,7 @@ class ProducerProductController extends Controller
                     'slug' => $slug, 'title' => $data['title'], 'description' => $data['description'], 'unit' => $data['unit'],
                     'price_type' => $priceType, 'price_amount' => $priceType === 'contact' ? null : ($data['price_amount'] ?? null),
                     'currency' => $data['currency'] ?? 'PAB', 'stock_quantity' => $data['stock_quantity'] ?? null,
-                    'delivery_method' => $data['delivery_method'], 'status' => 'draft',
+                    'delivery_method' => $data['delivery_method'], 'status' => 'pending',
                 ]);
                 foreach ($data['images'] as $position => $image) {
                     $paths = $photoOptimizer->store($image, $mediaDisk, "products/{$product->id}");
@@ -276,7 +277,8 @@ class ProducerProductController extends Controller
         $data = $request->validate(['decision' => ['required', 'in:approve,reject,request_changes'], 'reason' => ['required', 'string', 'min:5', 'max:1000']]);
         $status = ['approve' => 'published', 'reject' => 'rejected', 'request_changes' => 'changes_requested'][$data['decision']];
         $product = Product::query()->where('status', 'pending')->findOrFail($id);
-        $product = $workflow->transition($product, $status, $request->user()->id, $data['reason'], moderator: true);
+        $isAdmin = $request->user() instanceof AdminUser;
+        $product = $workflow->transition($product, $status, $isAdmin ? null : $request->user()->id, $data['reason'], moderator: true, adminActorId: $isAdmin ? $request->user()->id : null);
 
         return response()->json(['data' => ['id' => $product->id, 'status' => $product->status->value]]);
     }
@@ -306,7 +308,8 @@ class ProducerProductController extends Controller
             }
 
             try {
-                $product = $workflow->transition($product, $target, $request->user()->id, $data['reason'], moderator: true);
+                $isAdmin = $request->user() instanceof AdminUser;
+                $product = $workflow->transition($product, $target, $isAdmin ? null : $request->user()->id, $data['reason'], moderator: true, adminActorId: $isAdmin ? $request->user()->id : null);
                 $processed[] = ['id' => $product->id, 'status' => $product->status->value];
             } catch (ValidationException $exception) {
                 $failed[] = ['id' => (int) $id, 'message' => collect($exception->errors())->flatten()->implode(' ')];

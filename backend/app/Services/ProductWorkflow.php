@@ -22,7 +22,7 @@ class ProductWorkflow
         'sold_out' => ['published', 'withdrawn'],
     ];
 
-    public function transition(Product $product, string $target, int $actorId, ?string $reason = null, bool $moderator = false): Product
+    public function transition(Product $product, string $target, ?int $actorId, ?string $reason = null, bool $moderator = false, ?int $adminActorId = null): Product
     {
         $to = ProductStatus::tryFrom($target);
         if (! $to) {
@@ -32,7 +32,7 @@ class ProductWorkflow
             throw ValidationException::withMessages(['reason' => ['Explica el motivo con al menos 5 caracteres.']]);
         }
 
-        return DB::transaction(function () use ($product, $target, $to, $actorId, $reason, $moderator): Product {
+        return DB::transaction(function () use ($product, $target, $to, $actorId, $adminActorId, $reason, $moderator): Product {
             $product = Product::query()->lockForUpdate()->with(['producer', 'category.parent'])->findOrFail($product->id);
             $producer = ProducerProfile::query()->lockForUpdate()->findOrFail($product->producer_profile_id);
             $from = $product->status;
@@ -58,7 +58,7 @@ class ProductWorkflow
             if ($target === 'published' && $producer->profile_status !== 'active') {
                 throw ValidationException::withMessages(['producer' => ['No se puede publicar la oferta hasta que el perfil del productor esté activo.']]);
             }
-            if ($target === 'published' && $producer->phone_verified_at === null) {
+            if ($target === 'published' && $producer->phone_verified_at === null && $adminActorId === null) {
                 throw ValidationException::withMessages(['producer' => ['El productor debe verificar su teléfono antes de publicar ofertas.']]);
             }
 
@@ -70,8 +70,8 @@ class ProductWorkflow
                 $product->images()->update(['is_public' => true]);
             }
             $product->save();
-            $product->statusHistory()->create(['actor_id' => $actorId, 'from_status' => $from->value, 'to_status' => $to->value, 'reason' => $reason]);
-            AuditLog::create(['actor_id' => $actorId, 'action' => 'product.status_changed', 'resource_type' => 'product', 'resource_id' => $product->id, 'before_values' => ['status' => $from->value], 'after_values' => ['status' => $to->value], 'reason' => $reason, 'created_at' => now()]);
+            $product->statusHistory()->create(['actor_id' => $actorId, 'admin_actor_id' => $adminActorId, 'from_status' => $from->value, 'to_status' => $to->value, 'reason' => $reason]);
+            AuditLog::create(['actor_id' => $actorId, 'admin_actor_id' => $adminActorId, 'action' => 'product.status_changed', 'resource_type' => 'product', 'resource_id' => $product->id, 'before_values' => ['status' => $from->value], 'after_values' => ['status' => $to->value], 'reason' => $reason, 'created_at' => now()]);
 
             return $product;
         });

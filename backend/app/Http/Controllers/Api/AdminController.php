@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ProducerVerificationLevel;
+use App\Enums\ProductStatus;
+use App\Services\ProductWorkflow;
 use App\Http\Controllers\Controller;
+use App\Models\AdminUser;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\ContactEvent;
@@ -17,6 +20,7 @@ use App\Models\SearchEvent;
 use App\Models\User;
 use App\Services\ProducerTrustLevelWorkflow;
 use App\Services\ProductReinstatementWorkflow;
+use App\Support\PanamaPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,11 +59,11 @@ class AdminController extends Controller
             'location.parent:id,name,level,parent_id',
             'consents' => fn ($query) => $query->select(['id', 'producer_profile_id', 'consent_type', 'version', 'accepted_at'])->orderByDesc('accepted_at'),
             'verifications' => fn ($query) => $query->select(['id', 'producer_profile_id', 'channel', 'status', 'verified_at', 'expires_at'])->withCount('attempts')->orderByDesc('id'),
-            'trustReviews' => fn ($query) => $query->with('actor:id,name')->orderByDesc('id')->limit(50),
+            'trustReviews' => fn ($query) => $query->with(['actor:id,name', 'adminActor:id,name'])->orderByDesc('id')->limit(50),
         ])->findOrFail($id);
         $products = Product::query()->where('producer_profile_id', $profile->id)
             ->select('id', 'producer_profile_id', 'title', 'status', 'updated_at')->latest('id')->limit(10)->get();
-        $productHistory = ProductStatusHistory::query()->with(['product:id,title,producer_profile_id', 'actor:id,name'])
+        $productHistory = ProductStatusHistory::query()->with(['product:id,title,producer_profile_id', 'actor:id,name', 'adminActor:id,name'])
             ->whereHas('product', fn ($query) => $query->where('producer_profile_id', $profile->id))
             ->latest('created_at')->limit(30)->get()
             ->map(fn (ProductStatusHistory $entry) => [
@@ -67,17 +71,17 @@ class AdminController extends Controller
                 'from_status' => $entry->from_status,
                 'to_status' => $entry->to_status,
                 'reason' => $entry->reason,
-                'actor' => $entry->actor?->name,
+                'actor' => $entry->adminActor?->name ?? $entry->actor?->name,
                 'created_at' => $entry->created_at,
             ]);
-        $audit = AuditLog::query()->with('actor:id,name')->where('resource_type', 'producer_profile')
+        $audit = AuditLog::query()->with(['actor:id,name', 'adminActor:id,name'])->where('resource_type', 'producer_profile')
             ->where('resource_id', $profile->id)->latest('created_at')->limit(50)->get()
             ->map(fn (AuditLog $entry) => [
                 'action' => $entry->action,
                 'before_values' => $entry->before_values,
                 'after_values' => $entry->after_values,
                 'reason' => $entry->reason,
-                'actor' => $entry->actor?->name,
+                'actor' => $entry->adminActor?->name ?? $entry->actor?->name,
                 'created_at' => $entry->created_at,
             ]);
         $statusCounts = Product::query()->where('producer_profile_id', $profile->id)
@@ -106,7 +110,7 @@ class AdminController extends Controller
                 'from_level' => $review->from_level,
                 'to_level' => $review->to_level,
                 'reason' => $review->reason,
-                'actor' => $review->actor?->name,
+                'actor' => $review->adminActor?->name ?? $review->actor?->name,
                 'created_at' => $review->created_at,
             ]),
             'product_status_counts' => $statusCounts,
@@ -129,9 +133,9 @@ class AdminController extends Controller
             $profile->save();
             $queuedProducts = 0;
             if ($data['profile_status'] === 'active' && $before === 'suspended') {
-                $queuedProducts = $workflow->queuePublishedProductsForReview($profile, $request->user()->id, $data['reason']);
+                $queuedProducts = $workflow->queuePublishedProductsForReview($profile, null, $data['reason'], $request->user()->id);
             }
-            AuditLog::create(['actor_id' => $request->user()->id, 'action' => 'producer.status_changed', 'resource_type' => 'producer_profile', 'resource_id' => $profile->id, 'before_values' => ['profile_status' => $before], 'after_values' => ['profile_status' => $profile->profile_status], 'reason' => $data['reason'], 'created_at' => now()]);
+            AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'producer.status_changed', 'resource_type' => 'producer_profile', 'resource_id' => $profile->id, 'before_values' => ['profile_status' => $before], 'after_values' => ['profile_status' => $profile->profile_status], 'reason' => $data['reason'], 'created_at' => now()]);
 
             return [$profile, $queuedProducts];
         });
@@ -156,6 +160,39 @@ class AdminController extends Controller
             'verification_level' => $level->value,
             'verification_label' => $level->label(),
         ]]);
+    }
+
+    public function confirmProducerContact(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('producers.verify');
+        $profile = ProducerProfile::query()->lockForUpdate()->findOrFail($id);
+
+        if ($profile->contact_level !== 'unverified') {
+            return response()->json(['data' => ['contact_level' => $profile->contact_level, 'phone_verified_at' => $profile->phone_verified_at]]);
+        }
+
+        $phone = PanamaPhoneNumber::normalize((string) $profile->phone_private);
+        abort_if($phone === null, 422, 'El teléfono del productor no es válido. Pídele que lo actualice desde su perfil antes de confirmar el contacto.');
+
+        DB::transaction(function () use ($profile, $phone, $request) {
+            $profile->forceFill([
+                'phone_private'    => $phone,
+                'phone_public'     => $phone,
+                'phone_verified_at' => now(),
+                'contact_level'    => 'contact_confirmed',
+            ])->save();
+
+            AuditLog::create([
+                'admin_actor_id'  => $request->user()->id,
+                'action'          => 'producer.contact_confirmed_manually',
+                'resource_type'   => 'producer_profile',
+                'resource_id'     => $profile->id,
+                'after_values'    => ['contact_level' => 'contact_confirmed'],
+                'created_at'      => now(),
+            ]);
+        });
+
+        return response()->json(['data' => ['contact_level' => 'contact_confirmed', 'phone_verified_at' => $profile->phone_verified_at]]);
     }
 
     public function categories(): JsonResponse
@@ -190,7 +227,7 @@ class AdminController extends Controller
         }
         $category->fill([...$data, 'slug' => Str::slug($data['name'])]);
         $category->save();
-        AuditLog::create(['actor_id' => $request->user()->id, 'action' => $id ? 'catalog.category_updated' : 'catalog.category_created', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => $category->only(['name', 'slug', 'active', 'position', 'parent_id']), 'created_at' => now()]);
+        AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => $id ? 'catalog.category_updated' : 'catalog.category_created', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => $category->only(['name', 'slug', 'active', 'position', 'parent_id']), 'created_at' => now()]);
 
         return response()->json(['data' => $category], $id ? 200 : 201);
     }
@@ -202,7 +239,7 @@ class AdminController extends Controller
         $this->assertCategoryCanDeactivate($category);
         $category->active = false;
         $category->save();
-        AuditLog::create(['actor_id' => $request->user()->id, 'action' => 'catalog.category_deactivated', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => ['active' => false], 'created_at' => now()]);
+        AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'catalog.category_deactivated', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => ['active' => false], 'created_at' => now()]);
 
         return response()->json(['data' => ['id' => $category->id, 'active' => false]]);
     }
@@ -280,7 +317,7 @@ class AdminController extends Controller
         }
         $location->fill([...$data, 'slug' => $slug]);
         $location->save();
-        AuditLog::create(['actor_id' => $request->user()->id, 'action' => $id ? 'catalog.location_updated' : 'catalog.location_created', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => $location->only(['name', 'slug', 'level', 'active', 'parent_id']), 'created_at' => now()]);
+        AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => $id ? 'catalog.location_updated' : 'catalog.location_created', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => $location->only(['name', 'slug', 'level', 'active', 'parent_id']), 'created_at' => now()]);
 
         return response()->json(['data' => $location], $id ? 200 : 201);
     }
@@ -294,7 +331,7 @@ class AdminController extends Controller
         }
         $location->active = false;
         $location->save();
-        AuditLog::create(['actor_id' => $request->user()->id, 'action' => 'catalog.location_deactivated', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => ['active' => false], 'created_at' => now()]);
+        AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'catalog.location_deactivated', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => ['active' => false], 'created_at' => now()]);
 
         return response()->json(['data' => ['id' => $location->id, 'active' => false]]);
     }
@@ -361,7 +398,7 @@ class AdminController extends Controller
             )
             ->where('decision.from_status', 'pending')
             ->whereIn('decision.to_status', ['published', 'changes_requested', 'rejected'])
-            ->whereNotNull('decision.actor_id')
+            ->where(fn ($q) => $q->whereNotNull('decision.actor_id')->orWhereNotNull('decision.admin_actor_id'))
             ->where('decision.created_at', '>=', $since)
             ->get();
 
@@ -384,7 +421,7 @@ class AdminController extends Controller
     {
         Gate::authorize('audit.view');
         $filters = $request->validate(['resource_type' => ['nullable', 'string', 'max:100'], 'action' => ['nullable', 'string', 'max:100'], 'per_page' => ['nullable', 'integer', 'min:1', 'max:100']]);
-        $query = AuditLog::query()->with('actor:id,name')->latest('created_at');
+        $query = AuditLog::query()->with(['actor:id,name', 'adminActor:id,name'])->latest('created_at');
         if (! empty($filters['resource_type'])) {
             $query->where('resource_type', $filters['resource_type']);
         }
@@ -392,7 +429,15 @@ class AdminController extends Controller
             $query->where('action', $filters['action']);
         }
 
-        return response()->json($query->paginate($filters['per_page'] ?? 50));
+        $paginated = $query->paginate($filters['per_page'] ?? 50);
+        $paginated->getCollection()->each(function (AuditLog $entry): void {
+            if ($entry->adminActor) {
+                $entry->setRelation('actor', $entry->adminActor);
+            }
+            $entry->makeHidden('adminActor');
+        });
+
+        return response()->json($paginated);
     }
 
     public function roles(Request $request): JsonResponse
@@ -427,7 +472,7 @@ class AdminController extends Controller
             // Serialize every role change against one row so two concurrent
             // demotions cannot both pass the last-super-admin check.
             $superAdminRole = Role::query()->where('name', 'super_admin')->lockForUpdate()->firstOrFail();
-            $actor = User::query()->lockForUpdate()->findOrFail($request->user()->id);
+            $actor = $request->user();
             abort_unless($actor->hasPermission('users.manage'), 403);
             $user = User::query()->with('roles')->lockForUpdate()->findOrFail($id);
             $current = $user->roles->pluck('name')->sort()->values()->all();
@@ -445,13 +490,119 @@ class AdminController extends Controller
                 }
             }
             $ids = Role::whereIn('name', $requested)->pluck('id')->all();
-            $roleAssignments = collect($ids)->mapWithKeys(fn (int $roleId) => [$roleId => ['assigned_by' => $request->user()->id, 'assigned_at' => now()]])->all();
+            $roleAssignments = collect($ids)->mapWithKeys(fn (int $roleId) => [$roleId => ['assigned_by' => null, 'assigned_at' => now()]])->all();
             $user->roles()->sync($roleAssignments);
-            AuditLog::create(['actor_id' => $request->user()->id, 'action' => 'admin.user_roles_changed', 'resource_type' => 'user', 'resource_id' => $user->id, 'before_values' => ['roles' => $current], 'after_values' => ['roles' => $requested], 'reason' => $data['reason'], 'created_at' => now()]);
+            AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'admin.user_roles_changed', 'resource_type' => 'user', 'resource_id' => $user->id, 'before_values' => ['roles' => $current], 'after_values' => ['roles' => $requested], 'reason' => $data['reason'], 'created_at' => now()]);
 
             return $requested;
         });
 
         return response()->json(['data' => ['id' => $id, 'roles' => $updatedRoles]]);
+    }
+
+    public function adminAccounts(Request $request): JsonResponse
+    {
+        Gate::authorize('users.manage');
+        $accounts = AdminUser::query()->select(['id', 'name', 'email', 'created_at'])->latest('id')->get();
+
+        return response()->json(['data' => $accounts]);
+    }
+
+    public function createAdminAccount(Request $request): JsonResponse
+    {
+        Gate::authorize('users.manage');
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:14', 'max:255', 'confirmed'],
+        ]);
+        $email = mb_strtolower(trim($data['email']));
+        if (AdminUser::query()->where('email', $email)->exists()) {
+            throw ValidationException::withMessages(['email' => 'Ya existe una cuenta de administrador con ese correo.']);
+        }
+        $account = DB::transaction(function () use ($data, $email, $request): AdminUser {
+            $account = AdminUser::query()->create([
+                'name' => trim($data['name']),
+                'email' => $email,
+                'password' => $data['password'],
+            ]);
+            AuditLog::create([
+                'admin_actor_id' => $request->user()->id,
+                'action' => 'admin.account_created',
+                'resource_type' => 'admin_user',
+                'resource_id' => $account->id,
+                'before_values' => null,
+                'after_values' => ['name' => $account->name, 'email' => $account->email],
+                'reason' => 'Cuenta de administrador creada desde el panel.',
+                'created_at' => now(),
+            ]);
+
+            return $account;
+        });
+
+        return response()->json(['data' => ['id' => $account->id, 'name' => $account->name, 'email' => $account->email]], 201);
+    }
+
+    public function setProductStatus(Request $request, int $id): JsonResponse
+    {
+        Gate::authorize('products.review');
+        $data = $request->validate([
+            'status' => ['required', 'in:pending,published,rejected,changes_requested,paused,withdrawn'],
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+        $product = Product::query()->with(['category.parent'])->findOrFail($id);
+        $from = $product->status;
+        $to   = ProductStatus::from($data['status']);
+
+        if ($from === $to) {
+            throw ValidationException::withMessages(['status' => ['La publicación ya tiene ese estado.']]);
+        }
+
+        DB::transaction(function () use ($product, $from, $to, $data, $request): void {
+            $product->status = $to;
+            if ($to === ProductStatus::Published) {
+                if ($product->published_at === null) {
+                    $product->published_at = now();
+                }
+                $product->images()->update(['is_public' => true]);
+            } elseif ($from === ProductStatus::Published) {
+                $product->images()->update(['is_public' => false]);
+            }
+            $product->save();
+            $product->statusHistory()->create(['admin_actor_id' => $request->user()->id, 'from_status' => $from->value, 'to_status' => $to->value, 'reason' => $data['reason']]);
+            AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'product.status_changed', 'resource_type' => 'product', 'resource_id' => $product->id, 'before_values' => ['status' => $from->value], 'after_values' => ['status' => $to->value], 'reason' => $data['reason'], 'created_at' => now()]);
+        });
+
+        return response()->json(['data' => ['id' => $product->id, 'status' => $product->status->value]]);
+    }
+
+    public function allProducts(Request $request): JsonResponse
+    {
+        Gate::authorize('products.review');
+        $filters = $request->validate([
+            'status' => ['nullable', 'string', 'in:draft,pending,published,paused,sold_out,rejected,changes_requested,withdrawn'],
+            'q'      => ['nullable', 'string', 'max:120'],
+        ]);
+        $query = Product::query()
+            ->select(['id', 'producer_profile_id', 'category_id', 'title', 'status', 'updated_at', 'published_at'])
+            ->with(['producer:id,public_name,slug', 'category:id,name'])
+            ->latest('id');
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['q'])) {
+            $query->where('title', 'like', '%'.$filters['q'].'%');
+        }
+        $products = $query->paginate(30);
+        $products->getCollection()->transform(fn (Product $product) => [
+            'id'         => $product->id,
+            'title'      => $product->title,
+            'status'     => $product->status->value,
+            'updated_at' => $product->updated_at,
+            'producer'   => ['id' => $product->producer->id, 'public_name' => $product->producer->public_name, 'slug' => $product->producer->slug],
+            'category'   => ['name' => $product->category->name],
+        ]);
+
+        return response()->json($products);
     }
 }

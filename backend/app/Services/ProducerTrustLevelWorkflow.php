@@ -3,17 +3,19 @@
 namespace App\Services;
 
 use App\Enums\ProducerVerificationLevel;
+use App\Models\AdminUser;
 use App\Models\AuditLog;
 use App\Models\ProducerProfile;
 use App\Models\ProducerTrustReview;
 use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProducerTrustLevelWorkflow
 {
-    public function change(ProducerProfile $profile, User $actor, ProducerVerificationLevel $target, string $reason): ProducerTrustReview
+    public function change(ProducerProfile $profile, Authenticatable $actor, ProducerVerificationLevel $target, string $reason): ProducerTrustReview
     {
         return DB::transaction(function () use ($profile, $actor, $target, $reason): ProducerTrustReview {
             $locked = ProducerProfile::query()->lockForUpdate()->findOrFail($profile->id);
@@ -39,9 +41,11 @@ class ProducerTrustLevelWorkflow
                 throw ValidationException::withMessages(['level' => ['No hay una revisión manual que retirar.']]);
             }
 
+            $isAdmin = $actor instanceof AdminUser;
             $review = ProducerTrustReview::create([
                 'producer_profile_id' => $locked->id,
-                'actor_id' => $actor->id,
+                'actor_id' => $isAdmin ? null : $actor->id,
+                'admin_actor_id' => $isAdmin ? $actor->id : null,
                 'from_level' => $current->value,
                 'to_level' => $target->value,
                 'reason' => $reason,
@@ -50,7 +54,8 @@ class ProducerTrustLevelWorkflow
             $locked->save();
 
             AuditLog::create([
-                'actor_id' => $actor->id,
+                'actor_id' => $isAdmin ? null : $actor->id,
+                'admin_actor_id' => $isAdmin ? $actor->id : null,
                 'action' => 'producer.trust_level_changed',
                 'resource_type' => 'producer_profile',
                 'resource_id' => $locked->id,

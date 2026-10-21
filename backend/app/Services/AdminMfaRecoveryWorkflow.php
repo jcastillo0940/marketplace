@@ -54,7 +54,7 @@ class AdminMfaRecoveryWorkflow
         });
     }
 
-    public function decide(AdminMfaRecoveryRequest $request, User $actor, string $decision, string $reason): AdminMfaRecoveryRequest
+    public function decide(AdminMfaRecoveryRequest $request, \Illuminate\Contracts\Auth\Authenticatable $actor, string $decision, string $reason): AdminMfaRecoveryRequest
     {
         $this->validateReason($reason);
         abort_unless(in_array($decision, ['approve', 'reject'], true), 422, 'Decisión no válida.');

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AdminMfaRecoveryController;
 use App\Http\Controllers\Api\AuthController;
@@ -64,6 +65,15 @@ Route::get('/producers/{slug}', [PublicCatalogController::class, 'producer']);
 Route::post('/contact-events', [TrustSafetyController::class, 'contact'])->middleware('throttle:public-actions');
 Route::post('/reports', [TrustSafetyController::class, 'report'])->middleware('throttle:public-actions');
 
+Route::prefix('admin-auth')->middleware('web')->group(function (): void {
+    Route::post('/login', [AdminAuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('/logout', [AdminAuthController::class, 'logout'])->middleware('auth:admin');
+    Route::post('/mfa/challenge', [AdminAuthController::class, 'mfaChallenge'])->middleware('throttle:auth');
+    Route::get('/mfa/setup', [AdminAuthController::class, 'mfaSetup'])->middleware('auth:admin');
+    Route::post('/mfa/confirm', [AdminAuthController::class, 'mfaConfirm'])->middleware(['auth:admin', 'throttle:auth']);
+    Route::get('/me', [AdminAuthController::class, 'me'])->middleware('auth:admin');
+});
+
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register'])->middleware(['web', 'throttle:auth']);
     Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:auth']);
@@ -94,46 +104,52 @@ Route::middleware(['web', 'auth:sanctum'])->group(function (): void {
     Route::post('/me/products/{id}/submit', [ProducerProductController::class, 'submit'])->whereNumber('id')->middleware('throttle:product-writes');
     Route::post('/me/products/{id}/transition', [ProducerProductController::class, 'transition'])->whereNumber('id')->middleware('throttle:product-writes');
     Route::post('/me/products/{id}/renew', [ProducerProductController::class, 'renew'])->whereNumber('id')->middleware('throttle:product-writes');
-    Route::middleware('admin.mfa')->prefix('admin')->group(function (): void {
-        Route::get('/mfa-recovery-requests', [AdminMfaRecoveryController::class, 'index']);
-        Route::post('/mfa-recovery-requests/{id}/decision', [AdminMfaRecoveryController::class, 'decide'])->whereNumber('id');
-        Route::get('/message-templates', [MessageTemplateController::class, 'index']);
-        Route::put('/message-templates/{key}', [MessageTemplateController::class, 'update'])->whereIn('key', ['product', 'producer']);
-        Route::get('/moderation', [ProducerProductController::class, 'moderationQueue']);
-        Route::post('/products/bulk-decision', [ProducerProductController::class, 'moderateMany']);
-        Route::get('/products/{id}/images/{imageId}', [ProducerProductController::class, 'moderationImage'])->whereNumber('id')->whereNumber('imageId');
-        Route::post('/products/{id}/approve', [ProducerProductController::class, 'approveProduct'])->whereNumber('id');
-        Route::post('/products/{id}/decision', [ProducerProductController::class, 'moderate'])->whereNumber('id');
-        Route::get('/reports', [TrustSafetyController::class, 'cases']);
-        Route::get('/reports/{id}', [TrustSafetyController::class, 'caseDetail'])->whereNumber('id');
-        Route::post('/reports/{id}/release', [TrustSafetyController::class, 'releaseCase'])->whereNumber('id');
-        Route::get('/security/alerts', [TrustSafetyController::class, 'alerts']);
-        Route::put('/security/alerts/{id}', [TrustSafetyController::class, 'updateAlert'])->whereNumber('id');
-        Route::put('/reports/{id}', [TrustSafetyController::class, 'updateCase'])->whereNumber('id');
-        Route::patch('/reports/{id}/priority', [TrustSafetyController::class, 'updateCasePriority'])->whereNumber('id');
-        Route::get('/reports/{id}/evidence/{evidenceId}', [TrustSafetyController::class, 'evidence'])->whereNumber('id')->whereNumber('evidenceId');
-        Route::get('/producers', [AdminController::class, 'producers']);
-        Route::post('/producers/assisted', [AuthController::class, 'registerAssisted']);
-        Route::get('/producers/{id}', [AdminController::class, 'producerDetail'])->whereNumber('id');
-        Route::put('/producers/{id}/trust-level', [AdminController::class, 'setProducerTrustLevel'])->whereNumber('id');
-        Route::get('/producer-appeals', [ProducerAppealController::class, 'queue']);
-        Route::put('/producer-appeals/{id}', [ProducerAppealController::class, 'decide'])->whereNumber('id');
-        Route::put('/producers/{id}/status', [AdminController::class, 'setProducerStatus'])->whereNumber('id');
-        Route::get('/categories', [AdminController::class, 'categories']);
-        Route::post('/categories', [AdminController::class, 'saveCategory']);
-        Route::put('/categories/{id}', [AdminController::class, 'saveCategory'])->whereNumber('id');
-        Route::delete('/categories/{id}', [AdminController::class, 'deactivateCategory'])->whereNumber('id');
-        Route::get('/locations', [AdminController::class, 'locations']);
-        Route::post('/locations', [AdminController::class, 'saveLocation']);
-        Route::put('/locations/{id}', [AdminController::class, 'saveLocation'])->whereNumber('id');
-        Route::delete('/locations/{id}', [AdminController::class, 'deactivateLocation'])->whereNumber('id');
-        Route::get('/metrics', [AdminController::class, 'metrics']);
-        Route::get('/metrics/export.csv', [AdminController::class, 'exportMetrics']);
-        Route::get('/analytics', [AdminController::class, 'metrics']);
-        Route::get('/analytics/export.csv', [AdminController::class, 'exportMetrics']);
-        Route::get('/audit', [AdminController::class, 'audit']);
-        Route::get('/roles', [AdminController::class, 'roles']);
-        Route::get('/users', [AdminController::class, 'users']);
-        Route::put('/users/{id}/roles', [AdminController::class, 'setUserRoles'])->whereNumber('id');
-    });
+});
+
+Route::middleware(['web', 'auth:admin', 'admin.mfa'])->prefix('admin')->group(function (): void {
+    Route::get('/mfa-recovery-requests', [AdminMfaRecoveryController::class, 'index']);
+    Route::post('/mfa-recovery-requests/{id}/decision', [AdminMfaRecoveryController::class, 'decide'])->whereNumber('id');
+    Route::get('/message-templates', [MessageTemplateController::class, 'index']);
+    Route::put('/message-templates/{key}', [MessageTemplateController::class, 'update'])->whereIn('key', ['product', 'producer']);
+    Route::get('/moderation', [ProducerProductController::class, 'moderationQueue']);
+    Route::get('/products', [AdminController::class, 'allProducts']);
+    Route::post('/products/bulk-decision', [ProducerProductController::class, 'moderateMany']);
+    Route::post('/products/{id}/set-status', [AdminController::class, 'setProductStatus'])->whereNumber('id');
+    Route::get('/products/{id}/images/{imageId}', [ProducerProductController::class, 'moderationImage'])->whereNumber('id')->whereNumber('imageId');
+    Route::post('/products/{id}/approve', [ProducerProductController::class, 'approveProduct'])->whereNumber('id');
+    Route::post('/products/{id}/decision', [ProducerProductController::class, 'moderate'])->whereNumber('id');
+    Route::get('/reports', [TrustSafetyController::class, 'cases']);
+    Route::get('/reports/{id}', [TrustSafetyController::class, 'caseDetail'])->whereNumber('id');
+    Route::post('/reports/{id}/release', [TrustSafetyController::class, 'releaseCase'])->whereNumber('id');
+    Route::get('/security/alerts', [TrustSafetyController::class, 'alerts']);
+    Route::put('/security/alerts/{id}', [TrustSafetyController::class, 'updateAlert'])->whereNumber('id');
+    Route::put('/reports/{id}', [TrustSafetyController::class, 'updateCase'])->whereNumber('id');
+    Route::patch('/reports/{id}/priority', [TrustSafetyController::class, 'updateCasePriority'])->whereNumber('id');
+    Route::get('/reports/{id}/evidence/{evidenceId}', [TrustSafetyController::class, 'evidence'])->whereNumber('id')->whereNumber('evidenceId');
+    Route::get('/producers', [AdminController::class, 'producers']);
+    Route::post('/producers/assisted', [AuthController::class, 'registerAssisted']);
+    Route::get('/producers/{id}', [AdminController::class, 'producerDetail'])->whereNumber('id');
+    Route::put('/producers/{id}/trust-level', [AdminController::class, 'setProducerTrustLevel'])->whereNumber('id');
+    Route::post('/producers/{id}/confirm-contact', [AdminController::class, 'confirmProducerContact'])->whereNumber('id');
+    Route::get('/producer-appeals', [ProducerAppealController::class, 'queue']);
+    Route::put('/producer-appeals/{id}', [ProducerAppealController::class, 'decide'])->whereNumber('id');
+    Route::put('/producers/{id}/status', [AdminController::class, 'setProducerStatus'])->whereNumber('id');
+    Route::get('/categories', [AdminController::class, 'categories']);
+    Route::post('/categories', [AdminController::class, 'saveCategory']);
+    Route::put('/categories/{id}', [AdminController::class, 'saveCategory'])->whereNumber('id');
+    Route::delete('/categories/{id}', [AdminController::class, 'deactivateCategory'])->whereNumber('id');
+    Route::get('/locations', [AdminController::class, 'locations']);
+    Route::post('/locations', [AdminController::class, 'saveLocation']);
+    Route::put('/locations/{id}', [AdminController::class, 'saveLocation'])->whereNumber('id');
+    Route::delete('/locations/{id}', [AdminController::class, 'deactivateLocation'])->whereNumber('id');
+    Route::get('/metrics', [AdminController::class, 'metrics']);
+    Route::get('/metrics/export.csv', [AdminController::class, 'exportMetrics']);
+    Route::get('/analytics', [AdminController::class, 'metrics']);
+    Route::get('/analytics/export.csv', [AdminController::class, 'exportMetrics']);
+    Route::get('/audit', [AdminController::class, 'audit']);
+    Route::get('/roles', [AdminController::class, 'roles']);
+    Route::get('/users', [AdminController::class, 'users']);
+    Route::put('/users/{id}/roles', [AdminController::class, 'setUserRoles'])->whereNumber('id');
+    Route::get('/admin-accounts', [AdminController::class, 'adminAccounts']);
+    Route::post('/admin-accounts', [AdminController::class, 'createAdminAccount']);
 });

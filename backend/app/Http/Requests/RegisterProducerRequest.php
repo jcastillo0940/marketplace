@@ -51,7 +51,7 @@ class RegisterProducerRequest extends FormRequest
             'password' => ['required', 'string', 'min:6', 'regex:/^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).+$/'],
             'cedula' => ['required', 'string', 'max:30', 'regex:/^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i', Rule::unique('producer_profiles', 'cedula')],
             'public_name' => ['required', 'string', 'max:120'],
-            'activity' => ['nullable', Rule::in(collect(config('activities'))->flatten()->all())],
+            'activity' => ['nullable', 'string', 'max:120', Rule::exists('categories', 'name')->where('active', true)],
             'location_id' => ['required', 'integer', new ValidActiveLocationHierarchy],
             'phone' => ['required', 'string', 'max:40', new ValidContactPhone],
             'terms_version' => ['required', 'string', 'max:40', Rule::in([config('marketplace.consent_versions.terms')])],

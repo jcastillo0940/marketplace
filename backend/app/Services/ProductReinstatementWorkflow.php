@@ -8,7 +8,7 @@ use App\Models\Product;
 
 class ProductReinstatementWorkflow
 {
-    public function queuePublishedProductsForReview(ProducerProfile $profile, int $actorId, string $reason): int
+    public function queuePublishedProductsForReview(ProducerProfile $profile, ?int $actorId, string $reason, ?int $adminActorId = null): int
     {
         $products = Product::query()->where('producer_profile_id', $profile->id)
             ->where('status', 'published')->lockForUpdate()->get();
@@ -18,12 +18,14 @@ class ProductReinstatementWorkflow
             $product->forceFill(['status' => 'pending'])->save();
             $product->statusHistory()->create([
                 'actor_id' => $actorId,
+                'admin_actor_id' => $adminActorId,
                 'from_status' => 'published',
                 'to_status' => 'pending',
                 'reason' => $reviewReason,
             ]);
             AuditLog::create([
                 'actor_id' => $actorId,
+                'admin_actor_id' => $adminActorId,
                 'action' => 'product.queued_after_producer_reinstatement',
                 'resource_type' => 'product',
                 'resource_id' => $product->id,

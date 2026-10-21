@@ -9,7 +9,7 @@ class AuditLog extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['actor_id', 'action', 'resource_type', 'resource_id', 'before_values', 'after_values', 'reason', 'created_at'];
+    protected $fillable = ['actor_id', 'admin_actor_id', 'action', 'resource_type', 'resource_id', 'before_values', 'after_values', 'reason', 'created_at'];
 
     protected function casts(): array
     {
@@ -19,5 +19,10 @@ class AuditLog extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
+    }
+
+    public function adminActor(): BelongsTo
+    {
+        return $this->belongsTo(AdminUser::class, 'admin_actor_id');
     }
 }
