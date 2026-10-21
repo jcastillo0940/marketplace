@@ -4,8 +4,7 @@ import { ArrowUpRight, LayoutDashboard, LogOut, Menu, Plus, Search, X } from 'lu
 
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { clearSessionCache, getSessionUser, logoutUser, type SessionUser } from '../../api/client';
-import superCarnesLogo from '../../assets/super-carnes-logo.png';
+import { adminLogout, clearSessionCache, getAdminMe, getSessionUser, logoutUser, type SessionUser } from '../../api/client';
 
 const NAV_LINKS: Array<{ label: string; to: string; match?: string }> = [
   { label: 'Explorar', to: '/productos', match: '/productos' },
@@ -18,12 +17,24 @@ const NAV_LINKS: Array<{ label: string; to: string; match?: string }> = [
 const CURRENT_YEAR = new Date().getFullYear()
 
 function BrandMark({ footer = false }: { footer?: boolean }) {
+  const gradientId = footer ? 'brand-bag-footer' : 'brand-bag'
   return (
     <>
-      <img className="brand__logo" src={superCarnesLogo} alt="Super Carnes" />
+      <svg className="brand__icon" viewBox="0 0 65 85" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#a9e83c" />
+            <stop offset=".52" stopColor="#66b578" />
+            <stop offset="1" stopColor="#075cc5" />
+          </linearGradient>
+        </defs>
+        <path d="M18 32V20C18-2 48-2 48 20v12" fill="none" stroke="#a8e137" strokeWidth="7" strokeLinecap="round" />
+        <path d="M10 32H54L60 77Q60 83 53 83H9Q3 83 6 76L17 65H36Q45 65 45 59Q45 54 38 54H13L20 45H42Q48 45 48 39Q48 34 41 34H10Z" fill={`url(#${gradientId})`} />
+        <path d="M7 43H40M3 53H37M1 64H32" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
+      </svg>
       <span className={`brand__type${footer ? ' brand__type--light' : ''}`}>
-        <span>El</span>
-        <strong>Empujoncito</strong>
+        <strong>El Empujoncito</strong>
+        <span>Marketplace</span>
       </span>
     </>
   )
@@ -35,20 +46,30 @@ export function SiteHeader() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  const isAdminPath = location.pathname.startsWith('/admin') || location.pathname === '/adminsc1car'
+
   useEffect(() => {
-    void getSessionUser().then(setSession)
-  }, [location.pathname])
+    if (isAdminPath) {
+      void getAdminMe().then((admin) => setSession(admin ? { name: admin.name, email: admin.email } as SessionUser : null))
+    } else {
+      void getSessionUser().then(setSession)
+    }
+  }, [location.pathname, isAdminPath])
 
   function closeMenu() { setMenuOpen(false) }
 
   async function handleLogout() {
     closeMenu()
     try {
-      await logoutUser()
+      if (isAdminPath) {
+        await adminLogout()
+      } else {
+        await logoutUser()
+      }
     } finally {
       clearSessionCache()
       setSession(null)
-      navigate('/')
+      navigate(isAdminPath ? '/adminsc1car' : '/')
     }
   }
 
@@ -58,7 +79,7 @@ export function SiteHeader() {
     <>
       <div className="initiative-bar">
         <span className="initiative-bar__dot" aria-hidden="true" />
-        <span>Una iniciativa de <strong>Super Carnes</strong> para apoyar a productores y emprendedores de Coclé, Veraguas, Herrera y Los Santos</span>
+        <span>Una iniciativa de <strong>Super Carnes</strong> para apoyar a productores y emprendedores de Panamá</span>
       </div>
       <header className="site-header">
         <div className="site-header__inner page-shell">
@@ -86,8 +107,8 @@ export function SiteHeader() {
             {session && session !== 'loading' ? (
               <>
                 <span className="site-nav__welcome">Bienvenido, <strong>{firstName}</strong></span>
-                <Link className="site-nav__icon-link" to="/mi-panel" onClick={closeMenu} aria-label="Mi panel">
-                  <LayoutDashboard size={16} aria-hidden="true" /> Mi panel
+                <Link className="site-nav__icon-link" to={isAdminPath ? '/admin' : '/mi-panel'} onClick={closeMenu} aria-label={isAdminPath ? 'Administración' : 'Mi panel'}>
+                  <LayoutDashboard size={16} aria-hidden="true" /> {isAdminPath ? 'Administración' : 'Mi panel'}
                 </Link>
                 <button type="button" className="site-nav__icon-link site-nav__logout" onClick={() => void handleLogout()}>
                   <LogOut size={16} aria-hidden="true" /> Cerrar sesión
@@ -102,8 +123,8 @@ export function SiteHeader() {
 
           <div className="site-header__actions">
             <Link className="icon-button" to="/productos" aria-label="Buscar productos en el catálogo" title="Buscar"><Search size={18} /></Link>
-            {session === null && <Link className="button button--accent button--small site-header__cta" to="/registro">Publica gratis <Plus size={16} /></Link>}
-            {session && session !== 'loading' && <Link className="button button--accent button--small site-header__cta" to="/mi-panel">Mi panel <ArrowUpRight size={15} /></Link>}
+            {session === null && !isAdminPath && <Link className="button button--accent button--small site-header__cta" to="/registro">Publica gratis <Plus size={16} /></Link>}
+            {session && session !== 'loading' && <Link className="button button--accent button--small site-header__cta" to={isAdminPath ? '/admin' : '/mi-panel'}>{isAdminPath ? 'Administración' : 'Mi panel'} <ArrowUpRight size={15} /></Link>}
           </div>
         </div>
       </header>

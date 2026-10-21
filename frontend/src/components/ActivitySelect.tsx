@@ -1,70 +1,7 @@
-const ACTIVITY_GROUPS: Record<string, string[]> = {
-  'Ganadería': [
-    'Ganadería bovina (res)',
-    'Ganadería porcina (cerdos)',
-    'Avicultura (pollos y gallinas)',
-    'Producción de huevos',
-    'Ganadería caprina (cabras)',
-    'Cunicultura (conejos)',
-  ],
-  'Lácteos': [
-    'Producción de leche',
-    'Quesos artesanales',
-    'Lácteos y derivados',
-  ],
-  'Pesca y acuicultura': [
-    'Pesca artesanal',
-    'Acuicultura y mariscos',
-  ],
-  'Granos y cereales': [
-    'Cultivo de maíz',
-    'Cultivo de arroz',
-    'Cultivo de frijoles y legumbres',
-  ],
-  'Tubérculos y raíces': [
-    'Cultivo de yuca',
-    'Cultivo de ñame y otoe',
-    'Cultivo de papa',
-  ],
-  'Frutas': [
-    'Cultivo de plátano y banano',
-    'Cultivo de papaya',
-    'Cultivo de cítricos',
-    'Cultivo de piña',
-    'Otras frutas tropicales',
-  ],
-  'Horticultura': [
-    'Cultivo de hortalizas y vegetales',
-    'Cultivo de tomate',
-    'Cultivo de ají y pimiento',
-    'Hierbas aromáticas y especias',
-  ],
-  'Cultivos especiales': [
-    'Cultivo de café',
-    'Cultivo de cacao',
-    'Apicultura (miel y cera)',
-    'Caña de azúcar',
-  ],
-  'Agroindustria y procesados': [
-    'Panadería y repostería artesanal',
-    'Conservas, mermeladas y salsas',
-    'Jugos y bebidas artesanales',
-    'Embutidos y derivados cárnicos',
-  ],
-  'Artesanías': [
-    'Artesanías en fibras naturales (paja toquilla, mimbre)',
-    'Artesanías en madera',
-    'Artesanías en cuero y talabartería',
-    'Cerámica y alfarería',
-    'Artesanías y manualidades',
-  ],
-  'Otras actividades': [
-    'Plantas medicinales y ornamentales',
-    'Silvicultura y carbón vegetal',
-    'Múltiples actividades agropecuarias',
-    'Otra actividad agropecuaria',
-  ],
-}
+import { useEffect, useState } from 'react'
+import { listCategories } from '../api/client'
+
+type Category = { id: number; name: string; slug: string; parent_id: number | null }
 
 type Props = {
   name?: string
@@ -75,16 +12,43 @@ type Props = {
 }
 
 export default function ActivitySelect({ name = 'activity', defaultValue, onChange, disabled = false, required = false }: Props) {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    listCategories()
+      .then((data) => setCategories(data as Category[]))
+      .catch(() => setCategories([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const parents = categories.filter((c) => c.parent_id === null)
+  const childrenOf = (parentId: number) => categories.filter((c) => c.parent_id === parentId)
+
   return (
-    <select name={name} defaultValue={defaultValue ?? ''} disabled={disabled} required={required} onChange={onChange ? (e) => onChange(e.target.value) : undefined}>
-      <option value="">Selecciona una actividad</option>
-      {Object.entries(ACTIVITY_GROUPS).map(([group, activities]) => (
-        <optgroup key={group} label={group}>
-          {activities.map((activity) => (
-            <option key={activity} value={activity}>{activity}</option>
-          ))}
-        </optgroup>
-      ))}
+    <select
+      name={name}
+      defaultValue={defaultValue ?? ''}
+      disabled={disabled || loading}
+      required={required}
+      onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+    >
+      <option value="">{loading ? 'Cargando…' : 'Selecciona una actividad'}</option>
+      {parents.map((parent) => {
+        const children = childrenOf(parent.id)
+        if (children.length > 0) {
+          return (
+            <optgroup key={parent.id} label={parent.name}>
+              {children.map((child) => (
+                <option key={child.id} value={child.name}>{child.name}</option>
+              ))}
+            </optgroup>
+          )
+        }
+        return (
+          <option key={parent.id} value={parent.name}>{parent.name}</option>
+        )
+      })}
     </select>
   )
 }

@@ -193,9 +193,24 @@ export async function resetPassword(payload: { email: string; token: string; pas
   throw new Error('No pudimos cambiar la contraseña. Inténtalo de nuevo más tarde.')
 }
 
+export async function adminLogin(email: string, password: string): Promise<{ mfa_required?: boolean; mfa_setup_required?: boolean }> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin-auth/login`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ email, password }) })
+  if (response.status === 202) return { mfa_required: true }
+  if (response.ok) return (await response.json().catch(() => ({})) as { mfa_setup_required?: boolean })
+  const body = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+  const messages: Record<number, string> = { 429: 'Demasiados intentos. Espera un momento antes de volver a intentarlo.', 503: 'El servicio no está disponible temporalmente. Inténtalo más tarde.' }
+  throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || messages[response.status] || 'No pudimos completar el acceso. Revisa los datos e inténtalo de nuevo.')
+}
+
+export async function adminLogout(): Promise<void> {
+  const token = await csrfToken()
+  await fetch(`${API_BASE}/admin-auth/logout`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token } })
+}
+
 export async function completeAdminMfaChallenge(code: string): Promise<void> {
   const token = await csrfToken()
-  const response = await fetch(`${API_BASE}/auth/mfa/challenge`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ code }) })
+  const response = await fetch(`${API_BASE}/admin-auth/mfa/challenge`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ code }) })
   if (response.ok) return
   const messages: Record<number, string> = {
     401: 'El desafío venció. Inicia sesión nuevamente.',
@@ -216,14 +231,28 @@ export class AuthFlowError extends Error {
   }
 }
 export async function getAdminMfaSetup(): Promise<{ enabled: boolean; secret?: string; otpauth_uri?: string }> {
-  const response = await fetch(`${API_BASE}/auth/mfa/setup`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  const response = await fetch(`${API_BASE}/admin-auth/mfa/setup`, { credentials: 'include', headers: { Accept: 'application/json' } })
   if (!response.ok) throw new Error(response.status === 401 ? 'Inicia sesión para configurar MFA.' : 'Solo el personal interno puede configurar MFA.')
   return (await response.json() as { data: { enabled: boolean; secret?: string; otpauth_uri?: string } }).data
 }
 export async function confirmAdminMfa(code: string): Promise<void> {
   const token = await csrfToken()
-  const response = await fetch(`${API_BASE}/auth/mfa/confirm`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ code }) })
+  const response = await fetch(`${API_BASE}/admin-auth/mfa/confirm`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ code }) })
   if (!response.ok) throw new Error('El código no es válido. Comprueba la hora del dispositivo y vuelve a intentarlo.')
+}
+
+export async function getAdminPermissions(): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/admin-auth/me`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) return []
+  const result = await response.json() as { data: { permissions?: string[] } }
+  return result.data.permissions ?? []
+}
+
+export async function getAdminMe(): Promise<{ name: string; email: string } | null> {
+  const response = await fetch(`${API_BASE}/admin-auth/me`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) return null
+  const result = await response.json() as { data: { name: string; email: string } }
+  return { name: result.data.name, email: result.data.email }
 }
 
 export async function registerProducer(payload: { name: string; email: string; password: string; public_name: string; activity?: string; location_id: number; phone: string; terms_version: string; privacy_version: string; producer_authorized?: boolean; terms_confirmed?: boolean; privacy_confirmed?: boolean }, assisted = false): Promise<void> {
@@ -291,10 +320,10 @@ export async function renewProducerProduct(id: number): Promise<{ published_at: 
   return (await response.json() as { data: { published_at: string; listing_expires_at: string | null } }).data
 }
 
-export async function listCategories(): Promise<Array<{ id: number; name: string; slug: string }>> {
+export async function listCategories(): Promise<Array<{ id: number; name: string; slug: string; parent_id: number | null }>> {
   const response = await fetch(`${API_BASE}/categories`, { headers: { Accept: 'application/json' } })
   if (!response.ok) throw new Error('No se pudieron cargar las categorías.')
-  return response.json() as Promise<Array<{ id: number; name: string; slug: string }>>
+  return response.json() as Promise<Array<{ id: number; name: string; slug: string; parent_id: number | null }>>
 }
 
 export type ProducerDashboardProduct = { id: number; title: string; status: string; slug: string; published_at?: string | null; listing_expired?: boolean; listing_expires_at?: string | null; latest_moderation_decision: { from_status: string; to_status: string; reason: string | null; created_at: string } | null }
@@ -388,6 +417,26 @@ export type ModerationItem = Omit<ApiProduct, 'producer' | 'category'> & {
   producer: ApiProduct['producer'] & { profile_status: string; contact_verified: boolean }
   category: ApiProduct['category'] & { active: boolean; parent?: { active: boolean } | null }
   status_history: Array<{ from_status: string | null; to_status: string; reason: string | null; actor: { name: string } | null; created_at: string }>
+}
+
+export type AdminProductRow = { id: number; title: string; status: string; updated_at: string; producer: { id: number; public_name: string; slug: string }; category: { name: string } }
+export async function setAdminProductStatus(id: number, status: string, reason: string): Promise<{ id: number; status: string }> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/products/${id}/set-status`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ status, reason }) })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo cambiar el estado.')
+  }
+  return ((await response.json()) as { data: { id: number; status: string } }).data
+}
+export async function getAdminAllProducts(params: { status?: string; q?: string; page?: number } = {}): Promise<Paginated<AdminProductRow>> {
+  const qs = new URLSearchParams()
+  if (params.status) qs.set('status', params.status)
+  if (params.q) qs.set('q', params.q)
+  if (params.page && params.page > 1) qs.set('page', String(params.page))
+  const response = await fetch(`${API_BASE}/admin/products?${qs}`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No se pudieron cargar las publicaciones.')
+  return response.json() as Promise<Paginated<AdminProductRow>>
 }
 
 export async function getModerationQueue(page = 1): Promise<Paginated<ModerationItem>> {
@@ -529,6 +578,13 @@ export async function setAdminProducerTrustLevel(id: number, level: Exclude<Prod
   if (!response.ok || !result.data) throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo actualizar el nivel de revisión.')
   return result.data
 }
+export async function confirmAdminProducerContact(id: number): Promise<{ contact_level: string; phone_verified_at: string }> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/producers/${id}/confirm-contact`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token } })
+  const result = await response.json().catch(() => ({})) as { data?: { contact_level: string; phone_verified_at: string }; message?: string }
+  if (!response.ok || !result.data) throw new Error(result.message || 'No se pudo confirmar el contacto.')
+  return result.data
+}
 export type AdminProducerAppeal = { id: number; reason: string; status: string; submitted_at: string; published_products_count: number; producer: { id: number; public_name: string; slug: string; profile_status: string; suspension_reason: string | null }; submitter: { id: number; name: string } }
 export async function getAdminProducerAppeals(): Promise<AdminProducerAppeal[]> {
   const response = await fetch(`${API_BASE}/admin/producer-appeals`, { credentials: 'include', headers: { Accept: 'application/json' } })
@@ -632,6 +688,24 @@ export async function setAdminUserRoles(id: number, roles: string[], reason: str
     const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
     throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudieron actualizar los roles.')
   }
+}
+
+export type AdminAccount = { id: number; name: string; email: string; created_at: string }
+export async function getAdminAccounts(): Promise<AdminAccount[]> {
+  const response = await fetch(`${API_BASE}/admin/admin-accounts`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No se pudieron cargar las cuentas de administrador.')
+  const result = await response.json() as { data: AdminAccount[] }
+  return result.data
+}
+export async function createAdminAccount(name: string, email: string, password: string, passwordConfirmation: string): Promise<AdminAccount> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/admin-accounts`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ name, email, password, password_confirmation: passwordConfirmation }) })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo crear la cuenta.')
+  }
+  const result = await response.json() as { data: AdminAccount }
+  return result.data
 }
 
 // ── Auth session ──────────────────────────────────────────────────────────────

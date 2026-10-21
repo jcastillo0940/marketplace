@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Flag, Handshake, HeartHandshake, Leaf, Lock, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Flag, Handshake, Heart, HeartHandshake, Leaf, Lock, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, Users, X } from 'lucide-react';
 
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -23,6 +23,7 @@ import { TESTIMONIALS, TESTIMONIAL_DESIGN_SAMPLE, type Testimonial } from '../co
 
 import { BrushStrokes, FavoriteButton, WhatsAppIcon } from './shared/MarketUi';
 import { CATEGORY_PHOTOS, categoryVisual } from './shared/marketVisuals';
+import { useReveal } from '../hooks/useReveal';
 
 import { SiteFooter, SiteHeader } from './shared/SiteChrome';
 
@@ -222,7 +223,7 @@ function DetailTabs({ product, profile, location }: { product: ApiProduct; profi
         <ul className="detail-producer-panel__facts">
           <li><Store size={22} aria-hidden="true" /><strong>{publishedCount ?? '—'}</strong><span>{publishedCount === 1 ? 'publicación activa' : 'publicaciones activas'}</span></li>
           <li><MapPin size={22} aria-hidden="true" /><strong>{province ?? 'Panamá'}</strong><span>zona de producción</span></li>
-          <li><BadgeCheck size={22} aria-hidden="true" /><strong>{producer.verification_label ?? (producer.contact_level === 'unverified' ? 'Sin verificar' : 'Contacto confirmado')}</strong><span>nivel de verificación</span></li>
+          {producer.contact_level !== 'unverified' && <li><BadgeCheck size={22} aria-hidden="true" /><strong>{producer.verification_label ?? 'Contacto confirmado'}</strong><span>nivel de verificación</span></li>}
           <li><HeartHandshake size={22} aria-hidden="true" /><strong>Trato directo</strong><span>sin intermediarios</span></li>
         </ul>
       </div>
@@ -405,6 +406,21 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
         </div>
         </div>
 
+        {profile?.description?.trim() && (
+          <section className="producer-story-band page-shell">
+            <span className="producer-story-band__avatar" aria-hidden="true">
+              {product.producer.public_name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA')}
+            </span>
+            <blockquote className="producer-story-band__body">
+              <p className="eyebrow eyebrow--quiet">LA HISTORIA DEL PRODUCTOR</p>
+              <p className="producer-story-band__quote">{profile.description}</p>
+              <footer className="producer-story-band__byline">
+                — {product.producer.public_name}{profile.activity ? `, ${profile.activity}` : ''}
+              </footer>
+            </blockquote>
+          </section>
+        )}
+
         <DetailTabs product={product} profile={profile} location={location} />
 
         {contactConfirmation && <DirectContactConfirmation channel={contactConfirmation} href={contactConfirmation === 'whatsapp' ? whatsappUrl! : telephoneUrl!} message={contactConfirmation === 'whatsapp' ? whatsappMessage : undefined} onCancel={cancelContactConfirmation} onContinue={confirmContact} />}
@@ -453,6 +469,9 @@ function TestimonialCarousel({ items, sample }: { items: Testimonial[]; sample: 
   )
 }
 
+/** El inicio muestra una sola fila de categorías; el resto vive en el catálogo. */
+const HOME_CATEGORY_LIMIT = 7
+
 export function HomePage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -463,9 +482,10 @@ export function HomePage() {
   const [homeError, setHomeError] = useState('')
   const [homeRetry, setHomeRetry] = useState(0)
   useScrollToHash()
+  useReveal([homeCategories.length, homeProducts?.length ?? -1])
 
   useEffect(() => {
-    void listCategories().then((result) => setHomeCategories(Array.isArray(result) ? result : [])).catch(() => setHomeCategories([]))
+    void listCategories().then((result) => setHomeCategories(Array.isArray(result) ? result.filter((c) => c.parent_id === null) : [])).catch(() => setHomeCategories([]))
     void listLocations().then((result) => setProvinces(Array.isArray(result) ? result.filter((item) => item.level === 'province') : [])).catch(() => setProvinces([]))
   }, [])
 
@@ -498,17 +518,22 @@ export function HomePage() {
           </div>
           <div className="home-hero__inner page-shell">
             <div className="home-hero__copy">
-              <p className="home-eyebrow">Productos locales, personas reales</p>
-              <h1 id="hero-title">Encuentra emprendedores <span>de nuestra tierra.</span></h1>
-              <p className="home-hero__lead">Productos frescos, artesanías, alimentos y más. Conecta directamente con quienes los producen.</p>
+              <p className="home-eyebrow" data-reveal="slide-left">Productos locales, personas reales</p>
+              <h1 id="hero-title" data-reveal="blur-in" style={{ animationDelay: '80ms' }}>Encuentra <em className="home-hero__accent">emprendedores</em> <span>de nuestra tierra.</span></h1>
+              <p className="home-hero__lead" data-reveal="fade-up" style={{ animationDelay: '200ms' }}>Descubre productos frescos, artesanías, alimentos y más. Conecta directamente con quienes los producen y apoya el talento local.</p>
+              <ul className="home-hero__benefits" aria-label="Por qué El Empujoncito" data-reveal="fade-up" style={{ animationDelay: '320ms' }}>
+                <li><span className="home-hero__benefit-icon"><Leaf size={20} /></span>Productos<br />locales</li>
+                <li><span className="home-hero__benefit-icon home-hero__benefit-icon--blue"><Users size={20} /></span>Trato directo<br />con productores</li>
+                <li><span className="home-hero__benefit-icon"><Heart size={20} /></span>Impulsa<br />nuestra economía</li>
+              </ul>
             </div>
-            <p className="home-hero__note" aria-hidden="true">Apoyar lo local<br />también nos alimenta<BrushStrokes className="home-hero__brush" /></p>
+            <p className="home-hero__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '480ms' }}>Apoyar lo local<br />también nos alimenta<BrushStrokes className="home-hero__brush" /></p>
           </div>
           <span className="sr-only">Fotografía: productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca.</span>
         </section>
 
         <section className="home-search page-shell" aria-label="Busca productos y emprendedores">
-          <ValidatedForm className="home-search__panel" role="search" noValidate onSubmit={(event) => { event.preventDefault(); navigate(searchHref) }}>
+          <ValidatedForm className="home-search__panel" role="search" noValidate data-reveal="fade-up" onSubmit={(event) => { event.preventDefault(); navigate(searchHref) }}>
             <label className="home-search__field home-search__field--query">
               <Search size={19} aria-hidden="true" />
               <input
@@ -549,23 +574,26 @@ export function HomePage() {
         </section>
 
         <section className="home-section page-shell" aria-labelledby="category-title">
-          <div className="home-section__heading">
+          <p className="home-eyebrow">Categorías</p>
+          <div className="home-section__heading" data-reveal="fade-up">
             <h2 id="category-title">Explora por categoría</h2>
             <Link className="text-link" to="/productos">Ver todas las categorías <ArrowRight size={15} /></Link>
           </div>
           {homeCategories.length > 0 ? (
             <ul className="category-rail">
-              {homeCategories.map((category) => {
+              {homeCategories.slice(0, HOME_CATEGORY_LIMIT).map((category) => {
                 const { Icon, tone } = categoryVisual(category.name)
                 const photo = CATEGORY_PHOTOS[category.slug]
                 return (
-                  <li key={category.id}>
+                  <li key={category.id} data-reveal="scale-in">
                     <Link className={`category-card category-card--${tone}`} to={`/productos?category=${encodeURIComponent(category.slug)}`}>
                       <span className="category-card__media" aria-hidden="true">
                         {photo ? <img src={photo} alt="" loading="lazy" decoding="async" /> : <Icon className="category-card__art" size={58} strokeWidth={1.25} />}
                       </span>
-                      <span className="category-card__badge" aria-hidden="true"><Icon size={17} /></span>
-                      <span className="category-card__name">{category.name}</span>
+                      <span className="category-card__footer">
+                        <span className="category-card__name">{category.name}</span>
+                        <span className="category-card__arrow" aria-hidden="true"><ChevronRight size={15} /></span>
+                      </span>
                     </Link>
                   </li>
                 )
@@ -576,8 +604,9 @@ export function HomePage() {
           )}
         </section>
 
-        <section className="home-section page-shell" aria-labelledby="featured-title">
-          <div className="home-section__heading">
+        <section className="home-section home-section--tight page-shell" aria-labelledby="featured-title">
+          <p className="home-eyebrow">Hecho en nuestra tierra</p>
+          <div className="home-section__heading" data-reveal="fade-up">
             <div>
               <h2 id="featured-title">Productos destacados</h2>
               <p>Conoce algunos de los productos que puedes encontrar en nuestra plataforma.</p>
@@ -590,7 +619,7 @@ export function HomePage() {
             <p role="status" className="home-section__placeholder">Cargando productos locales…</p>
           ) : homeProducts.length ? (
             <div className="product-grid product-grid--four">
-              {homeProducts.map((product) => <ApiProductCard key={product.id} product={product} />)}
+              {homeProducts.map((product) => <div key={product.id} data-reveal="fade-up"><ApiProductCard product={product} /></div>)}
             </div>
           ) : (
             <div className="empty-products" role="status">
@@ -602,20 +631,21 @@ export function HomePage() {
         </section>
 
         <section className="home-story" id="como-funciona" aria-labelledby="how-title">
-          <div className="home-story__people">
+          <div className="home-story__people" data-reveal="slide-left">
             <img src={heroPhoto} alt="Productor de Azuero junto a su cosecha de yuca, plátano y tomate" loading="lazy" decoding="async" />
             <div className="home-story__people-copy">
               <h2>Personas que hacen que nuestra tierra crezca.</h2>
               <Link className="button button--ghost-light" to="/productores">Conoce sus historias <ArrowRight size={16} /></Link>
             </div>
           </div>
-          <div className="home-story__how">
+          <div className="home-story__how" data-reveal="fade-up">
+            <p className="home-eyebrow">Sin intermediarios</p>
             <h2 id="how-title">¿Cómo funciona?</h2>
-            <p className="home-story__sub">Es muy fácil. Sin intermediarios.</p>
+            <p className="home-story__sub">Es muy fácil. Conecta, descubre y apoya.</p>
             <ol className="how-steps">
-              <li><span className="how-steps__icon"><Search size={22} /></span><span className="how-steps__number">1</span><div><strong>Busca productos</strong><p>y encuentra emprendedores de tu región.</p></div></li>
-              <li><span className="how-steps__icon how-steps__icon--whatsapp"><WhatsAppIcon size={22} /></span><span className="how-steps__number">2</span><div><strong>Contacta directamente</strong><p>por WhatsApp o teléfono.</p></div></li>
-              <li><span className="how-steps__icon"><Handshake size={22} /></span><span className="how-steps__number">3</span><div><strong>Acuerda la compra</strong><p>directamente con el productor.</p></div></li>
+              <li data-reveal="fade-up"><span className="how-steps__icon"><Search size={22} /></span><span className="how-steps__number">1</span><div><strong>Busca productos</strong><p>y encuentra emprendedores de tu región.</p></div></li>
+              <li data-reveal="fade-up"><span className="how-steps__icon how-steps__icon--whatsapp"><WhatsAppIcon size={22} /></span><span className="how-steps__number">2</span><div><strong>Contacta directamente</strong><p>por WhatsApp o teléfono.</p></div></li>
+              <li data-reveal="fade-up"><span className="how-steps__icon"><Handshake size={22} /></span><span className="how-steps__number">3</span><div><strong>Acuerda la compra</strong><p>directamente con el productor.</p></div></li>
             </ol>
             <Link className="text-link" to="/seguridad">Consejos para comprar con confianza <ArrowRight size={15} /></Link>
           </div>
@@ -623,27 +653,26 @@ export function HomePage() {
 
         <section className="home-publish page-shell" aria-labelledby="publish-title">
           <div className="home-publish__band">
-            <div className="home-publish__copy">
+            <div className="home-publish__copy" data-reveal="slide-left">
               <p className="home-eyebrow home-eyebrow--dark">¿Eres productor o emprendedor?</p>
               <h2 id="publish-title">Publica tu producto gratis.</h2>
               <p>Llega a más personas y haz crecer tu negocio.</p>
               <Link className="button button--primary" to="/registro">Publicar ahora <ArrowRight size={16} /></Link>
             </div>
-            <p className="home-publish__note" aria-hidden="true">Tu talento<br />también<br />empodera<br />comunidades</p>
-            <div className="home-publish__photo" aria-hidden="true">
+            <p className="home-publish__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '200ms' }}>Tu talento<br />también<br />empuja<br />comunidades</p>
+            <div className="home-publish__photo" aria-hidden="true" data-reveal="scale-in" style={{ animationDelay: '150ms' }}>
               <img src={heroPhoto} alt="" loading="lazy" decoding="async" />
             </div>
-            <BrushStrokes className="home-publish__brush" />
           </div>
           <p className="home-publish__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
         </section>
 
         <section className="home-values page-shell" aria-label="Por qué El Empujoncito">
           <ul>
-            <li><span className="home-values__icon"><Sprout size={24} /></span><div><strong>Una iniciativa con propósito</strong><p>Impulsada por Super Carnes.</p></div></li>
-            <li><span className="home-values__icon"><ShieldCheck size={24} /></span><div><strong>Contacto directo</strong><p>Hablas directamente con el productor.</p></div></li>
-            <li><span className="home-values__icon"><Users size={24} /></span><div><strong>Apoyo a comunidades</strong><p>Compras que generan un impacto real.</p></div></li>
-            <li><span className="home-values__icon"><Lock size={24} /></span><div><strong>Seguro y confiable</strong><p>Revisamos cada publicación antes de que sea visible.</p></div></li>
+            <li data-reveal="fade-up"><span className="home-values__icon"><Sprout size={24} /></span><div><strong>Una iniciativa con propósito</strong><p>Impulsada por Super Carnes.</p></div></li>
+            <li data-reveal="fade-up"><span className="home-values__icon"><ShieldCheck size={24} /></span><div><strong>Contacto directo</strong><p>Hablas directamente con el productor.</p></div></li>
+            <li data-reveal="fade-up"><span className="home-values__icon"><Users size={24} /></span><div><strong>Apoyo a comunidades</strong><p>Compras que generan impacto local.</p></div></li>
+            <li data-reveal="fade-up"><span className="home-values__icon"><Lock size={24} /></span><div><strong>Seguro y confiable</strong><p>Revisamos cada publicación antes de que sea visible.</p></div></li>
           </ul>
         </section>
 
@@ -707,7 +736,7 @@ export function CatalogPage() {
     setCategoriesLoading(true)
     setCategoriesLoadError(false)
     void listCategories().then((result) => {
-      if (active) setCategoriesFromApi(Array.isArray(result) ? result : [])
+      if (active) setCategoriesFromApi(Array.isArray(result) ? result.filter((c) => c.parent_id === null) : [])
     }).catch(() => {
       if (active) {
         setCategoriesFromApi([])
@@ -981,14 +1010,106 @@ export function PublicProducerPage() {
   const { slug = '' } = useParams()
   const [profile, setProfile] = useState<ProducerPublicProfile | null>(null)
   const [error, setError] = useState('')
+  const initials = profile ? profile.public_name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA') : ''
+  const locationLabel = profile ? publicLocationLabel(profile.location) || 'Panamá' : ''
+  const province = profile?.location?.parent?.parent?.name ?? profile?.location?.parent?.name ?? profile?.location?.name ?? 'Panamá'
   useSeoMetadata(
     profile ? `${profile.public_name} · El Empujoncito` : 'Productores locales · El Empujoncito',
-    profile ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${profile.description ?? ''} ${publicLocationLabel(profile.location) || 'Panamá'}. Explora sus ofertas y contacta directamente.` : 'Conoce productores locales del interior de Panamá y explora sus ofertas.',
+    profile ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${profile.description ?? ''} ${locationLabel}. Explora sus ofertas y contacta directamente.` : 'Conoce productores locales del interior de Panamá y explora sus ofertas.',
     undefined,
     'profile',
   )
   useEffect(() => { void getPublicProducer(slug).then(setProfile).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No se pudo cargar el perfil.')) }, [slug])
-  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><Link className="back-link" to="/productos">← Volver a productos</Link>{error ? <div className="empty-products" role="alert"><strong>{error}</strong></div> : !profile ? <p role="status">Cargando perfil…</p> : <><section className="producer-profile-card"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{profile.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL</p><h1>{profile.public_name}</h1><VerificationBadge level={profile.verification_level} label={profile.verification_label} /><p className="verification-explainer">Este nivel describe las comprobaciones de contacto o identidad realizadas. No garantiza calidad, disponibilidad, pago ni entrega.</p>{profile.activity && <p><strong>{profile.activity}</strong></p>}<p>{publicLocationLabel(profile.location) || 'Panamá'}</p>{profile.description && <p>{profile.description}</p>}<PublicProducerContact profile={profile} /><Link className="text-link" to={`/reportar/productor/${profile.id}`}>Reportar este perfil</Link></div></section><section className="featured-section"><h2>Ofertas publicadas</h2>{profile.products.length ? <div className="product-grid">{profile.products.map((product) => <ApiProductCard key={product.id} product={product} />)}</div> : <p>Este productor aún no tiene ofertas publicadas.</p>}</section></>}</main><SiteFooter /></div>
+
+  if (error) return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><div className="empty-products" role="alert"><strong>{error}</strong><Link className="button button--outline" to="/productores">Volver al directorio</Link></div></main><SiteFooter /></div>
+  if (!profile) return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><p role="status">Cargando perfil…</p></main><SiteFooter /></div>
+
+  return (
+    <div className="app-shell">
+      <SiteHeader />
+      <main className="product-page">
+
+        {/* ── Hero ── */}
+        <div className="product-page__hero">
+          <div className="product-page__crumbs page-shell">
+            <nav className="breadcrumbs" aria-label="Ruta de navegación">
+              <Link to="/">Inicio</Link><ChevronRight size={14} aria-hidden="true" />
+              <Link to="/productores">Productores</Link><ChevronRight size={14} aria-hidden="true" />
+              <span aria-current="page">{profile.public_name}</span>
+            </nav>
+          </div>
+
+          <div className="product-page__top page-shell">
+
+            {/* Left – visual identity */}
+            <div className="producer-profile-visual">
+              <div className="producer-profile-visual__avatar" aria-hidden="true">{initials}</div>
+              <ul className="producer-profile-visual__facts">
+                <li><Store size={18} aria-hidden="true" /><div><strong>{profile.products.length}</strong><span>{profile.products.length === 1 ? 'oferta publicada' : 'ofertas publicadas'}</span></div></li>
+                <li><MapPin size={18} aria-hidden="true" /><div><strong>{province}</strong><span>zona de producción</span></div></li>
+                {profile.contact_level !== 'unverified' && <li><BadgeCheck size={18} aria-hidden="true" /><div><strong>{profile.verification_label}</strong><span>verificación confirmada</span></div></li>}
+                <li><HeartHandshake size={18} aria-hidden="true" /><div><strong>Trato directo</strong><span>sin intermediarios</span></div></li>
+              </ul>
+            </div>
+
+            {/* Right – info + contact */}
+            <div className="product-info">
+              <span className="product-info__category">{profile.activity ?? 'Productor local'}</span>
+              <h1>{profile.public_name}</h1>
+              <p className="product-info__byline"><MapPin size={15} aria-hidden="true" /> {locationLabel}</p>
+              <VerificationBadge level={profile.verification_level} label={profile.verification_label} />
+
+              <ul className="product-info__highlights">
+                <li><Sprout size={24} aria-hidden="true" /><span>Productor local<br />de {province}</span></li>
+                <li><MessageCircle size={24} aria-hidden="true" /><span>Contacto directo<br />sin intermediarios</span></li>
+                <li><BadgeCheck size={24} aria-hidden="true" /><span>Perfil revisado<br />por el equipo</span></li>
+              </ul>
+
+              <PublicProducerContact profile={profile} />
+
+              <div className="product-info__secondary">
+                <Link className="text-link" to={`/reportar/productor/${profile.id}`}><Flag size={15} aria-hidden="true" /> Reportar este perfil</Link>
+                <Link className="text-link" to="/seguridad"><ShieldCheck size={15} aria-hidden="true" /> Consejos de seguridad</Link>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── Historia del productor ── */}
+        {profile.description?.trim() && (
+          <section className="producer-story-band page-shell">
+            <span className="producer-story-band__avatar" aria-hidden="true">{initials}</span>
+            <blockquote className="producer-story-band__body">
+              <p className="eyebrow eyebrow--quiet">LA HISTORIA DEL PRODUCTOR</p>
+              <p className="producer-story-band__quote">{profile.description}</p>
+              <footer className="producer-story-band__byline">— {profile.public_name}{profile.activity ? `, ${profile.activity}` : ''}</footer>
+            </blockquote>
+          </section>
+        )}
+
+        {/* ── Ofertas ── */}
+        <section className="detail-more page-shell" aria-label="Ofertas publicadas">
+          <div className="home-section__heading">
+            <h2>Ofertas de {profile.public_name}</h2>
+            {profile.products.length > 0 && <span>{profile.products.length} {profile.products.length === 1 ? 'oferta' : 'ofertas'}</span>}
+          </div>
+          {profile.products.length
+            ? <div className="product-grid product-grid--four">{profile.products.map((product) => <ApiProductCard key={product.id} product={product} />)}</div>
+            : <div className="empty-products"><Store size={24} aria-hidden="true" /><strong>Aún no hay ofertas publicadas</strong><span>Este productor no tiene publicaciones activas en este momento.</span></div>}
+        </section>
+
+        {/* ── Safety note ── */}
+        <aside className="catalog-safety-note page-shell">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <p>El contacto confirmado indica acceso al número, no certifica la calidad del producto ni garantiza una compraventa.</p>
+          <Link to="/seguridad">Consejos de seguridad</Link>
+        </aside>
+
+      </main>
+      <SiteFooter />
+    </div>
+  )
 }
 
 export function PublicProducerDirectoryPage() {
@@ -1025,7 +1146,7 @@ export function PublicProducerDirectoryPage() {
     return () => window.clearTimeout(timer)
   }, [composing, query, queryDraft, searchParams, setSearchParams])
   useEffect(() => {
-    void listCategories().then(setCategories).catch(() => setCategories([]))
+    void listCategories().then((result) => setCategories(result.filter((c) => c.parent_id === null))).catch(() => setCategories([]))
     void listLocations().then(setLocations).catch(() => setLocations([]))
   }, [])
   useEffect(() => {
@@ -1385,6 +1506,233 @@ export function NotFoundPage() {
   return <InfoPage title="No encontramos esta página" description="Revisa la dirección o vuelve al catálogo para explorar las ofertas." />
 }
 
+function RegistroPage() {
+  const [showRegForm, setShowRegForm] = useState(false)
+
+  // Login state
+  const [loginMessage, setLoginMessage] = useState('')
+
+  // Registration state
+  const [regMessage, setRegMessage] = useState('')
+  const [registrationLocations, setRegistrationLocations] = useState<PublicLocation[]>([])
+  const [locationsLoading, setLocationsLoading] = useState(true)
+  const [locationsError, setLocationsError] = useState(false)
+  const [locationsRetry, setLocationsRetry] = useState(0)
+  const [regStep, setRegStep] = useState(1)
+  const [regFirstName, setRegFirstName] = useState('')
+  const [regLastName, setRegLastName] = useState('')
+  const [regCedula, setRegCedula] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regPublicName, setRegPublicName] = useState('')
+  const [regActivity, setRegActivity] = useState('')
+  const [regLocationId, setRegLocationId] = useState<number | null>(null)
+  const [regTerms, setRegTerms] = useState(false)
+  const [regPrivacy, setRegPrivacy] = useState(false)
+  const [regSubmitting, setRegSubmitting] = useState(false)
+  const [regStep1Error, setRegStep1Error] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setLocationsLoading(true)
+    void listLocations().then((locs) => {
+      if (active) setRegistrationLocations(locs)
+    }).catch(() => {
+      if (active) { setRegistrationLocations([]); setLocationsError(true) }
+    }).finally(() => { if (active) setLocationsLoading(false) })
+    return () => { active = false }
+  }, [locationsRetry])
+
+  async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
+    setLoginMessage('')
+    try {
+      const xsrf = await csrfToken()
+      const response = await fetch(`${apiBase}/auth/login`, {
+        method: 'POST', credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
+        body: JSON.stringify(Object.fromEntries(form)),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || 'Revisa los datos e inténtalo de nuevo.')
+      }
+      window.location.assign('/mi-panel')
+    } catch (error) {
+      setLoginMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio.')
+    }
+  }
+
+  async function submitRegistration() {
+    setRegSubmitting(true)
+    setRegMessage('')
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
+    try {
+      const xsrf = await csrfToken()
+      const response = await fetch(`${apiBase}/auth/register`, {
+        method: 'POST', credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
+        body: JSON.stringify({
+          name: `${regFirstName.trim()} ${regLastName.trim()}`,
+          email: regEmail, password: regPassword,
+          cedula: regCedula.toUpperCase(), public_name: regPublicName, activity: regActivity || null,
+          phone: regPhone, location_id: regLocationId,
+          terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
+          terms_confirmed: '1', privacy_confirmed: '1',
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || 'No pudimos completar el registro. Revisa los datos.')
+      }
+      window.location.assign('/verificar')
+    } catch (error) {
+      setRegMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio.')
+      setRegSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      <SiteHeader />
+      <main className="auth-gateway page-shell">
+        <div className="auth-gateway__header">
+          <span className="access-card__icon"><Sprout size={23} /></span>
+          <p className="eyebrow eyebrow--quiet">PORTAL DE PRODUCTORES</p>
+          <h1>Publica tus productos en El Empujoncito</h1>
+          <p>La plataforma gratuita para productores y emprendedores del interior de Panamá.</p>
+        </div>
+
+        {!showRegForm ? (
+          <div className="auth-gateway__panels">
+            {/* ── Login panel (desktop only) ── */}
+            <div className="auth-gateway__panel auth-gateway__panel--login">
+              <h2 className="auth-gateway__panel-title">Ya tengo cuenta</h2>
+              <p className="auth-gateway__panel-sub">Ingresa a tu panel de productor</p>
+              <ValidatedForm className="auth-form" onSubmit={submitLogin}>
+                <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
+                <label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label>
+                {loginMessage && <p role="alert">{loginMessage}</p>}
+                <button className="button button--primary" type="submit">Ingresar <ArrowRight size={16} /></button>
+                <Link className="text-link" to="/recuperar">¿Olvidaste tu contraseña?</Link>
+              </ValidatedForm>
+            </div>
+
+            <div className="auth-gateway__divider" aria-hidden="true"><span>o</span></div>
+
+            {/* ── Register CTA panel ── */}
+            <div className="auth-gateway__panel auth-gateway__panel--register-cta">
+              <h2 className="auth-gateway__panel-title">Crear mi cuenta gratis</h2>
+              <p className="auth-gateway__panel-sub">Únete y empieza a publicar tus ofertas en El Empujoncito, la plataforma gratuita para productores del interior de Panamá.</p>
+              <button className="button button--primary button--large" type="button" onClick={() => setShowRegForm(true)}>
+                Crear mi cuenta gratis <ArrowRight size={18} />
+              </button>
+              <Link className="text-link auth-gateway__login-mobile" to="/ingresar">Ya tengo una cuenta</Link>
+            </div>
+          </div>
+        ) : (
+          <div className="auth-gateway__register-only">
+            <h2 className="auth-gateway__panel-title">Crear mi cuenta gratis</h2>
+            <p className="auth-gateway__panel-sub">Únete y empieza a publicar tus ofertas</p>
+            <div className="reg-wizard">
+              <nav className="reg-steps" aria-label="Pasos del registro">
+                {([['1','Tus datos'],['2','Emprendimiento'],['3','Ubicación'],['4','Confirmar']] as [string,string][]).map(([n, lbl]) => (
+                  <button key={n} type="button"
+                    className={`reg-step-dot${regStep === Number(n) ? ' reg-step-dot--active' : ''}${regStep > Number(n) ? ' reg-step-dot--done' : ''}`}
+                    onClick={() => { if (regStep > Number(n)) setRegStep(Number(n)) }}
+                    disabled={regStep <= Number(n)}
+                    aria-label={`Paso ${n}: ${lbl}`}
+                    aria-current={regStep === Number(n) ? 'step' : undefined}
+                  >
+                    <span className="reg-step-dot__num">{regStep > Number(n) ? '✓' : n}</span>
+                    <span className="reg-step-dot__lbl">{lbl}</span>
+                  </button>
+                ))}
+              </nav>
+
+              {regStep === 1 && (
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => {
+                  e.preventDefault()
+                  const hasLetter = /[a-zA-Z]/.test(regPassword)
+                  const hasNumber = /[0-9]/.test(regPassword)
+                  const hasSpecial = /[^a-zA-Z0-9]/.test(regPassword)
+                  if (!hasLetter || !hasNumber || !hasSpecial) { setRegStep1Error('La contraseña debe incluir al menos una letra, un número y un carácter especial.'); return }
+                  setRegStep1Error('')
+                  setRegStep(2)
+                }}>
+                  <div className="reg-form-grid">
+                    <label className="form-field"><span className="form-field__label">Nombre</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Apellido</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Cédula de identidad</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span></label>
+                    <label className="form-field"><span className="form-field__label">Correo electrónico</span><input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Contraseña</span><input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><span className="form-field__hint">{regPassword ? (() => { const c = { len: regPassword.length >= 6, let: /[a-zA-Z]/.test(regPassword), num: /[0-9]/.test(regPassword), sym: /[^a-zA-Z0-9]/.test(regPassword) }; return (c.len && c.let && c.num && c.sym) ? <span className="pwd-ok">✓ Contraseña válida</span> : <span className="pwd-strength">{([{l:'6 car.',ok:c.len},{l:'letra',ok:c.let},{l:'número',ok:c.num},{l:'símbolo',ok:c.sym}] as {l:string,ok:boolean}[]).map(({l,ok}) => <span key={l} className={ok ? 'pwd-req pwd-req--ok' : 'pwd-req pwd-req--no'}>{ok ? '✓' : '✗'} {l}</span>)}</span> })() : 'Mín. 6 car. · letra · número · símbolo'}</span></label>
+                    <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><span className="form-field__hint">Ej: 6000-1234</span></label>
+                  </div>
+                  {regStep1Error && <p className="form-field__error" role="alert">{regStep1Error}</p>}
+                  <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
+                </ValidatedForm>
+              )}
+
+              {regStep === 2 && (
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(3) }}>
+                  <div className="reg-form-grid">
+                    <label className="form-field"><span className="form-field__label">Nombre público del emprendimiento</span><input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Actividad principal</span><ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                  </div>
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" onClick={() => setRegStep(1)}>Atrás</button>
+                    <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
+                  </div>
+                </ValidatedForm>
+              )}
+
+              {regStep === 3 && (
+                <div className="auth-form reg-step-form">
+                  <fieldset className="location-fieldset">
+                    <legend>Ubicación de tu emprendimiento</legend>
+                    {locationsLoading && <p role="status">Cargando localidades…</p>}
+                    {locationsError && <div role="alert"><p>No pudimos cargar las localidades.</p><button className="button button--outline" type="button" onClick={() => setLocationsRetry(a => a + 1)}>Intentar de nuevo</button></div>}
+                    {!locationsLoading && !locationsError && <LocationPicker locations={registrationLocations} idPrefix="gw-location" required value={regLocationId} onChange={setRegLocationId} />}
+                    <small>Elige provincia, distrito o corregimiento. No compartas una dirección exacta.</small>
+                  </fieldset>
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" onClick={() => setRegStep(2)}>Atrás</button>
+                    <button className="button button--primary" type="button" disabled={!regLocationId} onClick={() => setRegStep(4)}>Continuar <ArrowRight size={16} /></button>
+                  </div>
+                </div>
+              )}
+
+              {regStep === 4 && (
+                <div className="auth-form reg-step-form">
+                  <div className="reg-review">
+                    <div className="reg-review__row"><span>Nombre</span><strong>{regFirstName} {regLastName}</strong></div>
+                    <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
+                    <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
+                    <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>
+                    <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
+                    {regActivity && <div className="reg-review__row"><span>Actividad</span><strong>{regActivity}</strong></div>}
+                  </div>
+                  <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
+                  <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
+                  {regMessage && <p role="alert">{regMessage}</p>}
+                  <div className="reg-step-nav">
+                    <button className="button button--quiet" type="button" disabled={regSubmitting} onClick={() => setRegStep(3)}>Atrás</button>
+                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+      <SiteFooter />
+    </div>
+  )
+}
+
 function PublicRoutes() {
   return (
     <Routes>
@@ -1402,7 +1750,7 @@ function PublicRoutes() {
       <Route path="/reportar/producto/:id" element={<ReportPage resourceType="product" />} />
       <Route path="/reportar/productor/:id" element={<ReportPage resourceType="producer" />} />
       <Route path="/reportar/:id" element={<ReportPage resourceType="product" />} />
-      <Route path="/registro" element={<AccessPage title="Publica tu oferta" description="Crea una cuenta para administrar tu perfil y compartir tus productos." />} />
+      <Route path="/registro" element={<RegistroPage />} />
       <Route path="/ingresar" element={<AccessPage title="Ingresa a tu cuenta" description="Administra tus publicaciones y revisa su estado." />} />
       <Route path="/recuperar" element={<ForgotPasswordPage />} />
       <Route path="/restablecer" element={<ResetPasswordPage />} />

@@ -1,31 +1,81 @@
 :root {
-  --color-primary: #003399;
-  --color-secondary: #1649b8;
-  --color-accent: #ffd400;
-  --color-background: #f3f6fc;
-  --color-surface: #ffffff;
-  --color-text: #18243a;
-  --color-ink: var(--color-text);
-  --color-paper: var(--color-background);
-  --color-muted: #66748d;
-  --color-border: #d6dfef;
-  --color-success: #1649b8;
-  --color-warning: #8b5b0b;
-  --color-danger: #9f3530;
-  --color-focus: #1649b8;
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  /* Marca */
+  --brand-blue: #075CC5;
+  --brand-blue-hover: #034EA8;
+  --brand-navy: #092552;
+  --brand-lime: #A8E137;
+  --brand-lime-hover: #96CE2C;
+  --brand-teal: #2F968E;
+
+  /* Superficies */
+  --background: #FFFFFF;
+  --background-soft: #F7FAFD;
+  --surface: #FFFFFF;
+
+  /* Textos */
+  --text-primary: #092552;
+  --text-secondary: #65738A;
+  --text-muted: #8492A6;
+
+  /* Bordes */
+  --border: #DCE5EF;
+  --border-light: #ECF1F6;
+
+  /* Estados */
+  --success: #299565;
+  --warning: #E6A23C;
+  --error: #D94F43;
+
+  /* Categorías */
+  --category-green: #EAF6E6;
+  --category-red: #FCE9E8;
+  --category-blue: #E8F2FC;
+  --category-yellow: #FFF5D7;
+  --category-orange: #FCECE2;
+  --category-purple: #F0ECFA;
+  --category-teal: #E6F5F2;
+
+  /* Gradiente de marca */
+  --brand-gradient: linear-gradient(155deg, #B1E644 0%, #65AD71 45%, #075CC5 100%);
+
+  /* ── Variables de compatibilidad ── mantener para que App.css y public-redesign.css no se rompan */
+  --color-primary: var(--brand-navy);
+  --color-secondary: var(--brand-blue);
+  --color-accent: var(--brand-lime);
+  --color-background: var(--background-soft);
+  --color-surface: var(--surface);
+  --color-text: var(--text-primary);
+  --color-ink: var(--text-primary);
+  --color-paper: var(--background);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--error);
+  --color-focus: var(--brand-blue);
+  --color-ink-soft: var(--text-secondary);
+
+  /* Tipografía */
+  --font-display: 'Plus Jakarta Sans', 'Fraunces', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-hand: 'Caveat', 'Segoe Script', cursive;
+
+  /* Radio */
   --radius-sm: 0.45rem;
-  --radius-md: 0.8rem;
-  --radius-control: var(--radius-md);
-  --radius-lg: 1.25rem;
+  --radius-md: 0.75rem;
+  --radius-control: 0.75rem;
+  --radius-lg: 1rem;
   --radius-pill: 999px;
+
+  /* Espaciado */
   --space-page-max: 78rem;
   --space-section-gap: 3.5rem;
   --space-control-height: 2.9rem;
-  --scroll-track: #f3f6fc;
-  --scroll-thumb: #b6c5df;
-  --scroll-thumb-hover: #8097bd;
+
+  /* Scrollbar */
+  --scroll-track: var(--background-soft);
+  --scroll-thumb: #C2D0E0;
+  --scroll-thumb-hover: #9EB0C8;
 }
 
 @media (forced-colors: active) {

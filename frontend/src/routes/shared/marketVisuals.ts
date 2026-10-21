@@ -1,6 +1,8 @@
-import { Apple, Carrot, Coffee, Egg, Flower2, Palette, Shirt, ShoppingBasket, SprayCan, Sprout, Wheat, type LucideIcon } from 'lucide-react'
+import { Apple, Beef, Carrot, Coffee, Egg, Fish, Flower2, Palette, Shirt, ShoppingBasket, SprayCan, Sprout, Wheat, type LucideIcon } from 'lucide-react'
 
 const CATEGORY_ICON_RULES: Array<[RegExp, LucideIcon, string]> = [
+  [/carne|pollo|cerdo|res\b/i, Beef, 'meat'],
+  [/pescad|marisc/i, Fish, 'fish'],
   [/productos artesanal|miel|dulce|conserva/i, Flower2, 'honey'],
   [/frut|verdur|aliment|fresc/i, Carrot, 'fresh'],
   [/artesan|canast|tejid/i, ShoppingBasket, 'craft'],

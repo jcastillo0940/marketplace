@@ -6,7 +6,7 @@ export function useSeoMetadata(title: string, description: string, image?: strin
   const location = useLocation()
   useEffect(() => {
     const defaultTitle = 'El Empujoncito · El interior produce, Panamá conecta'
-    const defaultDescription = 'Encuentra productos y emprendimientos de productores locales de Coclé, Veraguas, Herrera y Los Santos. Contacta directamente y apoya lo local.'
+    const defaultDescription = 'Encuentra productos y emprendimientos de productores locales de Panamá. Contacta directamente y apoya lo local.'
     const setMeta = (selector: string, attribute: string, value: string) => {
       let element = document.head.querySelector<HTMLMetaElement>(selector)
       if (!element) {

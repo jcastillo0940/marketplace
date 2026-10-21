@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, CheckCircle2, Clock3, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { AdminShell } from '../routes/AdminRoutes'
 import { ConfirmActionDialog } from './ConfirmActionDialog'
 import TextAreaField from './TextAreaField'
 import ValidatedForm from './ValidatedForm'
@@ -63,7 +64,7 @@ export default function AdminMfaRecoveryPage() {
   const canReview = permissions?.includes('security.mfa_recovery.review') === true
   const decisionLabel = activeDecision?.decision === 'approve' ? 'aprobar' : 'rechazar'
 
-  return <div className="app-shell"><main className="catalog-page page-shell admin-mfa-recovery">
+  return <AdminShell><main className="admin-content admin-mfa-recovery">
     <Link className="text-link admin-mfa-recovery__back" to="/admin"><ArrowLeft size={16} /> Volver a administración</Link>
     <p className="eyebrow eyebrow--quiet">ADMINISTRACIÓN · SEGURIDAD DE CUENTAS</p>
     <h1>Recuperación de MFA</h1>
@@ -87,5 +88,5 @@ export default function AdminMfaRecoveryPage() {
     <ValidatedForm id="admin-mfa-recovery-decision" className="auth-form" onSubmit={(event) => void submitDecision(event)}>
       <TextAreaField id={`mfa-recovery-decision-reason-${activeDecision.request.id}`} name="reason" label="Motivo de la decisión" value={reasons[activeDecision.request.id] ?? ''} onChange={(value) => setReasons((current) => ({ ...current, [activeDecision.request.id]: value }))} hint="Describe la verificación realizada. No incluyas documentos ni números de identidad." minLength={10} maxLength={1000} rows={4} required />
     </ValidatedForm>
-  </ConfirmActionDialog>}</div>
+  </ConfirmActionDialog>}</AdminShell>
 }
