@@ -9,6 +9,7 @@ use App\Models\ContactEvent;
 use App\Models\ProducerProfile;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\Unit;
 use App\Rules\ValidContactPhone;
 use App\Services\ContactVerificationSender;
 use App\Services\PhoneVerificationWorkflow;
@@ -78,13 +79,13 @@ class ProducerProductController extends Controller
         return response()->json($products);
     }
 
-    public function store(Request $request, ProductPhotoOptimizer $photoOptimizer): JsonResponse
+    public function store(Request $request, ProductPhotoOptimizer $photoOptimizer, ProductWorkflow $workflow): JsonResponse
     {
         $data = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:120'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')->where('active', true)],
             'description' => ['required', 'string', 'min:20', 'max:3000'],
-            'unit' => ['required', 'string', Rule::in(Product::UNITS)],
+            'unit' => ['required', 'string', Rule::in(Unit::activeCodes())],
             'minimum_order' => ['nullable', 'string', 'max:100'],
             'price_type' => ['required', 'in:fixed,range'],
             'price_amount' => ['required', 'numeric', 'gt:0', 'max:99999999'],
@@ -123,6 +124,8 @@ class ProducerProductController extends Controller
             throw $exception;
         }
 
+        $product = $workflow->publishIfTrusted($product, $request->user()->id);
+
         return response()->json(['data' => ['id' => $product->id, 'slug' => $product->slug, 'status' => $product->status->value]], 201);
     }
 
@@ -146,7 +149,7 @@ class ProducerProductController extends Controller
         return Storage::disk($image->disk)->response($image->path, null, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff', 'Content-Disposition' => 'inline']);
     }
 
-    public function update(Request $request, int $id, ProductPhotoOptimizer $photoOptimizer): JsonResponse
+    public function update(Request $request, int $id, ProductPhotoOptimizer $photoOptimizer, ProductWorkflow $workflow): JsonResponse
     {
         $product = Product::query()->whereHas('producer', fn ($query) => $query->where('user_id', $request->user()->id))->findOrFail($id);
         $editableStatuses = ['draft', 'changes_requested', 'rejected', 'published', 'paused', 'sold_out'];
@@ -155,7 +158,7 @@ class ProducerProductController extends Controller
             'title' => ['required', 'string', 'min:3', 'max:120'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')->where('active', true)],
             'description' => ['required', 'string', 'min:20', 'max:3000'],
-            'unit' => ['required', 'string', Rule::in(Product::UNITS)],
+            'unit' => ['required', 'string', Rule::in(Unit::activeCodes())],
             'minimum_order' => ['nullable', 'string', 'max:100'],
             'price_type' => ['required', 'in:fixed,range'],
             'price_amount' => ['required', 'numeric', 'gt:0', 'max:99999999'],
@@ -234,7 +237,7 @@ class ProducerProductController extends Controller
             }
         }
 
-        $updatedProduct = $product->fresh()->load(['category', 'images']);
+        $updatedProduct = $workflow->publishIfTrusted($product, $request->user()->id)->load(['category', 'images']);
         $this->presentOwnerImages($updatedProduct);
 
         return response()->json(['data' => $updatedProduct]);
@@ -245,6 +248,7 @@ class ProducerProductController extends Controller
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:1000']]);
         $product = Product::query()->whereHas('producer', fn ($query) => $query->where('user_id', $request->user()->id))->findOrFail($id);
         $product = $workflow->transition($product, 'pending', $request->user()->id, $data['reason']);
+        $product = $workflow->publishIfTrusted($product, $request->user()->id);
 
         return response()->json(['data' => ['id' => $product->id, 'status' => $product->status->value]], 202);
     }

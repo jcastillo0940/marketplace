@@ -77,6 +77,24 @@ class ProductWorkflow
         });
     }
 
+    /**
+     * Verified producers skip the review queue. Anything that blocks publishing,
+     * such as a missing photo, leaves the offer pending for a moderator.
+     */
+    public function publishIfTrusted(Product $product, int $actorId): Product
+    {
+        $product = $product->fresh();
+        if ($product->status !== ProductStatus::Pending || ! $product->producer->canPublishDirectly()) {
+            return $product;
+        }
+
+        try {
+            return $this->transition($product, 'published', $actorId, 'Publicación directa de productor verificado.', moderator: true);
+        } catch (ValidationException) {
+            return $product;
+        }
+    }
+
     public function renewExpiredListing(Product $product, int $actorId): Product
     {
         return DB::transaction(function () use ($product, $actorId): Product {

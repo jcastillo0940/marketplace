@@ -9,10 +9,10 @@ import TextAreaField from '../components/TextAreaField'
 import ValidatedForm from '../components/ValidatedForm'
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog'
 import { ProducerReviewSubmission } from '../components/ProducerReviewSubmission'
-import { compressProductPhoto } from '../api/photo-optimizer'
+import { compressDocumentFile, compressProductPhoto, MAX_UPLOAD_BYTES, MAX_UPLOAD_MESSAGE } from '../api/photo-optimizer'
 import {
   clearSessionCache, getProducerAppeals, getProducerMetrics, getProducerDashboard,
-  getBiometricStatus, getProducerProduct, getSessionUser, listCategories, listLocations, logoutUser,
+  getBiometricStatus, getProducerProduct, getSessionUser, listCategories, listLocations, listUnits, logoutUser,
   renewProducerProduct, saveProductDraft, getMyStories, saveMyStory, deleteMyStory, submitProducerAppeal,
   transitionProducerProduct, updateProduct, updateProducerProfile,
   uploadProducerDocument, getProducerDocuments,
@@ -480,7 +480,9 @@ function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOper
   async function upload(type: ProducerDocumentType, file: File) {
     setStatus((current) => ({ ...current, [type]: 'Subiendo…' }))
     try {
-      await uploadProducerDocument(type, file)
+      const optimized = await compressDocumentFile(file)
+      if (optimized.size > MAX_UPLOAD_BYTES) throw new Error(MAX_UPLOAD_MESSAGE)
+      await uploadProducerDocument(type, optimized)
       const docs = await getProducerDocuments()
       setUploaded({ cedula_photo: docs.has_cedula_photo, pacto_social: docs.has_pacto_social, aviso_operacion: docs.has_aviso_operacion })
       setStatus((current) => ({ ...current, [type]: '✓ Subido correctamente.' }))
@@ -497,7 +499,7 @@ function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOper
       </div>
       <p className="producer-settings__section-help">
         Sube el documento que respalda tu RUC. Solo el equipo de Mercapro puede verlo.
-        {' '}Formatos aceptados: JPG, PNG, PDF · Máximo 10 MB por archivo.
+        {' '}Formatos aceptados: JPG, PNG y PDF. Las fotos las optimizamos por ti, pesen lo que pesen; los PDF deben pesar 2 MB o menos.
       </p>
       <div className="producer-readonly-grid">
         {documents.map((document) => (
@@ -523,12 +525,16 @@ function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOper
 
 // ── Product form ──────────────────────────────────────────────────────────────
 
-const PRODUCT_UNITS = ['lb', 'kg', 'unidad', 'docena', 'caja', 'quintal', 'saco', 'galón', 'litro']
+/** Shown until the list from the units table arrives. */
+const DEFAULT_UNITS = [
+  { code: 'lb', name: 'Libra (lb)' }, { code: 'kg', name: 'Kilogramo (kg)' }, { code: 'unidad', name: 'Unidad' },
+  { code: 'docena', name: 'Docena' }, { code: 'caja', name: 'Caja' }, { code: 'quintal', name: 'Quintal' },
+  { code: 'saco', name: 'Saco' }, { code: 'galón', name: 'Galón' }, { code: 'litro', name: 'Litro' },
+]
 
-/** Older products hold free text; anything that is not a standard unit must be chosen again. */
+/** Older products hold free text; the form asks again for anything that is not in the units table. */
 function normalizeUnit(unit: string): string {
-  const normalized = unit.trim().toLowerCase()
-  return PRODUCT_UNITS.includes(normalized) ? normalized : ''
+  return unit.trim().toLowerCase()
 }
 
 const PRODUCT_DRAFT_KEY = 'mercapro.product-draft'
@@ -570,6 +576,7 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [photoError, setPhotoError] = useState('')
+  const [units, setUnits] = useState(DEFAULT_UNITS)
   const [categoriesFromApi, setCategoriesFromApi] = useState<Array<{ id: number; name: string; parent_id: number | null }>>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [categoriesLoadError, setCategoriesLoadError] = useState('')
@@ -592,6 +599,7 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const [pvTitle, setPvTitle] = useState(draft?.title ?? '')
   const [pvDesc, setPvDesc] = useState(draft?.description ?? '')
   const [pvUnit, setPvUnit] = useState(draft?.unit ?? 'lb')
+  const knownUnit = units.some((unit) => unit.code === pvUnit)
   const [pvPrice, setPvPrice] = useState(draft?.price_amount ?? '')
   const [pvCurrency, setPvCurrency] = useState(draft?.currency ?? 'PAB')
   const [pvPriceType, setPvPriceType] = useState<'fixed' | 'range'>(draft?.price_type === 'range' ? 'range' : 'fixed')
@@ -614,6 +622,14 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
         .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'No pudimos cargar esta publicación.'))
     }
   }, [editing, id])
+
+  useEffect(() => {
+    let current = true
+    void listUnits().then((loaded) => {
+      if (current && loaded.length > 0) setUnits(loaded)
+    }).catch(() => undefined)
+    return () => { current = false }
+  }, [])
 
   useEffect(() => {
     let current = true
@@ -703,11 +719,9 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
     const total = (initial?.images.length ?? 0) + files.length
     const error = total > 5
       ? 'Conserva o agrega un máximo de cinco fotografías.'
-      : files.find((file) => file.size > 5 * 1024 * 1024)
-        ? 'Cada fotografía debe pesar 5 MB o menos.'
-        : files.find((file) => file.type && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
-          ? 'Adjunta fotografías JPG, PNG o WebP.'
-          : ''
+      : files.find((file) => file.type && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
+        ? 'Adjunta fotografías JPG, PNG o WebP.'
+        : ''
     input.setCustomValidity(error)
     setPhotoError(error)
     return error
@@ -783,7 +797,9 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
         setMessage('Preparando tus fotografías…')
         form.delete('images[]')
         for (const photo of Array.from(photoInput.files)) {
-          form.append('images[]', await compressProductPhoto(photo))
+          const optimized = await compressProductPhoto(photo)
+          if (optimized.size > MAX_UPLOAD_BYTES) throw new Error(MAX_UPLOAD_MESSAGE)
+          form.append('images[]', optimized)
         }
       }
       if (editing) {
@@ -801,9 +817,12 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
         setRemovedImageIds([])
         setMessage(updated.status === 'pending'
           ? 'Guardamos los cambios y enviamos la oferta a revisión. No aparecerá en el catálogo hasta que el equipo la apruebe.'
-          : 'Guardamos los cambios. Puedes enviar la publicación a revisión desde tu panel.')
+          : updated.status === 'published'
+            ? 'Guardamos los cambios. Tu oferta sigue publicada en el catálogo.'
+            : 'Guardamos los cambios. Puedes enviar la publicación a revisión desde tu panel.')
       } else {
-        await saveProductDraft(form)
+        const saved = await saveProductDraft(form)
+        const published = saved.status === 'published'
         window.clearTimeout(draftTimer.current)
         clearProductDraft()
         setDraftRestored(false)
@@ -813,11 +832,13 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
           setDraft({ unit: pvUnit, currency: pvCurrency, delivery_method: String(form.get('delivery_method') ?? ''), category_id: Number(selectedCategoryId) })
           resetForNextProduct()
           setAddedCount((count) => count + 1)
-          setMessage(`“${title}” se envió a revisión. Agrega el siguiente producto; dejamos la categoría y la entrega para ahorrarte tiempo.`)
+          setMessage(`“${title}” ${published ? 'ya está publicado' : 'se envió a revisión'}. Agrega el siguiente producto; dejamos la categoría y la entrega para ahorrarte tiempo.`)
           window.scrollTo({ top: 0, behavior: 'smooth' })
           return
         }
-        const notice = profileStatus === 'pending'
+        const notice = published
+          ? 'Tu oferta ya está publicada en el catálogo.'
+          : profileStatus === 'pending'
           ? 'Tu oferta quedó en revisión. Aparecerá en el catálogo cuando tu perfil y tu oferta sean aprobados.'
           : 'Tu anuncio fue enviado a revisión. El equipo lo aprobará pronto y aparecerá en el catálogo.'
         navigate('/mis-productos', { state: { notice } })
@@ -921,17 +942,9 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
 
                   <div className="form-row">
                     <label>Unidad de venta
-                      <select name="unit" value={pvUnit} required onChange={(e) => setPvUnit(e.currentTarget.value)}>
-                        {!PRODUCT_UNITS.includes(pvUnit) && <option value="">Selecciona una unidad</option>}
-                        <option value="lb">Libra (lb)</option>
-                        <option value="kg">Kilogramo (kg)</option>
-                        <option value="unidad">Unidad</option>
-                        <option value="docena">Docena</option>
-                        <option value="caja">Caja</option>
-                        <option value="quintal">Quintal</option>
-                        <option value="saco">Saco</option>
-                        <option value="galón">Galón</option>
-                        <option value="litro">Litro</option>
+                      <select name="unit" value={knownUnit ? pvUnit : ''} required onChange={(e) => setPvUnit(e.currentTarget.value)}>
+                        {!knownUnit && <option value="">Selecciona una unidad</option>}
+                        {units.map((unit) => <option key={unit.code} value={unit.code}>{unit.name}</option>)}
                       </select>
                     </label>
                     <label>Pedido mínimo (opcional)
@@ -1014,7 +1027,7 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
                     <input name="images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple required={!editing}
                       aria-describedby="product-photos-help product-photos-error"
                       onChange={(e) => handlePhotosChange(e.currentTarget)} />
-                    <small id="product-photos-help">JPG, PNG o WebP · hasta cinco fotografías · máximo 5 MB por archivo. Las optimizamos al guardar.</small>
+                    <small id="product-photos-help">JPG, PNG o WebP · hasta cinco fotografías. Las optimizamos al guardar, pesen lo que pesen.</small>
                     {photoError && <span id="product-photos-error" role="alert">{photoError}</span>}
                   </label>
 

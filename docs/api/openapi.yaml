@@ -238,6 +238,27 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Category' }
+  /units:
+    get:
+      tags: [Public]
+      summary: Lista las unidades de venta activas
+      responses:
+        '200':
+          description: Unidades aceptadas al publicar un producto
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, name]
+                      properties:
+                        code: { type: string }
+                        name: { type: string }
   /locations:
     get:
       tags: [Public]

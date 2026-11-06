@@ -9,6 +9,7 @@ use App\Models\ProducerProfile;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\SearchEvent;
+use App\Models\Unit;
 use App\Support\PanamaPhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -439,6 +440,17 @@ class PublicCatalogController extends Controller
         abort_unless($storage->exists($path), 404);
 
         return $storage->response($path, null, ['Cache-Control' => 'public, max-age=86400', 'X-Content-Type-Options' => 'nosniff']);
+    }
+
+    public function units(): JsonResponse
+    {
+        $units = Cache::remember('public.units', 600, fn () => Unit::query()
+            ->where('active', true)
+            ->orderBy('position')
+            ->get(['code', 'name'])
+            ->toArray());
+
+        return response()->json(['data' => $units]);
     }
 
     public function categories(): JsonResponse

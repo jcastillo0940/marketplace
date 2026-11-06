@@ -17,8 +17,6 @@ class Product extends Model
 
     protected $hidden = ['producer_profile_id', 'created_by'];
 
-    /** Standard sale units. Free text is not accepted. */
-    public const UNITS = ['lb', 'kg', 'unidad', 'docena', 'caja', 'quintal', 'saco', 'galón', 'litro'];
 
     protected $fillable = ['producer_profile_id', 'category_id', 'created_by', 'slug', 'title', 'description', 'unit', 'minimum_order', 'price_type', 'price_amount', 'price_max', 'currency', 'stock_quantity', 'delivery_method', 'status', 'published_at'];
 

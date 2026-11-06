@@ -144,6 +144,30 @@ class ProducerOwnershipTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_verified_producer_keeps_an_edited_offer_live_without_moderation(): void
+    {
+        Storage::fake('local');
+        $product = $this->publicProduct();
+        $product->producer->forceFill([
+            'verification_level' => 'identity_reviewed', 'contact_level' => 'contact_confirmed', 'phone_verified_at' => now(),
+        ])->save();
+        $this->attachAvailablePhoto($product);
+
+        $this->actingAs($product->producer->user)->patchJson("/api/me/products/{$product->id}", [
+            'title' => 'Yuca fresca seleccionada',
+            'category_id' => $product->category_id,
+            'description' => 'Yuca cosechada esta semana y seleccionada en la finca familiar.',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB',
+            'delivery_method' => 'Retiro coordinado',
+            'reason' => 'Actualicé la descripción y confirmé la disponibilidad.',
+        ])->assertOk()->assertJsonPath('data.status', 'published');
+
+        $this->assertDatabaseHas('product_status_history', [
+            'product_id' => $product->id, 'from_status' => 'pending', 'to_status' => 'published',
+            'reason' => 'Publicación directa de productor verificado.',
+        ]);
+    }
+
     public function test_editing_a_live_offer_requires_reason_and_sends_it_to_moderation_without_renewing_ttl(): void
     {
         Storage::fake('local');

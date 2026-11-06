@@ -63,6 +63,7 @@ Route::get('/products/{slug}', [PublicCatalogController::class, 'product']);
 Route::get('/products/{slug}/images/{imageId}', [PublicCatalogController::class, 'image'])->whereNumber('imageId');
 Route::get('/activities', fn () => response()->json(['data' => config('activities')]));
 Route::get('/categories', [PublicCatalogController::class, 'categories']);
+Route::get('/units', [PublicCatalogController::class, 'units']);
 Route::get('/locations', [PublicCatalogController::class, 'locations']);
 Route::get('/producers', [PublicCatalogController::class, 'producers']);
 Route::get('/producers/{slug}', [PublicCatalogController::class, 'producer']);

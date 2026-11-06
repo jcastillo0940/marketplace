@@ -1,3 +1,4 @@
+import { compressDocumentFile, MAX_UPLOAD_BYTES, MAX_UPLOAD_MESSAGE } from '../api/photo-optimizer'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Gift, Flag, Heart, HeartHandshake, Leaf, Lock, Mail, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, User, UserPlus, Users, X } from 'lucide-react';
@@ -1775,8 +1776,8 @@ export function ReportPage({ resourceType }: { resourceType: 'product' | 'produc
     const files = Array.from(input.files ?? [])
     const error = files.length > 3
       ? 'Puedes adjuntar hasta tres archivos.'
-      : files.find((file) => file.size > 5 * 1024 * 1024)
-        ? 'Cada archivo debe pesar 5 MB o menos.'
+      : files.find((file) => file.type === 'application/pdf' && file.size > MAX_UPLOAD_BYTES)
+        ? 'Cada PDF debe pesar 2 MB o menos.'
         : files.find((file) => file.type && !['image/jpeg', 'image/png', 'application/pdf'].includes(file.type))
           ? 'Adjunta únicamente imágenes JPG o PNG, o documentos PDF.'
           : ''
@@ -1797,7 +1798,9 @@ export function ReportPage({ resourceType }: { resourceType: 'product' | 'produc
     setSubmitError('')
     setMessage('')
     try {
-      const result = await submitReport({ resource_type: resourceType, resource_id: Number(id), reason_code: String(values.get('reason_code')), description: String(values.get('description')), contact_email: String(values.get('contact_email') || '') || undefined, evidence: evidence.files })
+      const optimizedEvidence = await Promise.all(Array.from(evidence.files ?? []).map(compressDocumentFile))
+      if (optimizedEvidence.some((file) => file.size > MAX_UPLOAD_BYTES)) throw new Error(MAX_UPLOAD_MESSAGE)
+      const result = await submitReport({ resource_type: resourceType, resource_id: Number(id), reason_code: String(values.get('reason_code')), description: String(values.get('description')), contact_email: String(values.get('contact_email') || '') || undefined, evidence: optimizedEvidence })
       setReference(result.reference)
       setMessage('Gracias. Recibimos tu reporte y lo revisará el equipo. Tus datos no se mostrarán en público.')
     } catch (error) {
@@ -1806,7 +1809,7 @@ export function ReportPage({ resourceType }: { resourceType: 'product' | 'produc
       submittingRef.current = false
       setSubmitting(false)
     }
-  }} onChange={() => { if (submitError) setSubmitError('') }}><p className="eyebrow eyebrow--quiet">TRUST & SAFETY</p><h1>Reportar {targetLabel}</h1><p>Cuéntanos qué debemos revisar. El reporte y cualquier dato de contacto se mantienen privados.</p><label>Motivo<select name="reason_code" required disabled={Boolean(reference) || submitting}><option value="">Selecciona un motivo</option><option value="incorrect">Información incorrecta</option><option value="unavailable">Oferta no disponible</option><option value="suspicious">Actividad sospechosa</option><option value="unsafe">Riesgo de seguridad</option><option value="other">Otro</option></select></label><label>Detalles<textarea name="description" minLength={10} maxLength={1000} required rows={5} disabled={Boolean(reference) || submitting} className="resize-none" /></label><label>Correo electrónico (opcional)<input name="contact_email" type="email" autoComplete="email" disabled={Boolean(reference) || submitting} /></label><label>Evidencia opcional (hasta 3 imágenes o PDF, máximo 5 MB cada uno)<input name="evidence" type="file" accept="image/jpeg,image/png,application/pdf" multiple disabled={Boolean(reference) || submitting} aria-describedby="report-evidence-help report-evidence-error" onChange={(event) => { setMessage(''); validateEvidence(event.currentTarget) }} /></label><small id="report-evidence-help">JPG, PNG o PDF · hasta 3 archivos · máximo 5 MB por archivo.</small>{evidenceError && <p id="report-evidence-error" role="alert">{evidenceError}</p>}{submitError && <p role="alert">{submitError}</p>}{message && <p role="status">{message}</p>}{submitting && <p role="status">Enviando el reporte…</p>}{reference && <p className="form-help">Referencia de recepción: <strong>{reference}</strong></p>}<button className="button button--primary" type="submit" disabled={Boolean(reference) || submitting} aria-busy={submitting}>{submitting ? 'Enviando…' : 'Enviar reporte'}</button><Link className="text-link" to="/seguridad">Consejos de seguridad</Link></ValidatedForm></main><SiteFooter /></div>
+  }} onChange={() => { if (submitError) setSubmitError('') }}><p className="eyebrow eyebrow--quiet">TRUST & SAFETY</p><h1>Reportar {targetLabel}</h1><p>Cuéntanos qué debemos revisar. El reporte y cualquier dato de contacto se mantienen privados.</p><label>Motivo<select name="reason_code" required disabled={Boolean(reference) || submitting}><option value="">Selecciona un motivo</option><option value="incorrect">Información incorrecta</option><option value="unavailable">Oferta no disponible</option><option value="suspicious">Actividad sospechosa</option><option value="unsafe">Riesgo de seguridad</option><option value="other">Otro</option></select></label><label>Detalles<textarea name="description" minLength={10} maxLength={1000} required rows={5} disabled={Boolean(reference) || submitting} className="resize-none" /></label><label>Correo electrónico (opcional)<input name="contact_email" type="email" autoComplete="email" disabled={Boolean(reference) || submitting} /></label><label>Evidencia opcional (hasta 3 imágenes o PDF)<input name="evidence" type="file" accept="image/jpeg,image/png,application/pdf" multiple disabled={Boolean(reference) || submitting} aria-describedby="report-evidence-help report-evidence-error" onChange={(event) => { setMessage(''); validateEvidence(event.currentTarget) }} /></label><small id="report-evidence-help">JPG, PNG o PDF · hasta 3 archivos. Optimizamos las imágenes por ti; cada PDF debe pesar 2 MB o menos.</small>{evidenceError && <p id="report-evidence-error" role="alert">{evidenceError}</p>}{submitError && <p role="alert">{submitError}</p>}{message && <p role="status">{message}</p>}{submitting && <p role="status">Enviando el reporte…</p>}{reference && <p className="form-help">Referencia de recepción: <strong>{reference}</strong></p>}<button className="button button--primary" type="submit" disabled={Boolean(reference) || submitting} aria-busy={submitting}>{submitting ? 'Enviando…' : 'Enviar reporte'}</button><Link className="text-link" to="/seguridad">Consejos de seguridad</Link></ValidatedForm></main><SiteFooter /></div>
 }
 
 export function NotFoundPage() {

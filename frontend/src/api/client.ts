@@ -158,7 +158,7 @@ export async function recordContact(target: { product_id: number } | { producer_
   if (!response.ok) throw new Error(response.status === 429 ? 'Se alcanzó el límite temporal para registrar contactos.' : 'No se pudo registrar la intención de contacto.')
 }
 
-export async function submitReport(payload: { resource_type: 'product' | 'producer'; resource_id: number; reason_code: string; description: string; contact_email?: string; evidence?: FileList | null }): Promise<{ reference: string }> {
+export async function submitReport(payload: { resource_type: 'product' | 'producer'; resource_id: number; reason_code: string; description: string; contact_email?: string; evidence?: File[] | FileList | null }): Promise<{ reference: string }> {
   const body = new FormData()
   body.append('resource_type', payload.resource_type)
   body.append('resource_id', String(payload.resource_id))
@@ -271,13 +271,15 @@ export async function registerProducer(payload: { ruc?: string; ruc_dv?: string;
   }
 }
 
-export async function saveProductDraft(form: FormData): Promise<void> {
+export async function saveProductDraft(form: FormData): Promise<{ status?: string }> {
   const token = await csrfToken()
   const response = await fetch(`${API_BASE}/me/products`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token }, body: form })
   if (!response.ok) {
     const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
     throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo guardar el borrador.')
   }
+  const result = await response.json().catch(() => ({})) as { data?: { status?: string } }
+  return { status: result.data?.status }
 }
 
 export async function getProducerProduct(id: string): Promise<{ id: number; title: string; description: string; unit: string; minimum_order: string | null; price_type: 'fixed' | 'range' | 'from' | 'contact'; price_amount: string | null; price_max?: string | null; currency: 'PAB' | 'USD'; stock_quantity: string | null; delivery_method: string; category_id: number; status: string; images: Array<{ id: number; url: string; alt_text: string | null; position: number }> }> {
@@ -324,6 +326,15 @@ export async function renewProducerProduct(id: number): Promise<{ published_at: 
     throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo renovar la oferta.')
   }
   return (await response.json() as { data: { published_at: string; listing_expires_at: string | null } }).data
+}
+
+export type ProductUnit = { code: string; name: string }
+
+export async function listUnits(): Promise<ProductUnit[]> {
+  const response = await fetch(`${API_BASE}/units`, { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No se pudieron cargar las unidades.')
+  const result = await response.json() as { data?: ProductUnit[] }
+  return Array.isArray(result.data) ? result.data : []
 }
 
 export async function listCategories(): Promise<Array<{ id: number; name: string; slug: string; parent_id: number | null }>> {
@@ -911,6 +922,6 @@ export async function uploadProducerDocument(type: 'cedula_photo' | 'pacto_socia
   const response = await fetch(`${API_BASE}/me/documents`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token }, body })
   if (!response.ok) {
     const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
-    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No pudimos subir el documento. Verifica el tipo y tamaño del archivo (máx. 10 MB).')
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No pudimos subir el documento. Verifica el tipo y tamaño del archivo.')
   }
 }

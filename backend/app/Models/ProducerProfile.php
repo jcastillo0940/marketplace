@@ -79,6 +79,15 @@ class ProducerProfile extends Model
             ?? ProducerVerificationLevel::ContactConfirmed->value;
     }
 
+    public function canPublishDirectly(): bool
+    {
+        return $this->profile_status === 'active' && in_array($this->publicVerificationLevel(), [
+            ProducerVerificationLevel::IdentityReviewed->value,
+            ProducerVerificationLevel::BiometricVerified->value,
+            ProducerVerificationLevel::ProducerValidated->value,
+        ], true);
+    }
+
     public function biometricChecks(): HasMany
     {
         return $this->hasMany(ProducerBiometricCheck::class);
