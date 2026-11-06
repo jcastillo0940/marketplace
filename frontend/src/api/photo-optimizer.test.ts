@@ -13,7 +13,7 @@ describe('product photo optimizer', () => {
     const drawImage = vi.fn()
     const output = new Blob([new Uint8Array(200 * 1024)], { type: 'image/webp' })
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => ({ drawImage }) as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => ({ drawImage }) as never)
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => callback(output))
 
     const compressed = await compressProductPhoto(input)

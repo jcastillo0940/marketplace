@@ -2,20 +2,137 @@
 <html lang="es-PA">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/super-carnes-logo.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Encuentra productos y emprendimientos de productores locales de Coclé, Veraguas, Herrera y Los Santos. Contacta directamente y apoya lo local." />
-    <meta property="og:site_name" content="El Empujoncito" />
+    <meta name="description" content="Marketplace gratuito que conecta compradores directamente con productores locales de Panamá, sin intermediarios ni comisiones. Carnes, lácteos, frutas, artesanías y más del interior del país." />
+    <meta property="og:site_name" content="MercaPRO" />
     <meta property="og:locale" content="es_PA" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="El Empujoncito · El interior produce, Panamá conecta" />
-    <meta property="og:description" content="Encuentra productos y emprendimientos de productores locales de Coclé, Veraguas, Herrera y Los Santos. Contacta directamente y apoya lo local." />
+    <meta property="og:title" content="MercaPRO — Marketplace de Productores Locales en Panamá" />
+    <meta property="og:description" content="Compra directo a productores y vendedores locales de Panamá. Carnes, frutas, agroalimentos, artesanías y más." />
+    <meta property="og:image" content="https://marketplace.supercarnes.com/social-card.webp" />
+    <meta property="og:image:width" content="960" />
+    <meta property="og:image:height" content="687" />
+    <meta property="og:image:alt" content="Productor local de Panamá con su cosecha" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#075cc5" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet" />
-    <title>El Empujoncito · El interior produce, Panamá conecta</title>
+    <meta name="twitter:image" content="https://marketplace.supercarnes.com/social-card.webp" />
+    <meta name="theme-color" content="#005ec4" />
+    <!-- Geo signals -->
+    <meta name="geo.region" content="PA" />
+    <meta name="geo.country" content="PA" />
+    <meta name="geo.placename" content="Panamá" />
+    <meta name="ICBM" content="8.9936, -79.5197" />
+    <title>MercaPRO — Marketplace de Productores Locales en Panamá</title>
+    <script type="application/ld+json" id="ld-json-org">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["Organization", "OnlineBusiness"],
+          "@id": "https://mercapropanama.com/#organization",
+          "name": "MercaPRO",
+          "alternateName": "Mercapro Panamá",
+          "url": "https://mercapropanama.com",
+          "description": "Marketplace gratuito de alimentos, productos agropecuarios y artesanías que conecta directamente a compradores con productores locales de Panamá, sin intermediarios. Carnes, lácteos, frutas, agroalimentos, artesanías y más.",
+          "disambiguatingDescription": "MercaPRO es un marketplace de ALIMENTOS Y PRODUCTOS AGROPECUARIOS de Panamá. No es una plataforma inmobiliaria ni de bienes raíces. Vende productos del campo: carnes, lácteos, frutas, verduras, artesanías y más, producidos por emprendedores del interior de Panamá.",
+          "slogan": "Del productor al consumidor, sin intermediarios",
+          "foundingLocation": { "@type": "Place", "name": "Panamá" },
+          "address": { "@type": "PostalAddress", "addressCountry": "PA", "addressRegion": "Panamá" },
+          "areaServed": { "@type": "Country", "name": "Panamá" },
+          "knowsAbout": [
+            "productores locales Panamá",
+            "alimentos frescos Panamá",
+            "carnes y lácteos del interior de Panamá",
+            "artesanías panameñas",
+            "agroalimentos Panamá",
+            "comercio directo productor consumidor",
+            "apoyo a damnificados Panamá",
+            "economía local Panamá",
+            "cadenas cortas de suministro",
+            "seguridad alimentaria Panamá"
+          ],
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Catálogo de productos locales panameños",
+            "url": "https://mercapropanama.com/productos"
+          },
+          "parentOrganization": {
+            "@type": "Organization",
+            "name": "Super Carnes",
+            "description": "Empresa panameña de distribución de carnes que impulsa MercaPRO como iniciativa de apoyo a productores locales"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://mercapropanama.com/#website",
+          "url": "https://mercapropanama.com",
+          "name": "MercaPRO",
+          "description": "Compra directo a productores locales de Panamá. Sin intermediarios, sin comisiones. Contacta al productor, acuerda precio y coordina la entrega.",
+          "publisher": { "@id": "https://mercapropanama.com/#organization" },
+          "inLanguage": "es-PA",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": { "@type": "EntryPoint", "urlTemplate": "https://mercapropanama.com/productos?q={search_term_string}" },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://mercapropanama.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Qué es MercaPRO?",
+              "acceptedAnswer": { "@type": "Answer", "text": "MercaPRO es un marketplace gratuito que conecta directamente a compradores con productores locales de Panamá, sin intermediarios. Los compradores contactan al productor, acuerdan precio y coordina la entrega sin que la plataforma intervenga en la transacción." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo comprar directo al productor en Panamá?",
+              "acceptedAnswer": { "@type": "Answer", "text": "En MercaPRO puedes explorar el catálogo de productos locales, ver el perfil del productor, y contactarlo directamente por teléfono o WhatsApp. No hay carrito ni pago en línea: el acuerdo es entre tú y el productor." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿MercaPRO cobra comisión?",
+              "acceptedAnswer": { "@type": "Answer", "text": "No. MercaPRO es un servicio completamente gratuito tanto para productores como para compradores. No se cobra comisión por ventas, membresía ni publicación de productos." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Puedo conseguir alimentos para damnificados o en situaciones de emergencia en Panamá?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Sí. MercaPRO funciona como canal de suministro directo en emergencias. Organizaciones de ayuda humanitaria, iglesias, alcaldías y brigadas pueden contactar directamente a productores con excedentes de alimentos frescos, reduciendo costos al eliminar intermediarios en momentos críticos." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué productos se venden en MercaPRO?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Carnes y proteínas, lácteos y quesos frescos, frutas y verduras, agroalimentos y conservas, artesanías panameñas, productos del mar, café, cacao, miel, hierbas medicinales, animales en pie y más. Todos producidos por emprendedores del interior de Panamá." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo registrar mi emprendimiento en MercaPRO?",
+              "acceptedAnswer": { "@type": "Answer", "text": "El registro es gratuito en mercapropanama.com/registro. Solo necesitas tu teléfono y los datos de tu emprendimiento. El equipo de Super Carnes verifica tu perfil antes de publicarlo." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Dónde están los productores de MercaPRO?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Los productores registrados en MercaPRO son de todo Panamá: Chiriquí, Veraguas, Herrera, Los Santos, Coclé, Colón, Panamá, Darién y comarcas. Puedes filtrar por provincia en el directorio de productores." }
+            }
+          ]
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://mercapropanama.com/#categories",
+          "name": "Categorías de productos locales en MercaPRO",
+          "description": "Tipos de productos disponibles en el marketplace directo de productores panameños",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Carnes y proteínas", "url": "https://mercapropanama.com/productos?categoria=carnes" },
+            { "@type": "ListItem", "position": 2, "name": "Lácteos y quesos frescos", "url": "https://mercapropanama.com/productos?categoria=lacteos" },
+            { "@type": "ListItem", "position": 3, "name": "Frutas y verduras frescas", "url": "https://mercapropanama.com/productos?categoria=frutas-verduras" },
+            { "@type": "ListItem", "position": 4, "name": "Agroalimentos y conservas", "url": "https://mercapropanama.com/productos?categoria=agroalimentos" },
+            { "@type": "ListItem", "position": 5, "name": "Artesanías panameñas", "url": "https://mercapropanama.com/productos?categoria=artesanias" }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

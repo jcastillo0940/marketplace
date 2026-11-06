@@ -1,8 +1,5 @@
-@import '@fontsource/fraunces/500.css';
-@import '@fontsource/fraunces/600.css';
-@import '@fontsource/atkinson-hyperlegible/400.css';
-@import '@fontsource/atkinson-hyperlegible/700.css';
 @import '@fontsource/caveat/600.css';
+@import './styles/fonts.css';
 @import './styles/tokens.css';
 
 :root {
@@ -32,7 +29,7 @@ button { cursor: pointer; }
 a { color: inherit; }
 img { display: block; max-width: 100%; }
 
-::selection { background: #e7b83f66; color: var(--color-primary); }
+::selection { background: #f15a2444; color: var(--color-primary); }
 
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--scroll-track); }

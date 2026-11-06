@@ -117,8 +117,10 @@ body { color: var(--brand-navy); background: #fff; }
 .contact-chip { min-height: 34px; padding: 4px 12px 4px 4px; border-color: #d9e6eb; color: var(--brand-navy); font-size: 0.72rem; font-weight: 800; }
 .contact-chip__icon { width: 26px; height: 26px; }
 
-/* Insignia de verificación: verde suave del diseño */
+/* Insignia de verificación */
 .verification-badge { padding: 4px 9px; border: 0; border-radius: 100px; color: #377b3b; background: #edfadf; font-size: 0.66rem; font-weight: 700; }
+.verification-badge--verified-pro { color: #fff; background: #1d6b3a; border: none; }
+.verification-badge--verified-pro strong { color: #9eefb6; }
 
 /* Historias + cómo funciona */
 .home-story { margin-top: 63px; }
@@ -128,12 +130,17 @@ body { color: var(--brand-navy); background: #fff; }
 .home-story__how { background: #f8f4e9; }
 .home-story__how .home-eyebrow { margin-bottom: 12px; }
 .home-story__sub { color: var(--text-secondary); font-size: 0.85rem; }
+.how-cols { gap: 16px; }
+.how-col { background: rgba(255,255,255,0.7); border-radius: 13px; padding: 16px; }
+.how-col__header { color: var(--brand-blue); font-size: 0.67rem; }
+.how-col__cta { border-color: var(--brand-blue); color: var(--brand-blue); border-radius: 10px; padding: 0 14px; min-height: 36px; font-size: 0.8rem; }
+.how-disclaimer { background: rgba(255,255,255,0.7); border-radius: 10px; color: var(--text-secondary); }
+.how-steps li { grid-template-columns: 18px 1fr; }
 .how-steps__icon { width: 48px; height: 48px; color: var(--brand-blue); box-shadow: none; }
 .how-steps__icon--whatsapp { color: #168e56; background: #dcf4df; }
-.how-steps li { grid-template-columns: 48px 20px 1fr; }
-.how-steps__number { color: #d7a21a; font-family: var(--font-body); font-size: 1.25rem; font-weight: 800; }
-.how-steps strong { font-size: 0.85rem; }
-.how-steps p { font-size: 0.78rem; color: var(--text-secondary); }
+.how-steps__number { color: #d7a21a; font-family: var(--font-body); font-size: 1rem; font-weight: 800; }
+.how-steps strong { font-size: 0.82rem; }
+.how-steps p { font-size: 0.76rem; color: var(--text-secondary); }
 
 /* Publica gratis */
 .home-publish { padding-top: 63px; }

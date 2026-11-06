@@ -1,11 +1,16 @@
 :root {
   /* Marca */
-  --brand-blue: #075CC5;
-  --brand-blue-hover: #034EA8;
-  --brand-navy: #092552;
-  --brand-lime: #A8E137;
-  --brand-lime-hover: #96CE2C;
-  --brand-teal: #2F968E;
+  --brand-blue: #005EC4;
+  --brand-blue-hover: #004C9E;
+  --brand-blue-soft: #EAF2FC;
+  --brand-navy: #0B1D3D;
+  --brand-orange: #F15A24;
+  --brand-orange-hover: #D94A17;
+  --brand-orange-soft: #FEEFE8;
+  /* Alias heredados: el antiguo acento lima ahora es el naranja de marca */
+  --brand-lime: var(--brand-orange);
+  --brand-lime-hover: var(--brand-orange-hover);
+  --brand-teal: #1C9A8A;
 
   /* Superficies */
   --background: #FFFFFF;
@@ -13,8 +18,8 @@
   --surface: #FFFFFF;
 
   /* Textos */
-  --text-primary: #092552;
-  --text-secondary: #65738A;
+  --text-primary: #0B1D3D;
+  --text-secondary: #5D6B82;
   --text-muted: #8492A6;
 
   /* Bordes */
@@ -36,9 +41,25 @@
   --category-teal: #E6F5F2;
 
   /* Gradiente de marca */
-  --brand-gradient: linear-gradient(155deg, #B1E644 0%, #65AD71 45%, #075CC5 100%);
+  --brand-gradient: linear-gradient(135deg, #005EC4 0%, #0A7BE8 100%);
 
-  /* ── Variables de compatibilidad ── mantener para que App.css y public-redesign.css no se rompan */
+  /* Tokens semánticos de DESIGN.md (verificados por verify:design) */
+  --color-primary: #005EC4;
+  --color-secondary: #F15A24;
+  --color-accent: #F15A24;
+  --color-background: #F7FAFD;
+  --color-surface: #FFFFFF;
+  --color-text: #0B1D3D;
+  --color-muted: #5D6B82;
+  --color-border: #DCE5EF;
+  --color-success: #299565;
+  --color-warning: #E6A23C;
+  --color-danger: #D94F43;
+  --color-focus: #005EC4;
+
+  /* ── Variables de compatibilidad ── mantener para que App.css y public-redesign.css no se rompan.
+     En la hoja heredada --color-primary es la tinta de títulos y --color-secondary el color de enlaces,
+     por eso se reasignan aquí después de los valores de marca de DESIGN.md. */
   --color-primary: var(--brand-navy);
   --color-secondary: var(--brand-blue);
   --color-accent: var(--brand-lime);
@@ -56,8 +77,9 @@
   --color-ink-soft: var(--text-secondary);
 
   /* Tipografía */
-  --font-display: 'Plus Jakarta Sans', 'Fraunces', Georgia, serif;
-  --font-body: 'Plus Jakarta Sans', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-display: 'Causten Round', 'Causten', system-ui, sans-serif;
+  --font-body: 'Causten', 'Causten Round', system-ui, sans-serif;
+  --font-logo: 'Drephonic', 'Causten Round', system-ui, sans-serif;
   --font-hand: 'Caveat', 'Segoe Script', cursive;
 
   /* Radio */

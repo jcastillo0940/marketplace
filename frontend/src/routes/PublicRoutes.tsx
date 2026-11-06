@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Flag, Handshake, Heart, HeartHandshake, Leaf, Lock, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Gift, Flag, Heart, HeartHandshake, Leaf, Lock, Mail, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, User, UserPlus, Users, X } from 'lucide-react';
 
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import heroPhoto from '../assets/azuero-harvest.webp';
+import heroProducer640 from '../assets/mercapro/hero/productor-mercapro-640.webp';
+import heroProducer960 from '../assets/mercapro/hero/productor-mercapro-960.webp';
+import heroProducer1440 from '../assets/mercapro/hero/productor-mercapro-1440.webp';
+import leafBlue from '../assets/mercapro/decor/hoja-azul.svg';
+import leafSky from '../assets/mercapro/decor/hoja-celeste.svg';
+import leafOrange from '../assets/mercapro/decor/hoja-naranja.svg';
+import heroWaves from '../assets/mercapro/decor/ondas-hero.svg';
 
 import yucaImage from '../assets/yuca.svg';
 import termsText from '../legal-terms.md?raw';
@@ -12,10 +19,13 @@ import privacyText from '../legal-privacy.md?raw';
 
 import ActivitySelect from '../components/ActivitySelect';
 import LocationPicker from '../components/LocationPicker';
+import ProducerZoneMap from '../components/ProducerZoneMap';
 
 import ValidatedForm from '../components/ValidatedForm';
 
 import VerificationBadge from '../components/VerificationBadge';
+import { isPublicVerifiedLevel, VERIFIED_DOCUMENT_LABELS } from '../components/verificationLevels';
+import { categoryTreeOptions } from '../components/categoryTree';
 
 import { completeAdminMfaChallenge, csrfToken, getContactMessageTemplates, DEFAULT_CONTACT_MESSAGE_TEMPLATES, getPublicProducer, getPublicProducers, getProduct, listCategories, listLocations, listProducts, recordContact, recordNoResultSearch, requestAdminMfaRecovery, requestPasswordReset, resetPassword, submitReport, type ApiProduct, type ProducerPublicProfile, type PublicLocation, type PublicProducerSummary, type ProducerVerificationLevel } from '../api/client';
 
@@ -29,6 +39,7 @@ import { SiteFooter, SiteHeader } from './shared/SiteChrome';
 
 import { useSeoMetadata } from './shared/SeoMetadata';
 import { InfoPage } from './shared/InfoPage';
+import { StoriesPage, StoryDetailPage } from './public/StoriesPages';
 
 type FeaturedProduct = {
   id: string
@@ -44,6 +55,7 @@ type FeaturedProduct = {
   initials: string
   imageClass: string
   verified: boolean
+  producerSlug?: string
   verificationLevel?: ProducerVerificationLevel
   verificationLabel?: string
 }
@@ -64,7 +76,7 @@ export function ProductCard({ product }: { product: FeaturedProduct }) {
         <h3><Link to={`/productos/${product.id}`}>{product.title}</Link></h3>
         <p className="product-card__location"><MapPin size={14} aria-hidden="true" /> {product.location}</p>
         <p className="product-card__producer">
-          <span>{product.producer}</span>
+          {product.producerSlug ? <Link to={`/productores/${product.producerSlug}`} aria-label={`Ver todos los productos de ${product.producer}`}>{product.producer}</Link> : <span>{product.producer}</span>}
           {product.verified && product.verificationLevel && <VerificationBadge level={product.verificationLevel} label={product.verificationLabel} />}
         </p>
         <p className="product-price">
@@ -81,10 +93,12 @@ export function ProductCard({ product }: { product: FeaturedProduct }) {
   )
 }
 
-export function productPrice(product: Pick<ApiProduct, 'price_type' | 'price_amount' | 'currency'>): string {
+export function productPrice(product: Pick<ApiProduct, 'price_type' | 'price_amount' | 'price_max' | 'currency'>): string {
   if (product.price_type === 'contact' || product.price_amount === null) return 'Consultar'
   const prefix = product.currency === 'USD' ? 'US$' : 'B/.'
-  return `${prefix} ${Number(product.price_amount).toFixed(2)}`
+  const amount = `${prefix} ${Number(product.price_amount).toFixed(2)}`
+  if (product.price_type === 'range' && product.price_max != null) return `${amount} – ${Number(product.price_max).toFixed(2)}`
+  return product.price_type === 'from' ? `Desde ${amount}` : amount
 }
 
 export function publicLocationLabel(location?: { name: string; parent?: { name: string; parent?: { name: string } } } | null): string {
@@ -104,7 +118,7 @@ export function ApiProductCard({ product }: { product: ApiProduct }) {
   const location = publicLocationLabel(product.producer.location) || 'Panamá'
   const price = productPrice(product)
   const availability = product.stock_quantity === null ? 'Consulta disponibilidad' : `Stock indicado: ${Number(product.stock_quantity).toLocaleString('es-PA')} ${product.unit}`
-  return <ProductCard product={{ id: product.slug, title: product.title, producer: product.producer.public_name, location, category: product.category.name, price, unit: product.unit, availability, image: imageUrl, imageAlt: image?.alt_text ?? product.title, initials: product.producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA'), imageClass: '', verified: product.producer.contact_level !== 'unverified', verificationLevel: product.producer.verification_level, verificationLabel: product.producer.verification_label }} />
+  return <ProductCard product={{ id: product.slug, title: product.title, producer: product.producer.public_name, producerSlug: product.producer.slug, location, category: product.category.name, price, unit: product.unit, availability, image: imageUrl, imageAlt: image?.alt_text ?? product.title, initials: product.producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA'), imageClass: '', verified: product.producer.contact_level !== 'unverified', verificationLevel: product.producer.verification_level, verificationLabel: product.producer.verification_label }} />
 }
 
 type DirectContactChannel = 'whatsapp' | 'phone'
@@ -132,7 +146,7 @@ export function DirectContactConfirmation({ channel, href, message, onCancel, on
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  return <div className="contact-confirmation-backdrop"><section ref={dialogRef} className="contact-confirmation" role="dialog" aria-modal="true" aria-labelledby="contact-confirmation-title" tabIndex={-1}><p className="eyebrow eyebrow--quiet">CONTACTO DIRECTO</p><h2 id="contact-confirmation-title">{channel === 'whatsapp' ? 'Antes de continuar a WhatsApp' : 'Antes de iniciar la llamada'}</h2><p>Confirma disponibilidad, precio y entrega directamente con el productor. No compartas contraseñas ni códigos de verificación.</p><ul className="contact-confirmation__safety"><li>No envíes dinero por adelantado sin verificar al productor y acordar las condiciones.</li><li>Antes de abrir un enlace de pago, confirma la solicitud por un canal independiente. Nunca compartas contraseñas ni OTP.</li><li>Confirma el pago directamente en tu cuenta; no confíes solo en capturas o comprobantes enviados por otra persona.</li><li>Acuerda entrega y lugar de encuentro directamente. No compartas códigos de acceso ni OTP.</li></ul>{channel === 'whatsapp' && message && <label className="text-area-field"><span>Mensaje para el productor · puedes editarlo</span><textarea rows={3} maxLength={1000} className="resize-none" style={{ resize: 'none' }} value={editableMessage} onChange={(event) => setEditableMessage(event.currentTarget.value)} /></label>}<p>El marketplace no procesa pagos ni organiza entregas. Registraremos este clic como intención de contacto, no como una venta.</p><div className="contact-confirmation__actions"><button className="button button--quiet" type="button" onClick={onCancel}>Volver</button><a className="button button--primary" href={outgoingHref} target={channel === 'whatsapp' ? '_blank' : undefined} rel={channel === 'whatsapp' ? 'noreferrer' : undefined} onClick={onContinue}>{channel === 'whatsapp' ? 'Continuar a WhatsApp' : 'Iniciar llamada'} <ArrowUpRight size={16} /></a></div></section></div>
+  return <div className="contact-confirmation-backdrop"><section ref={dialogRef} className="contact-confirmation" role="dialog" aria-modal="true" aria-labelledby="contact-confirmation-title" tabIndex={-1}><p className="eyebrow eyebrow--quiet">CONTACTO DIRECTO</p><h2 id="contact-confirmation-title">{channel === 'whatsapp' ? 'Antes de continuar a WhatsApp' : 'Antes de iniciar la llamada'}</h2><p className="contact-confirmation__notice"><strong>Mercapro no procesa pagos, no cobra comisiones a clientes ni a productores y no organiza entregas.</strong> Super Carnes no participa en la venta.</p><p>Confirma disponibilidad, precio y entrega directamente con el productor.</p><ul className="contact-confirmation__safety"><li><strong>No envíes dinero por adelantado.</strong> Primero confirma quién es el productor y acuerden las condiciones.</li><li>Si te mandan un enlace de pago, confírmalo con el productor antes de abrirlo.</li><li><strong>Nunca compartas contraseñas ni códigos que te lleguen por mensaje.</strong></li><li>Revisa el pago en tu propia cuenta. No confíes solo en capturas o comprobantes.</li></ul>{channel === 'whatsapp' && message && <label className="text-area-field"><span>Mensaje para el productor · puedes editarlo</span><textarea rows={3} maxLength={1000} className="resize-none" style={{ resize: 'none' }} value={editableMessage} onChange={(event) => setEditableMessage(event.currentTarget.value)} /></label>}<p>Registraremos este clic como intención de contacto, no como una venta.</p><div className="contact-confirmation__actions"><button className="button button--quiet" type="button" onClick={onCancel}>Volver</button><a className="button button--primary" href={outgoingHref} target={channel === 'whatsapp' ? '_blank' : undefined} rel={channel === 'whatsapp' ? 'noreferrer' : undefined} onClick={onContinue}>{channel === 'whatsapp' ? 'Continuar a WhatsApp' : 'Iniciar llamada'} <ArrowUpRight size={16} /></a></div></section></div>
 }
 
 type DetailTab = 'productor' | 'historia' | 'ubicacion' | 'preguntas'
@@ -223,7 +237,7 @@ function DetailTabs({ product, profile, location }: { product: ApiProduct; profi
         <ul className="detail-producer-panel__facts">
           <li><Store size={22} aria-hidden="true" /><strong>{publishedCount ?? '—'}</strong><span>{publishedCount === 1 ? 'publicación activa' : 'publicaciones activas'}</span></li>
           <li><MapPin size={22} aria-hidden="true" /><strong>{province ?? 'Panamá'}</strong><span>zona de producción</span></li>
-          {producer.contact_level !== 'unverified' && <li><BadgeCheck size={22} aria-hidden="true" /><strong>{producer.verification_label ?? 'Contacto confirmado'}</strong><span>nivel de verificación</span></li>}
+          {isPublicVerifiedLevel(producer.verification_level) && <li><BadgeCheck size={22} aria-hidden="true" /><strong>{producer.verification_label}</strong><span>nivel de verificación</span></li>}
           <li><HeartHandshake size={22} aria-hidden="true" /><strong>Trato directo</strong><span>sin intermediarios</span></li>
         </ul>
       </div>
@@ -245,7 +259,7 @@ function DetailTabs({ product, profile, location }: { product: ApiProduct; profi
       <div id="detail-panel-preguntas" role="tabpanel" aria-labelledby="detail-tab-preguntas" hidden={active !== 'preguntas'} className="detail-text-panel detail-faq">
         <h2>Preguntas frecuentes</h2>
         <details><summary>¿Cómo compro este producto?</summary><p>Contacta al productor por WhatsApp o teléfono y acuerda con él cantidad, precio final, pago y entrega.</p></details>
-        <details><summary>¿Puedo pagar en la plataforma?</summary><p>No. El Empujoncito no procesa pagos. Acuerda el método de pago directamente y verifica antes de enviar dinero.</p></details>
+        <details><summary>¿Puedo pagar en la plataforma?</summary><p>No. Mercapro no procesa pagos ni cobra comisiones. Acuerda el método de pago directamente con el productor. <strong>No envíes dinero por adelantado.</strong></p></details>
         <details><summary>¿Quién revisa las publicaciones?</summary><p>El equipo revisa cada publicación antes de mostrarla. La verificación no garantiza la calidad del producto ni la transacción.</p></details>
         <details><summary>¿Algo no está bien con esta oferta?</summary><p>Puedes <Link to={`/reportar/producto/${product.id}`}>reportar esta oferta</Link> y el equipo revisará el caso.</p></details>
       </div>
@@ -279,7 +293,49 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
   const lastContactChannel = useRef<DirectContactChannel | null>(null)
   const location = publicLocationLabel(product.producer.location) || 'Panamá'
   const province = product.producer.location?.parent?.parent?.name ?? product.producer.location?.parent?.name ?? product.producer.location?.name ?? 'Panamá'
-  useSeoMetadata(`${product.title} · El Empujoncito`, `${product.description} · ${product.producer.public_name}, ${location}.`, image?.url, 'product')
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mercapropanama.com'
+  const productUrl = `${origin}/productos/${product.slug}`
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Product',
+        name: product.title,
+        description: product.description,
+        image: product.images.map((i) => i.url).filter(Boolean),
+        url: productUrl,
+        sku: String(product.id ?? product.slug),
+        brand: { '@type': 'Brand', name: product.producer.public_name },
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: product.currency ?? 'USD',
+          ...(product.price_type === 'range' && product.price_amount != null && product.price_max != null
+            ? { priceSpecification: { '@type': 'UnitPriceSpecification', priceCurrency: product.currency ?? 'USD', minPrice: String(product.price_amount), maxPrice: String(product.price_max) } }
+            : product.price_type !== 'contact' && product.price_amount != null
+            ? { price: String(product.price_amount) }
+            : { priceSpecification: { '@type': 'UnitPriceSpecification', priceCurrency: product.currency ?? 'USD', minPrice: '0' } }),
+          availability: 'https://schema.org/InStock',
+          url: productUrl,
+          seller: { '@type': 'Organization', name: product.producer.public_name },
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Inicio', item: origin },
+          { '@type': 'ListItem', position: 2, name: product.category.name, item: `${origin}/productos` },
+          { '@type': 'ListItem', position: 3, name: product.title, item: productUrl },
+        ],
+      },
+    ],
+  }
+  useSeoMetadata(
+    `${product.title} — ${product.producer.public_name} | MercaPRO Panamá`,
+    `${product.description.slice(0, 140)} · Ofrecido por ${product.producer.public_name} en ${location}. Contacta directamente en MercaPRO.`,
+    image?.url,
+    'product',
+    productJsonLd,
+  )
   useScrollToHash()
   const neighbors = useProductNeighbors(product)
   const profile = useProducerProfile(product.producer.slug)
@@ -292,7 +348,7 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
     const url = new URL(`/compartir/producto/${encodeURIComponent(product.slug)}`, window.location.origin).toString()
     try {
       if (navigator.share) {
-        await navigator.share({ title: product.title, text: `Oferta de ${product.producer.public_name} en El Empujoncito`, url })
+        await navigator.share({ title: product.title, text: `Oferta de ${product.producer.public_name} en Mercapro`, url })
         setShareStatus('Oferta compartida.')
       } else {
         await navigator.clipboard.writeText(url)
@@ -430,7 +486,7 @@ export function ApiProductDetail({ product }: { product: ApiProduct }) {
   )
 }
 
-const POPULAR_SEARCHES = ['Café', 'Miel', 'Huevos', 'Plantas', 'Artesanías', 'Productos de limpieza', 'Ropa', 'Quesos']
+const POPULAR_SEARCHES = ['Tomate', 'Yuca', 'Plátano', 'Ñame', 'Queso', 'Huevos', 'Pollo', 'Arroz']
 
 function useScrollToHash() {
   const { hash } = useLocation()
@@ -446,7 +502,7 @@ function TestimonialCarousel({ items, sample }: { items: Testimonial[]; sample: 
   const item = items[index]
   const go = (step: number) => setIndex((current) => (current + step + items.length) % items.length)
   return (
-    <section className="home-testimonials page-shell" id="historias" aria-roledescription="carrusel" aria-label="Historias de productores">
+    <section className="home-testimonials page-shell" id="testimonios" aria-roledescription="carrusel" aria-label="Historias de productores">
       {sample && <p className="home-testimonials__sample">Ejemplo de diseño · reemplaza este contenido en <code>src/content/testimonials.ts</code></p>}
       <div className="home-testimonials__card">
         {items.length > 1 && <button className="carousel-arrow carousel-arrow--prev" type="button" aria-label="Historia anterior" onClick={() => go(-1)}><ChevronLeft size={18} /></button>}
@@ -478,7 +534,7 @@ export function HomePage() {
   const [province, setProvince] = useState('')
   const [provinces, setProvinces] = useState<PublicLocation[]>([])
   const [homeProducts, setHomeProducts] = useState<ApiProduct[] | null>(null)
-  const [homeCategories, setHomeCategories] = useState<Array<{ id: number; name: string; slug: string }>>([])
+  const [homeCategories, setHomeCategories] = useState<Array<{ id: number; name: string; slug: string; parent_id?: number | null }>>([])
   const [homeError, setHomeError] = useState('')
   const [homeRetry, setHomeRetry] = useState(0)
   useScrollToHash()
@@ -514,22 +570,21 @@ export function HomePage() {
       <main className="home">
         <section className="home-hero" aria-labelledby="hero-title">
           <div className="home-hero__photo" aria-hidden="true">
-            <img src={heroPhoto} alt="" fetchPriority="high" decoding="async" />
+            <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w, ${heroProducer1440} 1440w`} sizes="(max-width: 760px) 100vw, 60vw" alt="" fetchPriority="high" decoding="async" />
           </div>
           <div className="home-hero__inner page-shell">
             <div className="home-hero__copy">
               <p className="home-eyebrow" data-reveal="slide-left">Productos locales, personas reales</p>
-              <h1 id="hero-title" data-reveal="blur-in" style={{ animationDelay: '80ms' }}>Encuentra <em className="home-hero__accent">emprendedores</em> <span>de nuestra tierra.</span></h1>
-              <p className="home-hero__lead" data-reveal="fade-up" style={{ animationDelay: '200ms' }}>Descubre productos frescos, artesanías, alimentos y más. Conecta directamente con quienes los producen y apoya el talento local.</p>
-              <ul className="home-hero__benefits" aria-label="Por qué El Empujoncito" data-reveal="fade-up" style={{ animationDelay: '320ms' }}>
+              <h1 id="hero-title" data-reveal="blur-in" style={{ animationDelay: '80ms' }}>Plataforma <span>para conectar <em className="home-hero__accent">GRATIS</em></span> <span>a <em className="home-hero__accent home-hero__accent--warm">productores y artesanos</em></span> <span>con compradores</span></h1>
+              <p className="home-hero__lead" data-reveal="fade-up" style={{ animationDelay: '200ms' }}>Creando oportunidades e impulsando a las zonas vulnerables tras el terremoto.</p>
+              <ul className="home-hero__benefits" aria-label="Por qué Mercapro" data-reveal="fade-up" style={{ animationDelay: '320ms' }}>
                 <li><span className="home-hero__benefit-icon"><Leaf size={20} /></span>Productos<br />locales</li>
                 <li><span className="home-hero__benefit-icon home-hero__benefit-icon--blue"><Users size={20} /></span>Trato directo<br />con productores</li>
-                <li><span className="home-hero__benefit-icon"><Heart size={20} /></span>Impulsa<br />nuestra economía</li>
+                <li><span className="home-hero__benefit-icon home-hero__benefit-icon--warm"><Heart size={20} /></span>Apoya<br />nuestra economía</li>
               </ul>
             </div>
-            <p className="home-hero__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '480ms' }}>Apoyar lo local<br />también nos alimenta</p>
           </div>
-          <span className="sr-only">Fotografía: productor del interior de Panamá con yuca, plátanos y tomates cosechados en su finca.</span>
+          <span className="sr-only">Fotografía: productor sonriente con una caja de verduras frescas de su cosecha. Apoyar lo local también nos alimenta.</span>
         </section>
 
         <section className="home-search page-shell" aria-label="Busca productos y emprendedores">
@@ -562,7 +617,7 @@ export function HomePage() {
               <ChevronDown className="home-search__chevron" size={16} aria-hidden="true" />
             </label>
             <Link className="button button--primary home-search__submit" to={searchHref}>
-              Buscar
+              Buscar <ArrowRight size={19} aria-hidden="true" />
             </Link>
           </ValidatedForm>
           <div className="home-search__popular">
@@ -588,9 +643,10 @@ export function HomePage() {
                   <li key={category.id} data-reveal="scale-in">
                     <Link className={`category-card category-card--${tone}`} to={`/productos?category=${encodeURIComponent(category.slug)}`}>
                       <span className="category-card__media" aria-hidden="true">
-                        {photo ? <img src={photo} alt="" loading="lazy" decoding="async" /> : <Icon className="category-card__art" size={58} strokeWidth={1.25} />}
+                        {photo ? <img src={photo.src} srcSet={photo.srcSet} sizes="(max-width: 760px) 50vw, 180px" alt="" loading="lazy" decoding="async" /> : <Icon className="category-card__art" size={58} strokeWidth={1.25} />}
                       </span>
                       <span className="category-card__footer">
+                        {photo && <photo.Icon className="category-card__icon" size={28} strokeWidth={1.7} aria-hidden="true" />}
                         <span className="category-card__name">{category.name}</span>
                         <span className="category-card__arrow" aria-hidden="true"><ChevronRight size={15} /></span>
                       </span>
@@ -631,43 +687,49 @@ export function HomePage() {
         </section>
 
         <section className="home-story" id="como-funciona" aria-labelledby="how-title">
-          <div className="home-story__people" data-reveal="slide-left">
+          <div className="home-story__people" id="historias" data-reveal="slide-left">
             <img src={heroPhoto} alt="Productor de Azuero junto a su cosecha de yuca, plátano y tomate" loading="lazy" decoding="async" />
+            <img className="home-story__leaf" src={leafBlue} alt="" aria-hidden="true" />
             <div className="home-story__people-copy">
-              <h2>Personas que hacen que nuestra tierra crezca.</h2>
-              <Link className="button button--ghost-light" to="/productores">Conoce sus historias <ArrowRight size={16} /></Link>
+              <h2 className="home-story__script">Personas reales.<br />Nuestros productores.<br />Nuestro futuro<br />más fuerte.</h2>
+              <Link className="button button--ghost-light" to="/historias">Conoce<br />sus historias <ArrowRight size={16} /></Link>
             </div>
           </div>
           <div className="home-story__how" data-reveal="fade-up">
+            <img className="home-story__how-leaf home-story__how-leaf--top" src={leafSky} alt="" aria-hidden="true" />
+            <img className="home-story__how-leaf home-story__how-leaf--bottom" src={leafSky} alt="" aria-hidden="true" />
             <p className="home-eyebrow">Sin intermediarios</p>
             <h2 id="how-title">¿Cómo funciona?</h2>
-            <p className="home-story__sub">Es muy fácil. Conecta, descubre y apoya.</p>
-            <ol className="how-steps">
-              <li data-reveal="fade-up"><span className="how-steps__icon"><Search size={22} /></span><span className="how-steps__number">1</span><div><strong>Busca productos</strong><p>y encuentra emprendedores de tu región.</p></div></li>
-              <li data-reveal="fade-up"><span className="how-steps__icon how-steps__icon--whatsapp"><WhatsAppIcon size={22} /></span><span className="how-steps__number">2</span><div><strong>Contacta directamente</strong><p>por WhatsApp o teléfono.</p></div></li>
-              <li data-reveal="fade-up"><span className="how-steps__icon"><Handshake size={22} /></span><span className="how-steps__number">3</span><div><strong>Acuerda la compra</strong><p>directamente con el productor.</p></div></li>
-            </ol>
-            <Link className="text-link" to="/seguridad">Consejos para comprar con confianza <ArrowRight size={15} /></Link>
+            <p className="home-story__sub">Fácil para compradores y productores.</p>
+            <div className="how-cols">
+              <div className="how-col">
+                <p className="how-col__header"><Search size={15} aria-hidden="true" /> Para compradores</p>
+                <ol className="how-steps">
+                  <li><span className="how-steps__number">1</span><div><strong>Busca por categoría</strong><p>o filtra por provincia.</p></div></li>
+                  <li><span className="how-steps__number">2</span><div><strong>Revisa precio y unidad</strong><p>y los métodos de pago del productor.</p></div></li>
+                  <li><span className="how-steps__number">3</span><div><strong>Contacta directo</strong><p>por WhatsApp o llamada.</p></div></li>
+                  <li><span className="how-steps__number">4</span><div><strong>Acuerda pago y entrega</strong><p>directamente con el productor.</p></div></li>
+                </ol>
+                <Link className="button button--outline how-col__cta" to="/productos">Explorar productos <ArrowRight size={15} /></Link>
+              </div>
+              <div className="how-col">
+                <p className="how-col__header"><Sprout size={15} aria-hidden="true" /> Para productores</p>
+                <ol className="how-steps">
+                  <li><span className="how-steps__number">1</span><div><strong>Regístrate gratis</strong><p>con tu cédula y teléfono.</p></div></li>
+                  <li><span className="how-steps__number">2</span><div><strong>Publica tus productos</strong><p>con foto, precio y unidad.</p></div></li>
+                  <li><span className="how-steps__number">3</span><div><strong>Recibe consultas</strong><p>por WhatsApp o teléfono.</p></div></li>
+                  <li><span className="how-steps__number">4</span><div><strong>Acuerda pago y entrega</strong><p>directamente con el comprador.</p></div></li>
+                </ol>
+                <Link className="button button--outline how-col__cta" to="/registro">Publicar gratis <ArrowRight size={15} /></Link>
+              </div>
+            </div>
+            <p className="how-disclaimer"><Lock size={14} aria-hidden="true" /> Mercapro no procesa pagos ni cobra comisiones. Pagas directamente al productor por el medio que acuerden.</p>
           </div>
         </section>
 
-        <section className="home-publish page-shell" aria-labelledby="publish-title">
-          <div className="home-publish__band">
-            <div className="home-publish__copy" data-reveal="slide-left">
-              <p className="home-eyebrow home-eyebrow--dark">¿Eres productor o emprendedor?</p>
-              <h2 id="publish-title">Publica tu producto gratis.</h2>
-              <p>Llega a más personas y haz crecer tu negocio.</p>
-              <Link className="button button--primary" to="/registro">Publicar ahora <ArrowRight size={16} /></Link>
-            </div>
-            <p className="home-publish__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '200ms' }}>Tu talento<br />también<br />empuja<br />comunidades</p>
-            <div className="home-publish__photo" aria-hidden="true" data-reveal="scale-in" style={{ animationDelay: '150ms' }}>
-              <img src={heroPhoto} alt="" loading="lazy" decoding="async" />
-            </div>
-          </div>
-          <p className="home-publish__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
-        </section>
+        <PublishBand />
 
-        <section className="home-values page-shell" aria-label="Por qué El Empujoncito">
+        <section className="home-values page-shell" aria-label="Por qué Mercapro">
           <ul>
             <li data-reveal="fade-up"><span className="home-values__icon"><Sprout size={24} /></span><div><strong>Una iniciativa con propósito</strong><p>Impulsada por Super Carnes.</p></div></li>
             <li data-reveal="fade-up"><span className="home-values__icon"><ShieldCheck size={24} /></span><div><strong>Contacto directo</strong><p>Hablas directamente con el productor.</p></div></li>
@@ -698,7 +760,7 @@ export function CatalogPage() {
   const [apiError, setApiError] = useState('')
   const [loadedQueryKey, setLoadedQueryKey] = useState('')
   const [catalogRetry, setCatalogRetry] = useState(0)
-  const [categoriesFromApi, setCategoriesFromApi] = useState<Array<{ id: number; name: string; slug: string }>>([])
+  const [categoriesFromApi, setCategoriesFromApi] = useState<Array<{ id: number; name: string; slug: string; parent_id?: number | null }>>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [categoriesLoadError, setCategoriesLoadError] = useState(false)
   const [categoriesRetry, setCategoriesRetry] = useState(0)
@@ -830,7 +892,7 @@ export function CatalogPage() {
               }}
             >
               <option value="">{categoriesLoading ? 'Cargando…' : categoriesLoadError ? 'No disponibles' : categoriesFromApi.length ? 'Todas' : 'Sin opciones'}</option>
-              {categoriesFromApi.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
+              {categoryTreeOptions(categoriesFromApi).map((item) => <option key={item.id} value={item.slug}>{item.label}</option>)}
             </select>
           </label>
           <label className="catalog-filter catalog-sort">
@@ -875,7 +937,7 @@ export function CatalogPage() {
           </div>
         )}
         {visibleApiProducts && pagination.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de ofertas"><button className="button button--outline button--small" disabled={pagination.current_page <= 1} onClick={() => { const next = new URLSearchParams(searchParams); next.set('page', String(pagination.current_page - 1)); setSearchParams(next) }}>Anterior</button><span aria-live="polite">Página {pagination.current_page} de {pagination.last_page}</span><button className="button button--outline button--small" disabled={pagination.current_page >= pagination.last_page} onClick={() => { const next = new URLSearchParams(searchParams); next.set('page', String(pagination.current_page + 1)); setSearchParams(next) }}>Siguiente</button></nav>}
-        <aside className="catalog-safety-note"><ShieldCheck size={18} /><p>Acuerda directamente con el productor. Antes de pagar, verifica el producto, el precio y la forma de entrega.</p><Link to="/seguridad">Consejos de seguridad</Link></aside>
+        <aside className="catalog-safety-note"><ShieldCheck size={18} /><p>Mercapro no procesa pagos, no cobra comisiones y no organiza entregas. Acuerda todo directamente con el productor. <strong>No envíes dinero por adelantado.</strong></p><Link to="/seguridad">Consejos de seguridad</Link></aside>
       </main>
       <SiteFooter />
     </div>
@@ -887,8 +949,8 @@ export function ProductDetailPage() {
   const [apiProduct, setApiProduct] = useState<ApiProduct | null>(null)
   const [apiChecked, setApiChecked] = useState(false)
   useSeoMetadata(
-    apiProduct ? `${apiProduct.title} · El Empujoncito` : 'Ofertas locales · El Empujoncito',
-    apiProduct ? `${apiProduct.description} · ${apiProduct.producer.public_name}. Contacta directamente con productores locales del interior de Panamá.` : 'Encuentra y contacta directamente a productores locales del interior de Panamá.',
+    apiProduct ? `${apiProduct.title} — ${apiProduct.producer.public_name} | MercaPRO Panamá` : 'Ofertas locales | MercaPRO Panamá',
+    apiProduct ? `${apiProduct.description.slice(0, 140)} · ${apiProduct.producer.public_name}. Contacta directamente en MercaPRO.` : 'Encuentra y contacta directamente a productores locales de Panamá.',
     apiProduct?.images[0]?.url,
     'product',
   )
@@ -904,7 +966,7 @@ export function ProductDetailPage() {
 }
 
 export function GuidePage({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
-  useSeoMetadata(`${title} · El Empujoncito`, intro)
+  useSeoMetadata(`${title} · Mercapro`, intro)
   return (
     <div className="app-shell">
       <SiteHeader />
@@ -925,8 +987,8 @@ export function SafetyGuidePage() {
     <GuidePage title="Compra con cuidado" intro="El mercado te conecta con productores. Confirma los detalles de cada compra directamente con la persona que publica.">
       <div className="guide-grid">
         <section className="guide-card"><span className="guide-card__step">01</span><h2>Antes de acordar</h2><p>Confirma disponibilidad, cantidad, precio final, lugar y forma de entrega directamente con el productor. La oferta puede cambiar.</p></section>
-        <section className="guide-card"><span className="guide-card__step">02</span><h2>Cuida tus datos</h2><p>No compartas contraseñas ni códigos de verificación. La plataforma no procesa pagos; acuerda cualquier pago directamente con el productor.</p></section>
-        <section className="guide-card"><span className="guide-card__step">03</span><h2>Entiende la verificación</h2><p>“Contacto confirmado” indica que se comprobó el control del teléfono. No garantiza la calidad del producto ni una transacción.</p></section>
+        <section className="guide-card"><span className="guide-card__step">02</span><h2>Cuida tu dinero y tus datos</h2><p><strong>No envíes dinero por adelantado.</strong> <strong>Nunca compartas contraseñas ni códigos que te lleguen por mensaje.</strong> Mercapro no procesa pagos ni cobra comisiones; acuerda cualquier pago directamente con el productor.</p></section>
+        <section className="guide-card"><span className="guide-card__step">03</span><h2>Entiende la verificación</h2><p><strong>Verificado:</strong> el equipo revisó su RUC y documentos. <strong>Verificado Pro:</strong> además confirmó su identidad con foto en vivo y cédula. Ninguna etiqueta garantiza la calidad del producto ni una venta.</p></section>
         <section className="guide-card guide-card--report"><span className="guide-card__step">04</span><h2>¿Algo te preocupa?</h2><p>Usa “Reportar esta oferta” en la ficha del producto o visita el perfil para reportar una publicación. El equipo revisará el caso.</p></section>
       </div>
       <div className="guide-actions"><Link className="button button--primary" to="/productos">Explorar ofertas <ArrowRight size={16} /></Link><Link className="text-link" to="/productores">Conocer productores <ArrowRight size={15} /></Link><Link className="text-link" to="/productos">Reportar una oferta <ArrowRight size={15} /></Link></div>
@@ -940,7 +1002,7 @@ export function AboutProjectPage() {
       <div className="guide-grid">
         <section className="guide-card"><span className="guide-card__step">EL MERCADO</span><h2>Ofertas de quienes producen</h2><p>Cada productor crea y mantiene sus publicaciones. El equipo revisa las ofertas antes de mostrarlas en el catálogo.</p></section>
         <section className="guide-card"><span className="guide-card__step">CONTACTO DIRECTO</span><h2>Consulta con la persona que publica</h2><p>Compradores y productores acuerdan directamente disponibilidad, precio, pago y forma de entrega.</p></section>
-        <section className="guide-card guide-card--report"><span className="guide-card__step">LÍMITES DEL SERVICIO</span><h2>Sin pagos ni entregas dentro del sitio</h2><p>La plataforma no procesa pagos ni organiza entregas. Las publicaciones y los acuerdos se gestionan directamente entre comprador y productor.</p></section>
+        <section className="guide-card guide-card--report"><span className="guide-card__step">LÍMITES DEL SERVICIO</span><h2>Sin pagos, comisiones ni entregas</h2><p>Mercapro no procesa pagos, no cobra comisiones a clientes ni a productores y no organiza entregas. Super Carnes no participa en las ventas: los acuerdos se hacen directamente entre comprador y productor.</p></section>
         <section className="guide-card"><span className="guide-card__step">TU CUENTA</span><h2>Registro gratuito y directo</h2><p>Productores y emprendedores del interior de Panamá pueden crear su cuenta y publicar sus ofertas sin costo.</p></section>
       </div>
       <div className="guide-actions"><Link className="button button--primary" to="/productos">Explorar ofertas <ArrowRight size={16} /></Link><Link className="text-link" to="/seguridad">Leer consejos de seguridad <ArrowRight size={15} /></Link><Link className="text-link" to="/ayuda">Ver ayuda <ArrowRight size={15} /></Link></div>
@@ -952,13 +1014,12 @@ export function ProducerHelpPage() {
   return (
     <GuidePage title="Publica tus productos paso a paso" intro="Completa tu perfil y crea tus publicaciones directamente desde tu cuenta de productor.">
       <ol className="guide-steps">
-        <li><span>1</span><div><h2>Crea tu cuenta y perfil</h2><p>Regístrate, completa tu nombre público, actividad y ubicación. Verifica tu teléfono para habilitar el contacto confirmado.</p></div></li>
+        <li><span>1</span><div><h2>Crea tu cuenta y perfil</h2><p>Regístrate, completa tu nombre público, actividad y ubicación. Confirma tu teléfono para que los compradores puedan contactarte.</p></div></li>
         <li><span>2</span><div><h2>Prepara la oferta</h2><p>Agrega fotografías, título, categoría y una descripción clara. Indica unidad, precio si aplica, disponibilidad y detalles de entrega.</p></div></li>
         <li><span>3</span><div><h2>Envía a revisión</h2><p>Las publicaciones pasan por revisión antes de mostrarse públicamente. Revisa “Mis publicaciones” para ver el estado y atender cualquier cambio solicitado.</p></div></li>
         <li><span>4</span><div><h2>Mantén la información al día</h2><p>Edita o pausa una oferta cuando cambien la disponibilidad, el precio o las condiciones. Responde directamente a las consultas de compradores.</p></div></li>
       </ol>
-      <div className="guide-callout"><strong>Asistencia opcional en una fase futura</strong><p>Super Carnes podrá contratar por separado sugerencias para identificar productos, redactar descripciones o transcribir notas de voz. Si se incorpora, podrás editar o rechazar cada sugerencia; el flujo manual seguirá disponible.</p></div>
-      <div className="guide-actions"><Link className="button button--primary" to="/registro">Crear mi cuenta <ArrowRight size={16} /></Link><Link className="text-link" to="/mi-perfil">Completar mi perfil <ArrowRight size={15} /></Link><Link className="text-link" to="/mis-productos">Ver mis publicaciones <ArrowRight size={15} /></Link></div>
+<div className="guide-actions"><Link className="button button--primary" to="/registro">Crear mi cuenta <ArrowRight size={16} /></Link><Link className="text-link" to="/mi-perfil">Completar mi perfil <ArrowRight size={15} /></Link><Link className="text-link" to="/mis-productos">Ver mis publicaciones <ArrowRight size={15} /></Link></div>
     </GuidePage>
   )
 }
@@ -975,7 +1036,7 @@ export function HelpIndexPage() {
   )
 }
 
-export function PublicProducerContact({ profile }: { profile: ProducerPublicProfile }) {
+export function PublicProducerContact({ profile, favorite }: { profile: ProducerPublicProfile; favorite?: ReactNode }) {
   const templates = useContactTemplates()
   const [error, setError] = useState('')
   const [contactConfirmation, setContactConfirmation] = useState<DirectContactChannel | null>(null)
@@ -1003,109 +1064,317 @@ export function PublicProducerContact({ profile }: { profile: ProducerPublicProf
   }
   if (!phone) return null
 
-  return <div className="producer-contact-actions"><div className="detail-actions"><a ref={whatsappLinkRef} className="button button--primary" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); openConfirmation('whatsapp') }}>Escribir por WhatsApp</a><a ref={telephoneLinkRef} className="button button--outline" href={telephoneUrl} onClick={(event) => { event.preventDefault(); openConfirmation('phone') }}>Llamar por teléfono</a></div>{error && <p role="status">{error}</p>}{contactConfirmation && <DirectContactConfirmation channel={contactConfirmation} href={contactConfirmation === 'whatsapp' ? whatsappUrl : telephoneUrl} message={contactConfirmation === 'whatsapp' ? whatsappMessage : undefined} onCancel={() => setContactConfirmation(null)} onContinue={confirmContact} />}</div>
+  return <div className="producer-contact-actions"><div className="detail-actions"><a ref={whatsappLinkRef} className="button button--whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); openConfirmation('whatsapp') }}><WhatsAppIcon size={20} /> Escribir por WhatsApp</a><a ref={telephoneLinkRef} className="button button--outline" href={telephoneUrl} onClick={(event) => { event.preventDefault(); openConfirmation('phone') }}><Phone size={18} aria-hidden="true" /> Llamar por teléfono</a>{favorite}</div>{error && <p role="status">{error}</p>}{contactConfirmation && <DirectContactConfirmation channel={contactConfirmation} href={contactConfirmation === 'whatsapp' ? whatsappUrl : telephoneUrl} message={contactConfirmation === 'whatsapp' ? whatsappMessage : undefined} onCancel={() => setContactConfirmation(null)} onContinue={confirmContact} />}</div>
+}
+
+type GalleryImage = { url: string; thumb: string; alt: string }
+
+function ProducerGallery({ images, initials }: { images: GalleryImage[]; initials: string }) {
+  const [index, setIndex] = useState(0)
+  if (!images.length) return <div className="producer-gallery producer-gallery--empty"><span aria-hidden="true">{initials}</span></div>
+  const current = images[Math.min(index, images.length - 1)]
+  const step = (delta: number) => setIndex((value) => (value + delta + images.length) % images.length)
+  const extra = images.length - PRODUCER_GALLERY_THUMBS
+  return (
+    <div className="producer-gallery">
+      <div className="producer-gallery__stage">
+        <img src={current.url} alt={current.alt} fetchPriority="high" decoding="async" />
+        {images.length > 1 && (
+          <>
+            <span className="producer-gallery__count" aria-live="polite">{index + 1}/{images.length}</span>
+            <button type="button" className="producer-gallery__nav producer-gallery__nav--prev" aria-label="Foto anterior" onClick={() => step(-1)}><ChevronLeft size={20} /></button>
+            <button type="button" className="producer-gallery__nav producer-gallery__nav--next" aria-label="Foto siguiente" onClick={() => step(1)}><ChevronRight size={20} /></button>
+          </>
+        )}
+      </div>
+      {images.length > 1 && (
+        <ul className="producer-gallery__thumbs">
+          {images.slice(0, PRODUCER_GALLERY_THUMBS).map((image, position) => {
+            const showMore = position === PRODUCER_GALLERY_THUMBS - 1 && extra > 0
+            return (
+              <li key={`${image.url}-${position}`}>
+                <button type="button" aria-label={showMore ? `Ver foto ${position + 1} y ${extra} más` : `Ver foto ${position + 1}`} aria-current={position === index ? 'true' : undefined} onClick={() => setIndex(position)}>
+                  <img src={image.thumb} alt="" loading="lazy" decoding="async" />
+                  {showMore && <span className="producer-gallery__more">+{extra}</span>}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** Miniaturas visibles bajo la foto principal; el resto se resume como "+N". */
+const PRODUCER_GALLERY_THUMBS = 5
+
+const PRODUCER_TABS = [
+  { id: 'ofertas', label: 'Productos' },
+  { id: 'sobre-el-productor', label: 'Sobre nosotros' },
+  { id: 'ubicacion', label: 'Ubicación' },
+  { id: 'contacto', label: 'Métodos de contacto' },
+]
+
+function useRelatedProducts(excludeSlug: string) {
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  useEffect(() => {
+    const controller = new AbortController()
+    listProducts(new URLSearchParams({ per_page: '12' }), controller.signal)
+      .then((result) => setProducts(result.data.filter((product) => product.producer.slug !== excludeSlug)))
+      .catch(() => setProducts([]))
+    return () => controller.abort()
+  }, [excludeSlug])
+  return products
+}
+
+function PublishBand() {
+  useReveal()
+  return (
+    <section className="home-publish page-shell" aria-labelledby="publish-title">
+      <div className="home-publish__band">
+        <div className="home-publish__copy" data-reveal="slide-left">
+          <p className="home-eyebrow home-eyebrow--dark">¿Eres productor o emprendedor?</p>
+          <h2 id="publish-title">Publica tu producto gratis.</h2>
+          <p>Llega a más personas y haz crecer tu negocio.</p>
+          <Link className="button button--primary" to="/registro">Publicar ahora <ArrowRight size={16} /></Link>
+        </div>
+        <p className="home-publish__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '200ms' }}>Tu talento<br />también<br />impulsa<br />comunidades</p>
+        <div className="home-publish__photo" aria-hidden="true" data-reveal="scale-in" style={{ animationDelay: '150ms' }}>
+          <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w`} sizes="(max-width: 760px) 100vw, 40vw" alt="" loading="lazy" decoding="async" />
+        </div>
+      </div>
+      <p className="home-publish__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
+    </section>
+  )
 }
 
 export function PublicProducerPage() {
   const { slug = '' } = useParams()
   const [profile, setProfile] = useState<ProducerPublicProfile | null>(null)
   const [error, setError] = useState('')
+  const [sort, setSort] = useState<'recientes' | 'nombre'>('recientes')
+  const [activeTab, setActiveTab] = useState('ofertas')
+  const related = useRelatedProducts(slug)
+  const relatedRail = useRef<HTMLDivElement>(null)
   const initials = profile ? profile.public_name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA') : ''
   const locationLabel = profile ? publicLocationLabel(profile.location) || 'Panamá' : ''
   const province = profile?.location?.parent?.parent?.name ?? profile?.location?.parent?.name ?? profile?.location?.name ?? 'Panamá'
+  const producerOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://mercapropanama.com'
+  const producerJsonLd = profile ? {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'LocalBusiness',
+        name: profile.public_name,
+        url: `${producerOrigin}/productores/${profile.slug}`,
+        description: profile.description ?? `${profile.activity ?? 'Productor local'} en ${locationLabel}`,
+        address: {
+          '@type': 'PostalAddress',
+          addressCountry: 'PA',
+          addressRegion: province,
+          addressLocality: locationLabel,
+        },
+        areaServed: { '@type': 'Country', name: 'Panamá' },
+        ...(profile.products.length > 0 && {
+          hasOfferCatalog: {
+            '@type': 'OfferCatalog',
+            name: `Productos de ${profile.public_name}`,
+            itemListElement: profile.products.slice(0, 10).map((p, i) => ({
+              '@type': 'ListItem',
+              position: i + 1,
+              url: `${producerOrigin}/productos/${p.slug}`,
+              name: p.title,
+            })),
+          },
+        }),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Inicio', item: producerOrigin },
+          { '@type': 'ListItem', position: 2, name: 'Productores', item: `${producerOrigin}/productores` },
+          { '@type': 'ListItem', position: 3, name: profile.public_name, item: `${producerOrigin}/productores/${profile.slug}` },
+        ],
+      },
+    ],
+  } : undefined
   useSeoMetadata(
-    profile ? `${profile.public_name} · El Empujoncito` : 'Productores locales · El Empujoncito',
-    profile ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${profile.description ?? ''} ${locationLabel}. Explora sus ofertas y contacta directamente.` : 'Conoce productores locales del interior de Panamá y explora sus ofertas.',
+    profile ? `${profile.public_name} — Productor en ${province} | MercaPRO Panamá` : 'Productores locales | MercaPRO Panamá',
+    profile
+      ? `${profile.public_name}${profile.activity ? `: ${profile.activity}` : ''}. ${locationLabel}, Panamá. ${profile.products.length} ofertas disponibles. Explora y contacta directamente en MercaPRO.`
+      : 'Conoce productores locales de Panamá, filtra por actividad y ubicación y explora sus ofertas disponibles.',
     undefined,
     'profile',
+    producerJsonLd,
   )
   useEffect(() => { void getPublicProducer(slug).then(setProfile).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No se pudo cargar el perfil.')) }, [slug])
 
   if (error) return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><div className="empty-products" role="alert"><strong>{error}</strong><Link className="button button--outline" to="/productores">Volver al directorio</Link></div></main><SiteFooter /></div>
   if (!profile) return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell"><p role="status">Cargando perfil…</p></main><SiteFooter /></div>
 
+  const galleryImages: GalleryImage[] = profile.products.flatMap((product) => product.images.map((image) => ({ url: image.url, thumb: image.thumbnail_url ?? image.url, alt: image.alt_text ?? product.title })))
+  const summary = profile.description?.trim() || `${profile.activity ?? 'Productor local'} en ${locationLabel}. Contacta directamente y acuerda la compra sin intermediarios.`
+  const memberSince = profile.member_since ? new Date(profile.member_since).toLocaleDateString('es-PA', { month: 'long', year: 'numeric' }) : null
+  const sortedProducts = [...profile.products].sort((a, b) => sort === 'nombre' ? a.title.localeCompare(b.title, 'es') : (b.published_at ?? '').localeCompare(a.published_at ?? ''))
+  const scrollRelated = () => relatedRail.current?.scrollBy({ left: relatedRail.current.clientWidth * 0.8, behavior: 'smooth' })
+
   return (
     <div className="app-shell">
       <SiteHeader />
-      <main className="product-page">
+      <main className="producer-page">
 
-        {/* ── Hero ── */}
-        <div className="product-page__hero">
-          <div className="product-page__crumbs page-shell">
+        <div className="producer-hero">
+          <img className="producer-hero__leaf producer-hero__leaf--warm" src={leafOrange} alt="" aria-hidden="true" />
+          <img className="producer-hero__leaf producer-hero__leaf--blue" src={leafBlue} alt="" aria-hidden="true" />
+          <img className="producer-hero__leaf producer-hero__leaf--sky" src={leafSky} alt="" aria-hidden="true" />
+          <div className="page-shell">
             <nav className="breadcrumbs" aria-label="Ruta de navegación">
               <Link to="/">Inicio</Link><ChevronRight size={14} aria-hidden="true" />
               <Link to="/productores">Productores</Link><ChevronRight size={14} aria-hidden="true" />
               <span aria-current="page">{profile.public_name}</span>
             </nav>
-          </div>
-
-          <div className="product-page__top page-shell">
-
-            {/* Left – visual identity */}
-            <div className="producer-profile-visual">
-              <div className="producer-profile-visual__avatar" aria-hidden="true">{initials}</div>
-              <ul className="producer-profile-visual__facts">
-                <li><Store size={18} aria-hidden="true" /><div><strong>{profile.products.length}</strong><span>{profile.products.length === 1 ? 'oferta publicada' : 'ofertas publicadas'}</span></div></li>
-                <li><MapPin size={18} aria-hidden="true" /><div><strong>{province}</strong><span>zona de producción</span></div></li>
-                {profile.contact_level !== 'unverified' && <li><BadgeCheck size={18} aria-hidden="true" /><div><strong>{profile.verification_label}</strong><span>verificación confirmada</span></div></li>}
-                <li><HeartHandshake size={18} aria-hidden="true" /><div><strong>Trato directo</strong><span>sin intermediarios</span></div></li>
-              </ul>
-            </div>
-
-            {/* Right – info + contact */}
-            <div className="product-info">
-              <span className="product-info__category">{profile.activity ?? 'Productor local'}</span>
-              <h1>{profile.public_name}</h1>
-              <p className="product-info__byline"><MapPin size={15} aria-hidden="true" /> {locationLabel}</p>
-              <VerificationBadge level={profile.verification_level} label={profile.verification_label} />
-
-              <ul className="product-info__highlights">
-                <li><Sprout size={24} aria-hidden="true" /><span>Productor local<br />de {province}</span></li>
-                <li><MessageCircle size={24} aria-hidden="true" /><span>Contacto directo<br />sin intermediarios</span></li>
-                <li><BadgeCheck size={24} aria-hidden="true" /><span>Perfil revisado<br />por el equipo</span></li>
-              </ul>
-
-              <PublicProducerContact profile={profile} />
-
-              <div className="product-info__secondary">
-                <Link className="text-link" to={`/reportar/productor/${profile.id}`}><Flag size={15} aria-hidden="true" /> Reportar este perfil</Link>
-                <Link className="text-link" to="/seguridad"><ShieldCheck size={15} aria-hidden="true" /> Consejos de seguridad</Link>
+            <div className="producer-hero__grid">
+              <ProducerGallery images={galleryImages} initials={initials} />
+              <div className="producer-hero__info">
+                <span className="product-info__category">{profile.activity ?? 'Productor local'}</span>
+                <h1>{profile.public_name}</h1>
+                <p className="producer-hero__location"><MapPin size={17} aria-hidden="true" /> {locationLabel}</p>
+                <VerificationBadge level={profile.verification_level} label={profile.verification_label} />
+                <p className="producer-hero__summary">{summary}</p>
+                <ul className="product-info__highlights">
+                  <li><Sprout size={24} aria-hidden="true" /><span>Productor local<br />de {province}</span></li>
+                  <li><MessageCircle size={24} aria-hidden="true" /><span>Contacto directo<br />sin intermediarios</span></li>
+                  <li><BadgeCheck size={24} aria-hidden="true" /><span>Perfil revisado<br />por el equipo</span></li>
+                </ul>
+                <div id="contacto" className="producer-hero__contact">
+                  <PublicProducerContact profile={profile} favorite={<FavoriteButton id={`productor:${profile.slug}`} title={profile.public_name} className="producer-hero__favorite" />} />
+                </div>
+                <div className="product-info__secondary">
+                  <Link className="text-link" to={`/reportar/productor/${profile.id}`}><Flag size={15} aria-hidden="true" /> Reportar este perfil</Link>
+                  <Link className="text-link" to="/seguridad"><ShieldCheck size={15} aria-hidden="true" /> Consejos de seguridad</Link>
+                </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* ── Historia del productor ── */}
-        {profile.description?.trim() && (
-          <section className="producer-story-band page-shell">
-            <span className="producer-story-band__avatar" aria-hidden="true">{initials}</span>
-            <blockquote className="producer-story-band__body">
-              <p className="eyebrow eyebrow--quiet">LA HISTORIA DEL PRODUCTOR</p>
-              <p className="producer-story-band__quote">{profile.description}</p>
-              <footer className="producer-story-band__byline">— {profile.public_name}{profile.activity ? `, ${profile.activity}` : ''}</footer>
-            </blockquote>
+        <ul className="producer-facts page-shell">
+          <li><span className="producer-facts__icon"><Store size={22} aria-hidden="true" /></span><div><strong>{profile.products.length}</strong><span>{profile.products.length === 1 ? 'oferta publicada' : 'ofertas publicadas'}</span></div></li>
+          <li><span className="producer-facts__icon"><MapPin size={22} aria-hidden="true" /></span><div><strong>{province}</strong><span>zona de producción</span></div></li>
+          {isPublicVerifiedLevel(profile.verification_level) && <li><span className="producer-facts__icon"><BadgeCheck size={22} aria-hidden="true" /></span><div><strong>{profile.verification_label}</strong><span>{(profile.verified_documents ?? []).map((document) => VERIFIED_DOCUMENT_LABELS[document]).filter(Boolean).join(' · ') || 'verificación realizada'}</span></div></li>}
+          <li><span className="producer-facts__icon"><Users size={22} aria-hidden="true" /></span><div><strong>Trato directo</strong><span>sin intermediarios</span></div></li>
+        </ul>
+
+        <nav className="producer-tabs page-shell" aria-label="Secciones del perfil">
+          {PRODUCER_TABS.map((tab) => <a key={tab.id} href={`#${tab.id}`} aria-current={activeTab === tab.id ? 'true' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</a>)}
+        </nav>
+
+        <div className="producer-body page-shell">
+          <section id="ofertas" className="producer-offers" aria-labelledby="offers-title">
+            <div className="producer-offers__heading">
+              <div>
+                <h2 id="offers-title">Ofertas de {profile.public_name}</h2>
+                <p>Productos locales directamente de {province}.</p>
+              </div>
+              {profile.products.length > 0 && (
+                <div className="producer-offers__tools">
+                  <span>{profile.products.length} {profile.products.length === 1 ? 'oferta' : 'ofertas'}</span>
+                  <label className="producer-offers__sort">
+                    <span className="sr-only">Ordenar ofertas</span>
+                    <select value={sort} onChange={(event) => setSort(event.target.value === 'nombre' ? 'nombre' : 'recientes')}>
+                      <option value="recientes">Más recientes</option>
+                      <option value="nombre">Nombre (A–Z)</option>
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </label>
+                </div>
+              )}
+            </div>
+            {sortedProducts.length
+              ? <div className="product-grid producer-offers__grid">{sortedProducts.map((product) => <ApiProductCard key={product.id} product={product} />)}</div>
+              : <div className="empty-products"><Store size={24} aria-hidden="true" /><strong>Aún no hay ofertas publicadas</strong><span>Este productor no tiene publicaciones activas en este momento.</span></div>}
+            <aside className="catalog-safety-note">
+              <ShieldCheck size={18} aria-hidden="true" />
+              <p>Las etiquetas de verificación indican qué revisó el equipo. No certifican la calidad del producto ni garantizan una venta.</p>
+              <Link to="/seguridad">Consejos de seguridad</Link>
+            </aside>
+          </section>
+
+          <aside className="producer-aside">
+            <section id="sobre-el-productor" className="producer-card" aria-labelledby="about-title">
+              <div className="producer-card__head">
+                <span className="producer-card__mark"><Sprout size={24} aria-hidden="true" /></span>
+                <div>
+                  <h3 id="about-title">Sobre {profile.public_name}</h3>
+                  <p>{profile.description?.trim() || 'Este productor todavía no ha compartido su historia. Escríbele para conocer más sobre su trabajo.'}</p>
+                </div>
+              </div>
+              <dl className="producer-card__facts">
+                {memberSince && <div><CalendarDays size={20} aria-hidden="true" /><dt>En Mercapro desde</dt><dd>{memberSince.charAt(0).toLocaleUpperCase('es-PA') + memberSince.slice(1)}</dd></div>}
+                <div><Users size={20} aria-hidden="true" /><dt>Actividad</dt><dd>{profile.activity ?? 'Productor local'}</dd></div>
+                <div><Truck size={20} aria-hidden="true" /><dt>Cobertura</dt><dd>{locationLabel}</dd></div>
+                {profile.payment_methods && profile.payment_methods.length > 0 && (
+                  <div style={{ gridColumn: '1/-1' }}>
+                    <CreditCard size={20} aria-hidden="true" />
+                    <dt>Formas de pago</dt>
+                    <dd>
+                      <ul className="payment-chips">
+                        {profile.payment_methods.map((m) => (
+                          <li key={m} className="payment-chip">{
+                            m === 'efectivo' ? 'Efectivo' :
+                            m === 'yappy' ? 'Yappy' :
+                            m === 'transferencia' ? 'Transferencia' :
+                            m === 'tarjeta' ? 'Tarjeta' :
+                            m === 'cheque' ? 'Cheque' :
+                            m === 'credito' ? 'Crédito' : m
+                          }</li>
+                        ))}
+                      </ul>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              {profile.stories && profile.stories.length > 0 && (
+                <div className="producer-card__stories">
+                  <p className="home-eyebrow">{profile.stories.length === 1 ? 'Su historia' : 'Sus historias'}</p>
+                  {profile.stories.map((story) => (
+                    <Link key={story.id} className="producer-card__story" to={`/historias/${story.id}`}>
+                      {story.quote && <q>{story.quote}</q>}
+                      <strong>{story.title}</strong>
+                      <span>Leer historia <ArrowRight size={14} aria-hidden="true" /></span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section id="ubicacion" className="producer-card" aria-labelledby="zone-title">
+              <h3 id="zone-title">Zona de producción</h3>
+              <ProducerZoneMap location={profile.location} label={profile.location?.name ?? province} />
+              <a className="text-link producer-map__link" href={`https://www.google.com/maps/search/${encodeURIComponent(`${locationLabel}, Panamá`)}`} target="_blank" rel="noreferrer">Ver en Google Maps <ArrowUpRight size={15} aria-hidden="true" /></a>
+            </section>
+          </aside>
+        </div>
+
+        {related.length > 0 && (
+          <section className="producer-related page-shell" aria-labelledby="related-title">
+            <div className="home-section__heading">
+              <div>
+                <h2 id="related-title">Otros productores de tu interés</h2>
+                <p>Descubre más productos locales en {province} y otras áreas.</p>
+              </div>
+              <Link className="text-link" to="/productores">Ver más productores <ArrowRight size={15} /></Link>
+            </div>
+            <div className="producer-related__rail-wrap">
+              <div className="producer-related__rail" ref={relatedRail}>
+                {related.slice(0, 8).map((product) => <ApiProductCard key={product.id} product={product} />)}
+              </div>
+              {related.length > 4 && <button type="button" className="producer-related__next" aria-label="Ver más productos" onClick={scrollRelated}><ChevronRight size={20} /></button>}
+            </div>
           </section>
         )}
 
-        {/* ── Ofertas ── */}
-        <section className="detail-more page-shell" aria-label="Ofertas publicadas">
-          <div className="home-section__heading">
-            <h2>Ofertas de {profile.public_name}</h2>
-            {profile.products.length > 0 && <span>{profile.products.length} {profile.products.length === 1 ? 'oferta' : 'ofertas'}</span>}
-          </div>
-          {profile.products.length
-            ? <div className="product-grid product-grid--four">{profile.products.map((product) => <ApiProductCard key={product.id} product={product} />)}</div>
-            : <div className="empty-products"><Store size={24} aria-hidden="true" /><strong>Aún no hay ofertas publicadas</strong><span>Este productor no tiene publicaciones activas en este momento.</span></div>}
-        </section>
-
-        {/* ── Safety note ── */}
-        <aside className="catalog-safety-note page-shell">
-          <ShieldCheck size={18} aria-hidden="true" />
-          <p>El contacto confirmado indica acceso al número, no certifica la calidad del producto ni garantiza una compraventa.</p>
-          <Link to="/seguridad">Consejos de seguridad</Link>
-        </aside>
-
+        <PublishBand />
       </main>
       <SiteFooter />
     </div>
@@ -1123,7 +1392,7 @@ export function PublicProducerDirectoryPage() {
   const [queryDraft, setQueryDraft] = useState(query)
   const [querySource, setQuerySource] = useState(query)
   const [composing, setComposing] = useState(false)
-  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string }>>([])
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string; parent_id?: number | null }>>([])
   const [locations, setLocations] = useState<PublicLocation[]>([])
   const [pageData, setPageData] = useState<{ key: string; value: Awaited<ReturnType<typeof getPublicProducers>> } | null>(null)
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null)
@@ -1132,7 +1401,7 @@ export function PublicProducerDirectoryPage() {
     setQuerySource(query)
     setQueryDraft(query)
   }
-  useSeoMetadata('Productores locales · El Empujoncito', 'Conoce a productores del interior de Panamá, filtra por actividad y ubicación y explora sus ofertas disponibles.', undefined, 'profile')
+  useSeoMetadata('Productores locales · Mercapro', 'Conoce a productores del interior de Panamá, filtra por actividad y ubicación y explora sus ofertas disponibles.', undefined, 'profile')
   useEffect(() => {
     if (composing || queryDraft.trim() === query) return
     const timer = window.setTimeout(() => {
@@ -1176,7 +1445,7 @@ export function PublicProducerDirectoryPage() {
     setSearchParams(next)
   }
 
-  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell producer-directory"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">Productores</span></nav><header className="catalog-heading producer-directory__heading"><div><p className="eyebrow eyebrow--quiet">PERSONAS Y OFICIOS DEL INTERIOR</p><h1>Productores locales</h1><p>Conoce a quienes ofrecen productos y trabajo hecho en la región.</p></div><span className="producer-directory__stamp"><Sprout size={19} aria-hidden="true" /><span>ORIGEN<br />LOCAL</span></span></header><ValidatedForm className="catalog-toolbar producer-directory__filters" role="search" noValidate onSubmit={(event) => { event.preventDefault(); updateFilter('q', queryDraft.trim()) }}><label className="catalog-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productores</span><input type="search" aria-label="Buscar productores" placeholder="Nombre o actividad" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={(event) => { setComposing(false); setQueryDraft(event.currentTarget.value) }} /><button type="button" aria-label="Limpiar búsqueda" onClick={() => { setQueryDraft(''); updateFilter('q', '') }}><X size={16} /></button></label><label className="catalog-filter"><span>Producto</span><select aria-label="Filtrar por producto" value={category} onChange={(event) => updateFilter('category', event.currentTarget.value)}><option value="">Todas las categorías</option>{categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Provincia</span><select aria-label="Filtrar por provincia" value={province} onChange={(event) => updateFilter('province', event.currentTarget.value)}><option value="">Todas</option>{locations.filter((item) => item.level === 'province').map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Distrito</span><select aria-label="Filtrar por distrito" value={district} disabled={!province} onChange={(event) => updateFilter('district', event.currentTarget.value)}><option value="">Todos</option>{districts.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Corregimiento</span><select aria-label="Filtrar por corregimiento" value={corregimiento} disabled={!district} onChange={(event) => updateFilter('corregimiento', event.currentTarget.value)}><option value="">Todos</option>{corregimientos.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label></ValidatedForm><div className="catalog-result-line" aria-live="polite"><span>{currentPage ? `${currentPage.total} ${currentPage.total === 1 ? 'productor con ofertas' : 'productores con ofertas'}` : 'Productores locales'}</span><span>{[selectedDistrict?.name, selectedProvince?.name].filter(Boolean).join(' · ') || 'Todas las provincias'}</span></div>{error ? <div className="empty-products catalog-empty" role="alert"><strong>No pudimos cargar el directorio</strong><span>{error}</span><button className="button button--outline" type="button" onClick={() => { setFailure(null); setRetry((value) => value + 1) }}>Intentar de nuevo</button>{paramsKey && <button className="button button--quiet" type="button" onClick={() => { setFailure(null); setQueryDraft(""); setSearchParams({}) }}>Limpiar filtros y volver al directorio</button>}</div> : !currentPage ? <p className="producer-directory__loading" role="status">Buscando productores…</p> : currentPage.data.length ? <section className="producer-directory__grid" aria-label="Productores encontrados">{currentPage.data.map((producer: PublicProducerSummary) => <article className="producer-directory-card" key={producer.id}><div className="producer-directory-card__identity"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL{producer.contact_level !== 'unverified' ? ' · CONTACTO CONFIRMADO' : ''}</p><h2><Link to={`/productores/${producer.slug}`}>{producer.public_name}</Link></h2></div></div><p className="producer-directory-card__activity">{producer.activity ?? 'Productor local'}</p><p className="producer-directory-card__description">{producer.description ?? 'Conoce sus ofertas disponibles y consulta los detalles directamente.'}</p><p className="producer-directory-card__location">{[producer.location?.name, producer.location?.parent?.name].filter(Boolean).join(' · ') || 'Panamá'}</p><div className="producer-directory-card__footer"><span>{producer.products_count} {producer.products_count === 1 ? 'oferta disponible' : 'ofertas disponibles'}</span><Link className="text-link" to={`/productores/${producer.slug}`}>Conocer productor <ArrowRight size={15} /></Link></div></article>)}</section> : <div className="empty-products catalog-empty" role="status"><Search size={21} /><strong>No encontramos productores con esos filtros</strong><span>Prueba otra actividad o amplía la ubicación.</span><button className="text-link" type="button" onClick={() => { setQueryDraft(''); setSearchParams({}) }}>Limpiar filtros <ArrowRight size={15} /></button></div>}{currentPage && currentPage.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={currentPage.current_page <= 1} onClick={() => movePage(currentPage.current_page - 1)}>Anterior</button><span aria-live="polite">Página {currentPage.current_page} de {currentPage.last_page}</span><button className="button button--outline button--small" disabled={currentPage.current_page >= currentPage.last_page} onClick={() => movePage(currentPage.current_page + 1)}>Siguiente</button></nav>}<aside className="catalog-safety-note"><ShieldCheck size={18} /><p>El contacto confirmado indica acceso al número, no certifica la calidad del producto ni garantiza una compraventa.</p><Link to="/seguridad">Consejos de seguridad</Link></aside></main><SiteFooter /></div>
+  return <div className="app-shell"><SiteHeader /><main className="catalog-page page-shell producer-directory"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">Productores</span></nav><header className="catalog-heading producer-directory__heading"><div><p className="eyebrow eyebrow--quiet">PERSONAS Y OFICIOS DEL INTERIOR</p><h1>Productores locales</h1><p>Conoce a quienes ofrecen productos y trabajo hecho en la región.</p></div><span className="producer-directory__stamp"><Sprout size={19} aria-hidden="true" /><span>ORIGEN<br />LOCAL</span></span></header><ValidatedForm className="catalog-toolbar producer-directory__filters" role="search" noValidate onSubmit={(event) => { event.preventDefault(); updateFilter('q', queryDraft.trim()) }}><label className="catalog-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productores</span><input type="search" aria-label="Buscar productores" placeholder="Nombre o actividad" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={(event) => { setComposing(false); setQueryDraft(event.currentTarget.value) }} /><button type="button" aria-label="Limpiar búsqueda" onClick={() => { setQueryDraft(''); updateFilter('q', '') }}><X size={16} /></button></label><label className="catalog-filter"><span>Producto</span><select aria-label="Filtrar por producto" value={category} onChange={(event) => updateFilter('category', event.currentTarget.value)}><option value="">Todas las categorías</option>{categoryTreeOptions(categories).map((item) => <option key={item.id} value={item.slug}>{item.label}</option>)}</select></label><label className="catalog-filter"><span>Provincia</span><select aria-label="Filtrar por provincia" value={province} onChange={(event) => updateFilter('province', event.currentTarget.value)}><option value="">Todas</option>{locations.filter((item) => item.level === 'province').map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Distrito</span><select aria-label="Filtrar por distrito" value={district} disabled={!province} onChange={(event) => updateFilter('district', event.currentTarget.value)}><option value="">Todos</option>{districts.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label><label className="catalog-filter"><span>Corregimiento</span><select aria-label="Filtrar por corregimiento" value={corregimiento} disabled={!district} onChange={(event) => updateFilter('corregimiento', event.currentTarget.value)}><option value="">Todos</option>{corregimientos.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label></ValidatedForm><div className="catalog-result-line" aria-live="polite"><span>{currentPage ? `${currentPage.total} ${currentPage.total === 1 ? 'productor con ofertas' : 'productores con ofertas'}` : 'Productores locales'}</span><span>{[selectedDistrict?.name, selectedProvince?.name].filter(Boolean).join(' · ') || 'Todas las provincias'}</span></div>{error ? <div className="empty-products catalog-empty" role="alert"><strong>No pudimos cargar el directorio</strong><span>{error}</span><button className="button button--outline" type="button" onClick={() => { setFailure(null); setRetry((value) => value + 1) }}>Intentar de nuevo</button>{paramsKey && <button className="button button--quiet" type="button" onClick={() => { setFailure(null); setQueryDraft(""); setSearchParams({}) }}>Limpiar filtros y volver al directorio</button>}</div> : !currentPage ? <p className="producer-directory__loading" role="status">Buscando productores…</p> : currentPage.data.length ? <section className="producer-directory__grid" aria-label="Productores encontrados">{currentPage.data.map((producer: PublicProducerSummary) => <article className="producer-directory-card" key={producer.id}><div className="producer-directory-card__identity"><span className="producer-avatar producer-avatar--large" aria-hidden="true">{producer.public_name.slice(0, 2).toLocaleUpperCase('es-PA')}</span><div><p className="eyebrow eyebrow--quiet">PRODUCTOR LOCAL{isPublicVerifiedLevel(producer.verification_level) ? ' · VERIFICADO' : ''}</p><h2><Link to={`/productores/${producer.slug}`}>{producer.public_name}</Link></h2></div></div><p className="producer-directory-card__activity">{producer.activity ?? 'Productor local'}</p><p className="producer-directory-card__description">{producer.description ?? 'Conoce sus ofertas disponibles y consulta los detalles directamente.'}</p><p className="producer-directory-card__location">{[producer.location?.name, producer.location?.parent?.name].filter(Boolean).join(' · ') || 'Panamá'}</p><div className="producer-directory-card__footer"><span>{producer.products_count} {producer.products_count === 1 ? 'oferta disponible' : 'ofertas disponibles'}</span><Link className="text-link" to={`/productores/${producer.slug}`}>Conocer productor <ArrowRight size={15} /></Link></div></article>)}</section> : <div className="empty-products catalog-empty" role="status"><Search size={21} /><strong>No encontramos productores con esos filtros</strong><span>Prueba otra actividad o amplía la ubicación.</span><button className="text-link" type="button" onClick={() => { setQueryDraft(''); setSearchParams({}) }}>Limpiar filtros <ArrowRight size={15} /></button></div>}{currentPage && currentPage.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={currentPage.current_page <= 1} onClick={() => movePage(currentPage.current_page - 1)}>Anterior</button><span aria-live="polite">Página {currentPage.current_page} de {currentPage.last_page}</span><button className="button button--outline button--small" disabled={currentPage.current_page >= currentPage.last_page} onClick={() => movePage(currentPage.current_page + 1)}>Siguiente</button></nav>}<aside className="catalog-safety-note"><ShieldCheck size={18} /><p>Las etiquetas de verificación indican qué revisó el equipo. No certifican la calidad del producto ni garantizan una venta.</p><Link to="/seguridad">Consejos de seguridad</Link></aside></main><SiteFooter /></div>
 }
 
 export function AccessPage({ title, description }: { title: string; description: string }) {
@@ -1197,16 +1466,22 @@ export function AccessPage({ title, description }: { title: string; description:
   const [regFirstName, setRegFirstName] = useState('')
   const [regLastName, setRegLastName] = useState('')
   const [regCedula, setRegCedula] = useState('')
+  const [regRuc, setRegRuc] = useState('')
+  const [regRucDv, setRegRucDv] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regPhone, setRegPhone] = useState('')
   const [regPublicName, setRegPublicName] = useState('')
   const [regActivity, setRegActivity] = useState('')
+  const [regVendorType, setRegVendorType] = useState<'productor' | 'cooperativa' | 'distribuidor'>('productor')
+  const [regPaymentMethods, setRegPaymentMethods] = useState<string[]>([])
   const [regLocationId, setRegLocationId] = useState<number | null>(null)
   const [regTerms, setRegTerms] = useState(false)
   const [regPrivacy, setRegPrivacy] = useState(false)
+  const [regPaymentDisclaimer, setRegPaymentDisclaimer] = useState(false)
   const [regSubmitting, setRegSubmitting] = useState(false)
   const [regStep1Error, setRegStep1Error] = useState('')
+  const [regPaymentError, setRegPaymentError] = useState('')
 
   useEffect(() => {
     if (!isRegister) return
@@ -1238,8 +1513,9 @@ export function AccessPage({ title, description }: { title: string; description:
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
         body: JSON.stringify({
           name: `${regFirstName.trim()} ${regLastName.trim()}`,
-          email: regEmail, password: regPassword,
-          cedula: regCedula.toUpperCase(), public_name: regPublicName, activity: regActivity || null,
+          ...(regEmail ? { email: regEmail } : {}), password: regPassword,
+          cedula: regCedula.toUpperCase(), ...(regRuc.trim() ? { ruc: regRuc.trim().toUpperCase(), ruc_dv: regRucDv.trim() } : {}), public_name: regPublicName, activity: regActivity || null,
+          vendor_type: regVendorType, payment_methods: regPaymentMethods,
           phone: regPhone, location_id: regLocationId,
           terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
           terms_confirmed: '1', privacy_confirmed: '1',
@@ -1249,7 +1525,7 @@ export function AccessPage({ title, description }: { title: string; description:
         const body = await response.json().catch(() => ({}))
         throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || 'No pudimos completar el registro. Revisa los datos e inténtalo de nuevo.')
       }
-      window.location.assign('/verificar')
+      window.location.assign('/mis-productos/nuevo')
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio. Inténtalo de nuevo.')
       setRegSubmitting(false)
@@ -1340,7 +1616,8 @@ export function AccessPage({ title, description }: { title: string; description:
                     <label className="form-field"><span className="form-field__label">Nombre</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Apellido</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Cédula de identidad</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span></label>
-                    <label className="form-field"><span className="form-field__label">Correo electrónico</span><input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <div className="reg-ruc-row"><label className="form-field"><span className="form-field__label">RUC (opcional)</span><input name="ruc" type="text" autoComplete="off" maxLength={30} placeholder="8-123-4567" value={regRuc} onChange={e => setRegRuc(e.target.value)} /><span className="form-field__hint">Con tu RUC puedes obtener la etiqueta Verificado.</span></label><label className="form-field"><span className="form-field__label">Dígito verificador</span><input name="ruc_dv" type="text" inputMode="numeric" autoComplete="off" maxLength={2} pattern="[0-9]{1,2}" required={regRuc.trim() !== ''} value={regRucDv} onChange={e => setRegRucDv(e.target.value)} /></label></div>
+                    <label className="form-field"><span className="form-field__label">Correo electrónico <span style={{fontWeight:'normal',opacity:.7}}>(opcional)</span></span><input name="email" type="email" autoComplete="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint">Para recuperar tu contraseña si lo olvidas.</span></label>
                     <label className="form-field"><span className="form-field__label">Contraseña</span><input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><span className="form-field__hint">{regPassword ? (() => { const c = { len: regPassword.length >= 6, let: /[a-zA-Z]/.test(regPassword), num: /[0-9]/.test(regPassword), sym: /[^a-zA-Z0-9]/.test(regPassword) }; return (c.len && c.let && c.num && c.sym) ? <span className="pwd-ok">✓ Contraseña válida</span> : <span className="pwd-strength">{([{l:'6 car.',ok:c.len},{l:'letra',ok:c.let},{l:'número',ok:c.num},{l:'símbolo',ok:c.sym}] as {l:string,ok:boolean}[]).map(({l,ok}) => <span key={l} className={ok ? 'pwd-req pwd-req--ok' : 'pwd-req pwd-req--no'}>{ok ? '✓' : '✗'} {l}</span>)}</span> })() : 'Mín. 6 car. · letra · número · símbolo'}</span></label>
                     <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><span className="form-field__hint">Ej: 6000-1234</span></label>
                   </div>
@@ -1351,11 +1628,38 @@ export function AccessPage({ title, description }: { title: string; description:
               )}
 
               {regStep === 2 && (
-                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(3) }}>
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); if (regPaymentMethods.length === 0) { setRegPaymentError('Selecciona al menos un método de pago que aceptes.'); return } setRegPaymentError(''); setRegStep(3) }}>
                   <div className="reg-form-grid">
                     <label className="form-field"><span className="form-field__label">Nombre público del emprendimiento</span><input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Actividad principal</span><ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Tipo de emprendimiento</span>
+                      <select value={regVendorType} onChange={e => setRegVendorType(e.target.value as 'productor' | 'cooperativa' | 'distribuidor')}>
+                        <option value="productor">Personal / Productor individual</option>
+                        <option value="cooperativa">Cooperativa</option>
+                        <option value="distribuidor">PYME / Empresa</option>
+                      </select>
+                    <span className="form-field__hint" aria-hidden="true" /></label>
                   </div>
+                  <fieldset style={{ border: 'none', padding: 0 }}>
+                    <legend style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>¿Cómo recibes pagos de tus clientes?</legend>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-ink-soft, #666)', marginBottom: 10, marginTop: 0 }}>Selecciona todos los que aplican. Los compradores lo verán en tu perfil.</p>
+                    <ul className="payment-toggles">
+                      {([
+                        ['efectivo', 'Efectivo'],
+                        ['yappy', 'Yappy'],
+                        ['transferencia', 'Transferencia bancaria'],
+                        ['tarjeta', 'Tarjeta de crédito/débito'],
+                        ['cheque', 'Cheque'],
+                        ['credito', 'Crédito / Cuenta abierta'],
+                      ] as const).map(([value, label]) => (
+                        <li key={value} className="payment-toggle">
+                          <input id={`reg-pm-${value}`} type="checkbox" checked={regPaymentMethods.includes(value)} onChange={e => { setRegPaymentMethods(prev => e.target.checked ? [...prev, value] : prev.filter(x => x !== value)); setRegPaymentError('') }} />
+                          <label htmlFor={`reg-pm-${value}`} className="payment-toggle__label">{label}</label>
+                        </li>
+                      ))}
+                    </ul>
+                    {regPaymentError && <p role="alert" style={{ color: 'var(--color-error, #c0392b)', fontSize: '0.8rem', marginTop: 8 }}>{regPaymentError}</p>}
+                  </fieldset>
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" onClick={() => setRegStep(1)}>Atrás</button>
                     <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
@@ -1384,6 +1688,7 @@ export function AccessPage({ title, description }: { title: string; description:
                   <div className="reg-review">
                     <div className="reg-review__row"><span>Nombre</span><strong>{regFirstName} {regLastName}</strong></div>
                     <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
+                    {regRuc.trim() && <div className="reg-review__row"><span>RUC</span><strong>{regRuc.trim().toUpperCase()} DV {regRucDv.trim()}</strong></div>}
                     <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
                     <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>
                     <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
@@ -1391,10 +1696,11 @@ export function AccessPage({ title, description }: { title: string; description:
                   </div>
                   <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
                   <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
+                  <label className="auth-consent auth-consent--disclaimer"><input type="checkbox" checked={regPaymentDisclaimer} onChange={e => setRegPaymentDisclaimer(e.target.checked)} required />Entiendo que Mercapro no procesa pagos y que los acuerdos son directamente entre comprador y productor.</label>
                   {formMessage && <p role="alert">{formMessage}</p>}
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" disabled={regSubmitting} onClick={() => setRegStep(3)}>Atrás</button>
-                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
+                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy || !regPaymentDisclaimer} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
                   </div>
                   <Link className="text-link" to="/ingresar">Ya tengo una cuenta</Link>
                 </div>
@@ -1430,15 +1736,16 @@ export function ResetPasswordPage() {
 export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
   const title = kind === 'terms' ? 'Términos y condiciones' : 'Política de privacidad'
   const content = kind === 'terms' ? termsText : privacyText
-  const sections = content.split(/(?=^## )/m).filter(Boolean)
+  const sections = content.split(/(?=^##? )/m).filter((section) => section.trim())
   const renderInline = (text: string) => text.split(/(\*\*.*?\*\*|\[[^\]]+\]\([^)]*\))/g).map((part, index) => {
     const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (link) return <a key={index} href={link[2]}>{link[1]}</a>
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>
     return part
   })
-  return <div className="app-shell"><SiteHeader /><main className="info-page page-shell legal-page"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">{title}</span></nav><p className="eyebrow eyebrow--quiet">MERCADO SOLIDARIO · VERSIÓN 1.0 · 19 DE OCTUBRE DE 2026</p><h1>{title}</h1><p className="legal-page__notice">Borrador para revisión legal y operativa. Antes de la publicación definitiva, Super Carnes debe completar sus datos legales y canales de contacto.</p>{sections.map((section, index) => {
+  return <div className="app-shell"><SiteHeader /><main className="info-page page-shell legal-page"><nav className="breadcrumbs" aria-label="Ruta de navegación"><Link to="/">Inicio</Link><ChevronRight size={14} /><span aria-current="page">{title}</span></nav><p className="eyebrow eyebrow--quiet">MERCAPRO · VIGENTE DESDE EL 24 DE OCTUBRE DE 2026</p><h1>{title}</h1>{sections.map((section, index) => {
     const lines = section.trim().split('\n')
+    if (/^# /.test(lines[0])) return <h2 className="legal-page__part" key={`part-${index}`}>{lines[0].replace(/^# /, '')}</h2>
     const heading = lines[0].replace(/^## /, '')
     const body = lines.slice(1).join('\n').trim()
     const paragraphs = body.split(/\n\s*\n/).filter(Boolean)
@@ -1508,6 +1815,7 @@ export function NotFoundPage() {
 
 function RegistroPage() {
   const [showRegForm, setShowRegForm] = useState(false)
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
 
   // Login state
   const [loginMessage, setLoginMessage] = useState('')
@@ -1522,16 +1830,22 @@ function RegistroPage() {
   const [regFirstName, setRegFirstName] = useState('')
   const [regLastName, setRegLastName] = useState('')
   const [regCedula, setRegCedula] = useState('')
+  const [regRuc, setRegRuc] = useState('')
+  const [regRucDv, setRegRucDv] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regPhone, setRegPhone] = useState('')
   const [regPublicName, setRegPublicName] = useState('')
   const [regActivity, setRegActivity] = useState('')
+  const [regVendorType, setRegVendorType] = useState<'productor' | 'cooperativa' | 'distribuidor'>('productor')
+  const [regPaymentMethods, setRegPaymentMethods] = useState<string[]>([])
   const [regLocationId, setRegLocationId] = useState<number | null>(null)
   const [regTerms, setRegTerms] = useState(false)
   const [regPrivacy, setRegPrivacy] = useState(false)
+  const [regPaymentDisclaimer, setRegPaymentDisclaimer] = useState(false)
   const [regSubmitting, setRegSubmitting] = useState(false)
   const [regStep1Error, setRegStep1Error] = useState('')
+  const [regPaymentError, setRegPaymentError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -1577,8 +1891,9 @@ function RegistroPage() {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
         body: JSON.stringify({
           name: `${regFirstName.trim()} ${regLastName.trim()}`,
-          email: regEmail, password: regPassword,
-          cedula: regCedula.toUpperCase(), public_name: regPublicName, activity: regActivity || null,
+          ...(regEmail ? { email: regEmail } : {}), password: regPassword,
+          cedula: regCedula.toUpperCase(), ...(regRuc.trim() ? { ruc: regRuc.trim().toUpperCase(), ruc_dv: regRucDv.trim() } : {}), public_name: regPublicName, activity: regActivity || null,
+          vendor_type: regVendorType, payment_methods: regPaymentMethods,
           phone: regPhone, location_id: regLocationId,
           terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
           terms_confirmed: '1', privacy_confirmed: '1',
@@ -1588,7 +1903,7 @@ function RegistroPage() {
         const body = await response.json().catch(() => ({}))
         throw new Error(Object.values(body.errors ?? {}).flat().join(' ') || body.message || 'No pudimos completar el registro. Revisa los datos.')
       }
-      window.location.assign('/verificar')
+      window.location.assign('/mis-productos/nuevo')
     } catch (error) {
       setRegMessage(error instanceof Error ? error.message : 'No pudimos conectar con el servicio.')
       setRegSubmitting(false)
@@ -1598,43 +1913,66 @@ function RegistroPage() {
   return (
     <div className="app-shell">
       <SiteHeader />
-      <main className="auth-gateway page-shell">
-        <div className="auth-gateway__header">
-          <span className="access-card__icon"><Sprout size={23} /></span>
-          <p className="eyebrow eyebrow--quiet">PORTAL DE PRODUCTORES</p>
-          <h1>Publica tus productos en El Empujoncito</h1>
-          <p>La plataforma gratuita para productores y emprendedores del interior de Panamá.</p>
+      <main className="auth-gateway">
+        <div className="auth-gateway__scene" aria-hidden="true">
+          <div className="auth-gateway__farmer">
+            <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w, ${heroProducer1440} 1440w`} sizes="34vw" alt="" decoding="async" />
+          </div>
+          <p className="auth-gateway__note">Apoyar<br />lo local<br />también<br />nos alimenta</p>
+          <img className="auth-gateway__waves" src={heroWaves} alt="" />
+          <img className="auth-gateway__leaf auth-gateway__leaf--blue" src={leafBlue} alt="" />
+          <img className="auth-gateway__leaf auth-gateway__leaf--blue-2" src={leafBlue} alt="" />
+          <img className="auth-gateway__leaf auth-gateway__leaf--warm" src={leafOrange} alt="" />
         </div>
+
+        <div className="auth-gateway__inner page-shell">
+          <div className="auth-gateway__header">
+            <p className="auth-gateway__eyebrow"><span className="auth-gateway__eyebrow-icon"><Sprout size={20} aria-hidden="true" /></span>Portal de productores</p>
+            <h1>Publica tus productos <span>en Mercapro</span></h1>
+            <p>La plataforma gratuita para productores y emprendedores del interior de Panamá.</p>
+          </div>
 
         {!showRegForm ? (
           <div className="auth-gateway__panels">
-            {/* ── Login panel (desktop only) ── */}
-            <div className="auth-gateway__panel auth-gateway__panel--login">
-              <h2 className="auth-gateway__panel-title">Ya tengo cuenta</h2>
-              <p className="auth-gateway__panel-sub">Ingresa a tu panel de productor</p>
-              <ValidatedForm className="auth-form" onSubmit={submitLogin}>
-                <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
-                <label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label>
+            <section className="auth-gateway__panel auth-gateway__panel--login" aria-labelledby="login-title">
+              <div className="auth-gateway__panel-head">
+                <span className="auth-gateway__panel-icon"><User size={24} aria-hidden="true" /></span>
+                <div>
+                  <h2 id="login-title" className="auth-gateway__panel-title">Ya tengo cuenta</h2>
+                  <p className="auth-gateway__panel-sub">Ingresa a tu panel de productor para gestionar tus productos, ofertas y contactos.</p>
+                </div>
+              </div>
+              <ValidatedForm className="auth-form auth-gateway__login-form" onSubmit={submitLogin}>
+                <label>Correo electrónico
+                  <span className="auth-input"><Mail size={19} aria-hidden="true" /><input name="email" type="email" autoComplete="email" required /></span>
+                </label>
+                <label>Contraseña
+                  <span className="auth-input"><Lock size={19} aria-hidden="true" /><input name="password" type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required />
+                    <button type="button" className="auth-input__toggle" aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showLoginPassword} onClick={() => setShowLoginPassword((value) => !value)}>{showLoginPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button>
+                  </span>
+                </label>
+                <Link className="auth-gateway__forgot" to="/recuperar">¿Olvidaste tu contraseña?</Link>
                 {loginMessage && <p role="alert">{loginMessage}</p>}
-                <button className="button button--primary" type="submit">Ingresar <ArrowRight size={16} /></button>
-                <Link className="text-link" to="/recuperar">¿Olvidaste tu contraseña?</Link>
+                <button className="button button--primary auth-gateway__submit" type="submit">Ingresar <ArrowRight size={18} /></button>
               </ValidatedForm>
-            </div>
+            </section>
 
-            <div className="auth-gateway__divider" aria-hidden="true"><span>o</span></div>
-
-            {/* ── Register CTA panel ── */}
-            <div className="auth-gateway__panel auth-gateway__panel--register-cta">
-              <h2 className="auth-gateway__panel-title">Crear mi cuenta gratis</h2>
-              <p className="auth-gateway__panel-sub">Únete y empieza a publicar tus ofertas en El Empujoncito, la plataforma gratuita para productores del interior de Panamá.</p>
-              <button className="button button--primary button--large" type="button" onClick={() => setShowRegForm(true)}>
-                Crear mi cuenta gratis <ArrowRight size={18} />
+            <section className="auth-gateway__panel auth-gateway__panel--register-cta" aria-labelledby="register-title">
+              <div className="auth-gateway__panel-head">
+                <span className="auth-gateway__panel-icon auth-gateway__panel-icon--warm"><UserPlus size={24} aria-hidden="true" /></span>
+                <div>
+                  <h2 id="register-title" className="auth-gateway__panel-title">Crear mi cuenta gratis</h2>
+                  <p className="auth-gateway__panel-sub">Únete a Mercapro y empieza a publicar tus productos en pocos minutos. Es gratis y sin intermediarios.</p>
+                </div>
+              </div>
+              <button className="button auth-gateway__create" type="button" onClick={() => setShowRegForm(true)}>
+                Crear mi cuenta gratis <ArrowRight size={20} />
               </button>
-              <Link className="text-link auth-gateway__login-mobile" to="/ingresar">Ya tengo una cuenta</Link>
-            </div>
+            </section>
           </div>
         ) : (
           <div className="auth-gateway__register-only">
+            <button className="text-link auth-gateway__back" type="button" onClick={() => setShowRegForm(false)}><ArrowLeft size={16} aria-hidden="true" /> Ya tengo cuenta, quiero ingresar</button>
             <h2 className="auth-gateway__panel-title">Crear mi cuenta gratis</h2>
             <p className="auth-gateway__panel-sub">Únete y empieza a publicar tus ofertas</p>
             <div className="reg-wizard">
@@ -1667,7 +2005,8 @@ function RegistroPage() {
                     <label className="form-field"><span className="form-field__label">Nombre</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Apellido</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Cédula de identidad</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span></label>
-                    <label className="form-field"><span className="form-field__label">Correo electrónico</span><input name="email" type="email" autoComplete="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <div className="reg-ruc-row"><label className="form-field"><span className="form-field__label">RUC (opcional)</span><input name="ruc" type="text" autoComplete="off" maxLength={30} placeholder="8-123-4567" value={regRuc} onChange={e => setRegRuc(e.target.value)} /><span className="form-field__hint">Con tu RUC puedes obtener la etiqueta Verificado.</span></label><label className="form-field"><span className="form-field__label">Dígito verificador</span><input name="ruc_dv" type="text" inputMode="numeric" autoComplete="off" maxLength={2} pattern="[0-9]{1,2}" required={regRuc.trim() !== ''} value={regRucDv} onChange={e => setRegRucDv(e.target.value)} /></label></div>
+                    <label className="form-field"><span className="form-field__label">Correo electrónico <span style={{fontWeight:'normal',opacity:.7}}>(opcional)</span></span><input name="email" type="email" autoComplete="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint">Para recuperar tu contraseña si lo olvidas.</span></label>
                     <label className="form-field"><span className="form-field__label">Contraseña</span><input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><span className="form-field__hint">{regPassword ? (() => { const c = { len: regPassword.length >= 6, let: /[a-zA-Z]/.test(regPassword), num: /[0-9]/.test(regPassword), sym: /[^a-zA-Z0-9]/.test(regPassword) }; return (c.len && c.let && c.num && c.sym) ? <span className="pwd-ok">✓ Contraseña válida</span> : <span className="pwd-strength">{([{l:'6 car.',ok:c.len},{l:'letra',ok:c.let},{l:'número',ok:c.num},{l:'símbolo',ok:c.sym}] as {l:string,ok:boolean}[]).map(({l,ok}) => <span key={l} className={ok ? 'pwd-req pwd-req--ok' : 'pwd-req pwd-req--no'}>{ok ? '✓' : '✗'} {l}</span>)}</span> })() : 'Mín. 6 car. · letra · número · símbolo'}</span></label>
                     <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><span className="form-field__hint">Ej: 6000-1234</span></label>
                   </div>
@@ -1677,11 +2016,38 @@ function RegistroPage() {
               )}
 
               {regStep === 2 && (
-                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); setRegStep(3) }}>
+                <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); if (regPaymentMethods.length === 0) { setRegPaymentError('Selecciona al menos un método de pago que aceptes.'); return } setRegPaymentError(''); setRegStep(3) }}>
                   <div className="reg-form-grid">
                     <label className="form-field"><span className="form-field__label">Nombre público del emprendimiento</span><input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
                     <label className="form-field"><span className="form-field__label">Actividad principal</span><ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">Tipo de emprendimiento</span>
+                      <select value={regVendorType} onChange={e => setRegVendorType(e.target.value as 'productor' | 'cooperativa' | 'distribuidor')}>
+                        <option value="productor">Personal / Productor individual</option>
+                        <option value="cooperativa">Cooperativa</option>
+                        <option value="distribuidor">PYME / Empresa</option>
+                      </select>
+                    <span className="form-field__hint" aria-hidden="true" /></label>
                   </div>
+                  <fieldset style={{ border: 'none', padding: 0 }}>
+                    <legend style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>¿Cómo recibes pagos de tus clientes?</legend>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-ink-soft, #666)', marginBottom: 10, marginTop: 0 }}>Selecciona todos los que aplican. Los compradores lo verán en tu perfil.</p>
+                    <ul className="payment-toggles">
+                      {([
+                        ['efectivo', 'Efectivo'],
+                        ['yappy', 'Yappy'],
+                        ['transferencia', 'Transferencia bancaria'],
+                        ['tarjeta', 'Tarjeta de crédito/débito'],
+                        ['cheque', 'Cheque'],
+                        ['credito', 'Crédito / Cuenta abierta'],
+                      ] as const).map(([value, label]) => (
+                        <li key={value} className="payment-toggle">
+                          <input id={`gw-pm-${value}`} type="checkbox" checked={regPaymentMethods.includes(value)} onChange={e => { setRegPaymentMethods(prev => e.target.checked ? [...prev, value] : prev.filter(x => x !== value)); setRegPaymentError('') }} />
+                          <label htmlFor={`gw-pm-${value}`} className="payment-toggle__label">{label}</label>
+                        </li>
+                      ))}
+                    </ul>
+                    {regPaymentError && <p role="alert" style={{ color: 'var(--color-error, #c0392b)', fontSize: '0.8rem', marginTop: 8 }}>{regPaymentError}</p>}
+                  </fieldset>
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" onClick={() => setRegStep(1)}>Atrás</button>
                     <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
@@ -1710,6 +2076,7 @@ function RegistroPage() {
                   <div className="reg-review">
                     <div className="reg-review__row"><span>Nombre</span><strong>{regFirstName} {regLastName}</strong></div>
                     <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
+                    {regRuc.trim() && <div className="reg-review__row"><span>RUC</span><strong>{regRuc.trim().toUpperCase()} DV {regRucDv.trim()}</strong></div>}
                     <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
                     <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>
                     <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
@@ -1717,16 +2084,25 @@ function RegistroPage() {
                   </div>
                   <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
                   <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>
+                  <label className="auth-consent auth-consent--disclaimer"><input type="checkbox" checked={regPaymentDisclaimer} onChange={e => setRegPaymentDisclaimer(e.target.checked)} required />Entiendo que Mercapro no procesa pagos y que los acuerdos son directamente entre comprador y productor.</label>
                   {regMessage && <p role="alert">{regMessage}</p>}
                   <div className="reg-step-nav">
                     <button className="button button--quiet" type="button" disabled={regSubmitting} onClick={() => setRegStep(3)}>Atrás</button>
-                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
+                    <button className="button button--primary" type="button" disabled={regSubmitting || !regTerms || !regPrivacy || !regPaymentDisclaimer} aria-busy={regSubmitting} onClick={submitRegistration}>{regSubmitting ? 'Creando tu cuenta…' : <>Crear mi cuenta <ArrowRight size={16} /></>}</button>
                   </div>
                 </div>
               )}
             </div>
           </div>
         )}
+
+          <ul className="auth-gateway__benefits">
+            <li><span className="auth-gateway__benefit-icon"><Gift size={24} aria-hidden="true" /></span><div><strong>Plataforma gratuita</strong><span>Sin costos de publicación.</span></div></li>
+            <li><span className="auth-gateway__benefit-icon"><Users size={24} aria-hidden="true" /></span><div><strong>Conecta con compradores</strong><span>Trato directo y sin intermediarios.</span></div></li>
+            <li><span className="auth-gateway__benefit-icon auth-gateway__benefit-icon--green"><Leaf size={24} aria-hidden="true" /></span><div><strong>Apoya la economía local</strong><span>Impulsa a productores panameños.</span></div></li>
+            <li><span className="auth-gateway__benefit-icon auth-gateway__benefit-icon--warm"><ShieldCheck size={24} aria-hidden="true" /></span><div><strong>Seguro y confiable</strong><span>Cada publicación se revisa antes de ser visible.</span></div></li>
+          </ul>
+        </div>
       </main>
       <SiteFooter />
     </div>
@@ -1741,6 +2117,8 @@ function PublicRoutes() {
       <Route path="/productores" element={<PublicProducerDirectoryPage />} />
       <Route path="/productos/:slug" element={<ProductDetailPage />} />
       <Route path="/productores/:slug" element={<PublicProducerPage />} />
+      <Route path="/historias" element={<StoriesPage />} />
+      <Route path="/historias/:id" element={<StoryDetailPage />} />
       <Route path="/sobre-el-proyecto" element={<AboutProjectPage />} />
       <Route path="/seguridad" element={<SafetyGuidePage />} />
       <Route path="/ayuda" element={<HelpIndexPage />} />

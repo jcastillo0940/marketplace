@@ -29,15 +29,23 @@ class ProducerTrustLevelWorkflow
                 throw new HttpException(409, 'El perfil ya tiene ese nivel de revisión.');
             }
 
-            if ($target === ProducerVerificationLevel::ProducerValidated && $current !== ProducerVerificationLevel::IdentityReviewed) {
+            if ($target === ProducerVerificationLevel::ProducerValidated && ! in_array($current, [ProducerVerificationLevel::IdentityReviewed, ProducerVerificationLevel::BiometricVerified], true)) {
                 throw ValidationException::withMessages(['level' => ['Primero completa y registra la revisión de identidad.']]);
             }
 
-            if ($target === ProducerVerificationLevel::IdentityReviewed && ! in_array($current, [ProducerVerificationLevel::ContactConfirmed, ProducerVerificationLevel::ProducerValidated], true)) {
+            if ($target === ProducerVerificationLevel::IdentityReviewed && ! in_array($current, [ProducerVerificationLevel::ContactConfirmed, ProducerVerificationLevel::BiometricVerified, ProducerVerificationLevel::ProducerValidated], true)) {
                 throw ValidationException::withMessages(['level' => ['La revisión de identidad requiere contacto confirmado.']]);
             }
 
-            if ($target === ProducerVerificationLevel::ContactConfirmed && ! in_array($current, [ProducerVerificationLevel::IdentityReviewed, ProducerVerificationLevel::ProducerValidated], true)) {
+            if ($target === ProducerVerificationLevel::IdentityReviewed && $current === ProducerVerificationLevel::ContactConfirmed && (empty($locked->ruc) || ! $locked->hasLegalDocument())) {
+                throw ValidationException::withMessages(['level' => ['Para marcarlo como Verificado, el productor debe tener RUC y un documento legal cargado.']]);
+            }
+
+            if ($target === ProducerVerificationLevel::BiometricVerified && $current !== ProducerVerificationLevel::IdentityReviewed) {
+                throw ValidationException::withMessages(['level' => ['Verificado Pro requiere tener primero el nivel Verificado.']]);
+            }
+
+            if ($target === ProducerVerificationLevel::ContactConfirmed && ! in_array($current, [ProducerVerificationLevel::IdentityReviewed, ProducerVerificationLevel::BiometricVerified, ProducerVerificationLevel::ProducerValidated], true)) {
                 throw ValidationException::withMessages(['level' => ['No hay una revisión manual que retirar.']]);
             }
 
@@ -51,6 +59,14 @@ class ProducerTrustLevelWorkflow
                 'reason' => $reason,
             ]);
             $locked->verification_level = $target->value;
+
+            $autoActivated = false;
+            if ($target === ProducerVerificationLevel::ProducerValidated && $locked->profile_status === 'pending') {
+                $locked->profile_status = 'active';
+                $locked->suspension_reason = null;
+                $autoActivated = true;
+            }
+
             $locked->save();
 
             AuditLog::create([
@@ -64,6 +80,20 @@ class ProducerTrustLevelWorkflow
                 'reason' => $reason,
                 'created_at' => now(),
             ]);
+
+            if ($autoActivated) {
+                AuditLog::create([
+                    'actor_id' => $isAdmin ? null : $actor->id,
+                    'admin_actor_id' => $isAdmin ? $actor->id : null,
+                    'action' => 'producer.status_changed',
+                    'resource_type' => 'producer_profile',
+                    'resource_id' => $locked->id,
+                    'before_values' => ['profile_status' => 'pending'],
+                    'after_values' => ['profile_status' => 'active'],
+                    'reason' => 'Activación automática al otorgar nivel Productor validado.',
+                    'created_at' => now(),
+                ]);
+            }
 
             return $review;
         });

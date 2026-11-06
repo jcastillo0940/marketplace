@@ -41,5 +41,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('users.manage', fn ($user) => $user->hasPermission('users.manage'));
         Gate::define('security.alerts.view', fn ($user) => $user->hasPermission('security.alerts.view'));
         Gate::define('security.alerts.manage', fn ($user) => $user->hasPermission('security.alerts.manage'));
+        Gate::define('system.settings', fn ($user) => $user->hasPermission('system.settings'));
     }
 }

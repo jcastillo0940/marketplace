@@ -4,6 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ProducerVerificationLevel;
 use App\Enums\ProductStatus;
+use App\Mail\ProducerProfileApprovedMail;
+use App\Mail\ProducerProfileSuspendedMail;
+use App\Mail\ProductApprovedMail;
+use App\Mail\ProductRejectedMail;
+use App\Services\MarketMailer;
 use App\Services\ProductWorkflow;
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
@@ -17,6 +22,7 @@ use App\Models\ProductStatusHistory;
 use App\Models\Report;
 use App\Models\Role;
 use App\Models\SearchEvent;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\ProducerTrustLevelWorkflow;
 use App\Services\ProductReinstatementWorkflow;
@@ -24,6 +30,7 @@ use App\Support\PanamaPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -93,16 +100,29 @@ class AdminController extends Controller
                 'public_name' => $profile->public_name,
                 'slug' => $profile->slug,
                 'activity' => $profile->activity,
+                'vendor_type' => $profile->vendor_type ?? 'productor',
+                'payment_methods' => $profile->payment_methods ?? [],
                 'description' => $profile->description,
                 'profile_status' => $profile->profile_status,
                 'suspension_reason' => $profile->suspension_reason,
                 'contact_level' => $profile->contact_level,
                 'verification_level' => $profile->publicVerificationLevel(),
                 'phone_verified_at' => $profile->phone_verified_at,
+                'phone_private' => $profile->phone_private,
+                'cedula' => $profile->cedula,
+                'ruc' => $profile->ruc,
+                'ruc_dv' => $profile->ruc_dv,
                 'registration_method' => $profile->registration_method,
                 'registered_by' => $profile->registeredBy?->name,
                 'location' => $profile->location,
+                'has_cedula_photo' => $profile->cedula_photo_path !== null,
+                'has_pacto_social' => $profile->pacto_social_path !== null,
+                'has_aviso_operacion' => $profile->aviso_operacion_path !== null,
+                'aviso_operacion_url' => $request->user()->can('producers.verify') && $profile->aviso_operacion_path ? "/api/admin/producers/{$profile->id}/documents/aviso_operacion" : null,
+                'cedula_photo_url' => $request->user()->can('producers.verify') && $profile->cedula_photo_path ? "/api/admin/producers/{$profile->id}/documents/cedula_photo" : null,
+                'pacto_social_url' => $request->user()->can('producers.verify') && $profile->pacto_social_path ? "/api/admin/producers/{$profile->id}/documents/pacto_social" : null,
             ],
+            'biometric_check' => $this->biometricCheckSummary($request, $profile),
             'account' => ['name' => $profile->user->name, 'email' => $profile->user->email, 'created_at' => $profile->user->created_at],
             'consents' => $profile->consents,
             'verifications' => $profile->verifications,
@@ -142,7 +162,38 @@ class AdminController extends Controller
 
         [$profile, $queuedProducts] = $result;
 
+        $user = $profile->user;
+        if ($user) {
+            if ($profile->profile_status === 'active') {
+                MarketMailer::send(new ProducerProfileApprovedMail($user, $profile));
+            } elseif ($profile->profile_status === 'suspended') {
+                MarketMailer::send(new ProducerProfileSuspendedMail($user, $profile, $data['reason']));
+            }
+        }
+
         return response()->json(['data' => ['id' => $profile->id, 'profile_status' => $profile->profile_status, 'products_queued_for_review' => $queuedProducts]]);
+    }
+
+    private function biometricCheckSummary(Request $request, ProducerProfile $profile): ?array
+    {
+        $check = $profile->biometricChecks()->latest('id')->first();
+        if (! $check) {
+            return null;
+        }
+        $canReview = $request->user()->can('producers.verify');
+        $url = fn (?string $path, string $kind) => $canReview && $path ? "/api/admin/producers/{$profile->id}/biometric/{$check->id}/{$kind}" : null;
+
+        return [
+            'id' => $check->id,
+            'status' => $check->status,
+            'match_distance' => $check->match_distance,
+            'liveness_challenges' => $check->liveness_challenges,
+            'selfie_url' => $url($check->selfie_path, 'selfie'),
+            'cedula_url' => $url($check->cedula_path, 'cedula'),
+            'review_reason' => $check->review_reason,
+            'reviewed_at' => $check->reviewed_at,
+            'created_at' => $check->created_at,
+        ];
     }
 
     public function setProducerTrustLevel(Request $request, int $id, ProducerTrustLevelWorkflow $workflow): JsonResponse
@@ -156,9 +207,17 @@ class AdminController extends Controller
         $review = $workflow->change($profile, $request->user(), ProducerVerificationLevel::from($data['level']), $data['reason']);
         $level = ProducerVerificationLevel::from($review->to_level);
 
+        $profile->refresh();
+        $autoActivated = $level === ProducerVerificationLevel::ProducerValidated && $profile->profile_status === 'active';
+        if ($autoActivated) {
+            MarketMailer::send(new ProducerProfileApprovedMail($profile->user, $profile));
+        }
+
         return response()->json(['data' => [
             'verification_level' => $level->value,
             'verification_label' => $level->label(),
+            'profile_status' => $profile->profile_status,
+            'auto_activated' => $autoActivated,
         ]]);
     }
 
@@ -218,15 +277,18 @@ class AdminController extends Controller
             if ($parent->id === $category->id || ! $parent->active) {
                 throw ValidationException::withMessages(['parent_id' => ['Selecciona una categoría padre activa y distinta.']]);
             }
-            if ($parent->parent_id !== null) {
-                throw ValidationException::withMessages(['parent_id' => ['Las subcategorías deben depender de una categoría principal, no de otra subcategoría.']]);
+            $parentDepth = $parent->parent_id === null ? 1 : 2;
+            if ($parentDepth === 2 && $parent->parent?->parent_id !== null) {
+                throw ValidationException::withMessages(['parent_id' => ['El árbol admite como máximo tres niveles de categorías.']]);
             }
-            if ($id && $category->children()->exists()) {
-                throw ValidationException::withMessages(['parent_id' => ['Una categoría con subcategorías no puede convertirse en subcategoría.']]);
+            $hasGrandchildren = $id && Category::query()->whereIn('parent_id', $category->children()->pluck('id'))->exists();
+            if ($id && (($category->children()->exists() && $parentDepth === 2) || ($hasGrandchildren && $parentDepth === 1))) {
+                throw ValidationException::withMessages(['parent_id' => ['Mover esta categoría dejaría el árbol con más de tres niveles.']]);
             }
         }
         $category->fill([...$data, 'slug' => Str::slug($data['name'])]);
         $category->save();
+        Cache::forget('public.categories');
         AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => $id ? 'catalog.category_updated' : 'catalog.category_created', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => $category->only(['name', 'slug', 'active', 'position', 'parent_id']), 'created_at' => now()]);
 
         return response()->json(['data' => $category], $id ? 200 : 201);
@@ -239,6 +301,7 @@ class AdminController extends Controller
         $this->assertCategoryCanDeactivate($category);
         $category->active = false;
         $category->save();
+        Cache::forget('public.categories');
         AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'catalog.category_deactivated', 'resource_type' => 'category', 'resource_id' => $category->id, 'after_values' => ['active' => false], 'created_at' => now()]);
 
         return response()->json(['data' => ['id' => $category->id, 'active' => false]]);
@@ -317,6 +380,7 @@ class AdminController extends Controller
         }
         $location->fill([...$data, 'slug' => $slug]);
         $location->save();
+        Cache::forget('public.locations');
         AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => $id ? 'catalog.location_updated' : 'catalog.location_created', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => $location->only(['name', 'slug', 'level', 'active', 'parent_id']), 'created_at' => now()]);
 
         return response()->json(['data' => $location], $id ? 200 : 201);
@@ -331,6 +395,7 @@ class AdminController extends Controller
         }
         $location->active = false;
         $location->save();
+        Cache::forget('public.locations');
         AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'catalog.location_deactivated', 'resource_type' => 'location', 'resource_id' => $location->id, 'after_values' => ['active' => false], 'created_at' => now()]);
 
         return response()->json(['data' => ['id' => $location->id, 'active' => false]]);
@@ -490,7 +555,7 @@ class AdminController extends Controller
                 }
             }
             $ids = Role::whereIn('name', $requested)->pluck('id')->all();
-            $roleAssignments = collect($ids)->mapWithKeys(fn (int $roleId) => [$roleId => ['assigned_by' => null, 'assigned_at' => now()]])->all();
+            $roleAssignments = collect($ids)->mapWithKeys(fn (int $roleId) => [$roleId => ['assigned_by' => null, 'assigned_by_admin_id' => $actor->id, 'assigned_at' => now()]])->all();
             $user->roles()->sync($roleAssignments);
             AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'admin.user_roles_changed', 'resource_type' => 'user', 'resource_id' => $user->id, 'before_values' => ['roles' => $current], 'after_values' => ['roles' => $requested], 'reason' => $data['reason'], 'created_at' => now()]);
 
@@ -550,7 +615,7 @@ class AdminController extends Controller
             'status' => ['required', 'in:pending,published,rejected,changes_requested,paused,withdrawn'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
         ]);
-        $product = Product::query()->with(['category.parent'])->findOrFail($id);
+        $product = Product::query()->with(['category.parent', 'producer.user'])->findOrFail($id);
         $from = $product->status;
         $to   = ProductStatus::from($data['status']);
 
@@ -572,6 +637,16 @@ class AdminController extends Controller
             $product->statusHistory()->create(['admin_actor_id' => $request->user()->id, 'from_status' => $from->value, 'to_status' => $to->value, 'reason' => $data['reason']]);
             AuditLog::create(['admin_actor_id' => $request->user()->id, 'action' => 'product.status_changed', 'resource_type' => 'product', 'resource_id' => $product->id, 'before_values' => ['status' => $from->value], 'after_values' => ['status' => $to->value], 'reason' => $data['reason'], 'created_at' => now()]);
         });
+
+        $producer = $product->producer;
+        $user = $producer?->user;
+        if ($user) {
+            if ($to === ProductStatus::Published) {
+                MarketMailer::send(new ProductApprovedMail($user, $product));
+            } elseif (in_array($to, [ProductStatus::Rejected, ProductStatus::ChangesRequested], true)) {
+                MarketMailer::send(new ProductRejectedMail($user, $product, $data['reason'], $to === ProductStatus::ChangesRequested));
+            }
+        }
 
         return response()->json(['data' => ['id' => $product->id, 'status' => $product->status->value]]);
     }
@@ -604,5 +679,71 @@ class AdminController extends Controller
         ]);
 
         return response()->json($products);
+    }
+
+    public function getSmtpSettings(Request $request): JsonResponse
+    {
+        Gate::authorize('system.settings');
+        $cfg = SystemSetting::getSmtpConfig();
+
+        return response()->json(['data' => [
+            'host'         => $cfg['host'],
+            'port'         => $cfg['port'],
+            'encryption'   => $cfg['encryption'],
+            'username'     => $cfg['username'],
+            'password'     => $cfg['password'] !== '' ? '••••••••' : '',
+            'from_address' => $cfg['from_address'],
+            'from_name'    => $cfg['from_name'],
+        ]]);
+    }
+
+    public function saveSmtpSettings(Request $request): JsonResponse
+    {
+        Gate::authorize('system.settings');
+        $data = $request->validate([
+            'host'         => ['required', 'string', 'max:253'],
+            'port'         => ['required', 'integer', 'min:1', 'max:65535'],
+            'encryption'   => ['required', 'in:ssl,tls,none'],
+            'username'     => ['required', 'email', 'max:255'],
+            'password'     => ['nullable', 'string', 'max:255'],
+            'from_address' => ['required', 'email', 'max:255'],
+            'from_name'    => ['required', 'string', 'max:100'],
+        ]);
+
+        SystemSetting::set('smtp_host', $data['host']);
+        SystemSetting::set('smtp_port', (string) $data['port']);
+        SystemSetting::set('smtp_encryption', $data['encryption']);
+        SystemSetting::set('smtp_username', $data['username']);
+        if (isset($data['password']) && $data['password'] !== '') {
+            SystemSetting::set('smtp_password', $data['password'], true);
+        }
+        SystemSetting::set('smtp_from_address', $data['from_address']);
+        SystemSetting::set('smtp_from_name', $data['from_name']);
+
+        return response()->json(['data' => ['saved' => true]]);
+    }
+
+    public function testSmtpSettings(Request $request): JsonResponse
+    {
+        Gate::authorize('system.settings');
+        $data = $request->validate(['to' => ['required', 'email', 'max:255']]);
+
+        $cfg = SystemSetting::getSmtpConfig();
+        if (empty($cfg['host']) || empty($cfg['username'])) {
+            return response()->json(['data' => ['ok' => false, 'error' => 'No hay configuración SMTP guardada.']], 422);
+        }
+
+        try {
+            MarketMailer::mailer()->raw(
+                "Este es un correo de prueba enviado desde el panel de administración de MercaPRO.\n\nSi recibiste este mensaje, la configuración SMTP está funcionando correctamente.",
+                function (\Illuminate\Mail\Message $msg) use ($data, $cfg): void {
+                    $msg->to($data['to'])->subject('Prueba de correo — MercaPRO');
+                }
+            );
+
+            return response()->json(['data' => ['ok' => true]]);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => ['ok' => false, 'error' => $e->getMessage()]], 422);
+        }
     }
 }

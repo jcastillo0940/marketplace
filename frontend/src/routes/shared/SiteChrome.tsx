@@ -4,41 +4,19 @@ import { ArrowUpRight, LayoutDashboard, LogOut, Menu, Plus, Search, X } from 'lu
 
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+import { BrandLogo } from '../../components/BrandLogo';
+
 import { adminLogout, clearSessionCache, getAdminMe, getSessionUser, logoutUser, type SessionUser } from '../../api/client';
 
 const NAV_LINKS: Array<{ label: string; to: string; match?: string }> = [
   { label: 'Explorar', to: '/productos', match: '/productos' },
   { label: 'Productores', to: '/productores', match: '/productores' },
   { label: 'Cómo funciona', to: '/#como-funciona' },
-  { label: 'Historias', to: '/#historias' },
-  { label: 'Preguntas', to: '/ayuda', match: '/ayuda' },
+  { label: 'Historias', to: '/historias', match: '/historias' },
+  { label: 'Ayuda y consejos', to: '/ayuda', match: '/ayuda' },
 ]
 
 const CURRENT_YEAR = new Date().getFullYear()
-
-function BrandMark({ footer = false }: { footer?: boolean }) {
-  const gradientId = footer ? 'brand-bag-footer' : 'brand-bag'
-  return (
-    <>
-      <svg className="brand__icon" viewBox="0 0 65 85" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-            <stop stopColor="#a9e83c" />
-            <stop offset=".52" stopColor="#66b578" />
-            <stop offset="1" stopColor="#075cc5" />
-          </linearGradient>
-        </defs>
-        <path d="M18 32V20C18-2 48-2 48 20v12" fill="none" stroke="#a8e137" strokeWidth="7" strokeLinecap="round" />
-        <path d="M10 32H54L60 77Q60 83 53 83H9Q3 83 6 76L17 65H36Q45 65 45 59Q45 54 38 54H13L20 45H42Q48 45 48 39Q48 34 41 34H10Z" fill={`url(#${gradientId})`} />
-        <path d="M7 43H40M3 53H37M1 64H32" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
-      </svg>
-      <span className={`brand__type${footer ? ' brand__type--light' : ''}`}>
-        <strong>El Empujoncito</strong>
-        <span>Marketplace</span>
-      </span>
-    </>
-  )
-}
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -78,13 +56,15 @@ export function SiteHeader() {
   return (
     <>
       <div className="initiative-bar">
-        <span className="initiative-bar__dot" aria-hidden="true" />
-        <span>Una iniciativa de <strong>Super Carnes</strong> para apoyar a productores y emprendedores de Panamá</span>
+        <span>Impulsado por</span>
+        <a href="https://supercarnes.com" target="_blank" rel="noopener noreferrer" aria-label="Super Carnes">
+          <img src="/super-carnes-logo.png" alt="Super Carnes" className="initiative-bar__logo" />
+        </a>
       </div>
       <header className="site-header">
         <div className="site-header__inner page-shell">
-          <Link className="brand" to="/" aria-label="El Empujoncito, inicio">
-            <BrandMark />
+          <Link className="brand" to="/" aria-label="Mercapro, inicio">
+            <BrandLogo />
           </Link>
 
           <button
@@ -136,17 +116,24 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="site-footer__inner page-shell">
-        <Link className="brand brand--footer" to="/" aria-label="El Empujoncito, inicio"><BrandMark footer /></Link>
+        <Link className="brand brand--footer" to="/" aria-label="Mercapro, inicio"><BrandLogo light /></Link>
         <nav aria-label="Enlaces del pie de página">
           <Link to="/sobre-el-proyecto">Sobre el proyecto</Link>
-          <Link to="/ayuda">Preguntas</Link>
+          <Link to="/productores">Productores</Link>
+          <Link to="/historias">Historias</Link>
+          <Link to="/ayuda">Ayuda y consejos</Link>
           <Link to="/seguridad">Seguridad</Link>
           <Link to="/terminos">Términos y condiciones</Link>
           <Link to="/privacidad">Política de privacidad</Link>
         </nav>
+        <a href="https://supercarnes.com" target="_blank" rel="noopener noreferrer" className="site-footer__partner">
+          <span>Impulsado por</span>
+          <img src="/super-carnes-logo.png" alt="Super Carnes" className="site-footer__partner-logo" />
+        </a>
       </div>
       <div className="site-footer__legal page-shell">
-        <small>© {CURRENT_YEAR} El Empujoncito · Una iniciativa de apoyo a productores y emprendedores del interior de Panamá, impulsada por Super Carnes.</small>
+        <p className="site-footer__disclaimer">Mercapro es un servicio gratuito que conecta compradores con productores. No procesamos pagos ni intervenimos en precios, entregas, calidad o acuerdos entre las partes. Super Carnes no se hace responsable por pagos, transacciones ni acuerdos realizados entre compradores y productores.</p>
+        <small>© {CURRENT_YEAR} Mercapro · Apoyando lo nuestro. Plataforma gratuita que conecta a productores y artesanos con compradores, impulsada por Super Carnes.</small>
       </div>
     </footer>
   )

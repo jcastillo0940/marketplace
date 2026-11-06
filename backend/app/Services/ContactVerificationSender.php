@@ -33,10 +33,10 @@ class ContactVerificationSender
                 throw new RuntimeException('No hay correo disponible para enviar el código de verificación.');
             }
             Mail::html(
-                '<p>Tu código de verificación para <strong>El Empujoncito</strong> es:</p>'
+                '<p>Tu código de verificación para <strong>Mercapro</strong> es:</p>'
                 .'<h2 style="letter-spacing:0.2em">'.$code.'</h2>'
                 .'<p>Vence en 10 minutos. No lo compartas.</p>',
-                fn ($m) => $m->to($destination)->subject('Código de verificación - El Empujoncito')
+                fn ($m) => $m->to($destination)->subject('Código de verificación - Mercapro')
             );
 
             return;
@@ -58,7 +58,7 @@ class ContactVerificationSender
             ->post("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json", [
                 'To' => $destination,
                 'From' => $from,
-                'Body' => "Tu código de El Empujoncito es {$code}. Vence en 10 minutos. No lo compartas.",
+                'Body' => "Tu código de Mercapro es {$code}. Vence en 10 minutos. No lo compartas.",
             ])
             ->throw();
     }

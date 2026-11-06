@@ -1,7 +1,8 @@
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, BarChart2, ChevronRight, FileText, Flag, LayoutDashboard, LogOut, MessageSquare, Search, ShieldAlert, ShieldCheck, Sprout, Tag, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, BarChart2, BookOpen, ChevronRight, FileText, Flag, LayoutDashboard, LogOut, MessageSquare, Search, ShieldAlert, ShieldCheck, Tag, UserPlus, Users } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { BrandLogo } from '../components/BrandLogo'
 import Field from '../components/Field'
 import SelectField from '../components/SelectField'
 import ActivitySelect from '../components/ActivitySelect'
@@ -9,8 +10,9 @@ import LocationPicker from '../components/LocationPicker'
 import TextAreaField from '../components/TextAreaField'
 import ValidatedForm from '../components/ValidatedForm'
 import VerificationBadge from '../components/VerificationBadge'
+import { categoryPath, categoryTreeOptions } from '../components/categoryTree'
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog'
-import { adminLogin, adminLogout, completeAdminMfaChallenge, confirmAdminMfa, confirmAdminProducerContact, getAdminMe, deactivateAdminCatalogItem, decideModeration, decideModerationBulk, decideProducerAppeal, downloadAdminMetricsCsv, getAdminCategories, getAdminLocations, getAdminMetrics, getAdminMfaSetup, getAdminPermissions, getAdminProducerAppeals, getAdminProducerDetail, getAdminProducers, getAdminRoles, getAdminSecurityAlerts, getAdminUsers, getAuditLogs, getAdminMessageTemplates, updateAdminMessageTemplate, getModerationQueue, getAdminAllProducts, setAdminProductStatus, getReportCase, getReportCases, releaseReportCase, listLocations, registerProducer, reportEvidenceUrl, saveAdminCategory, saveAdminLocation, setAdminProducerStatus, setAdminProducerTrustLevel, setAdminUserRoles, updateAdminCategory, updateAdminLocation, updateAdminSecurityAlert, updateReportCase, updateReportPriority, getAdminAccounts, createAdminAccount, type AdminAccount, type AdminCategory, type AdminLocation, type AdminMetrics, type AdminMessageTemplate, type AdminProducer, type AdminProducerDetail, type AdminProducerAppeal, type AdminProductRow, type AdminRole, type AdminUser, type ModerationItem, type Paginated, type PublicLocation, type ReportCase, type ReportCaseDetail, type RiskAlert, type ProducerVerificationLevel } from '../api/client'
+import { decideBiometricCheck, type AdminBiometricCheck, adminLogin, decideStory, getAdminStories, type OwnedProducerStory, adminLogout, completeAdminMfaChallenge, confirmAdminMfa, confirmAdminProducerContact, getAdminMe, deactivateAdminCatalogItem, decideModeration, decideModerationBulk, decideProducerAppeal, downloadAdminMetricsCsv, getAdminCategories, getAdminLocations, getAdminMetrics, getAdminMfaSetup, getAdminPermissions, getAdminProducerAppeals, getAdminProducerDetail, getAdminProducers, getAdminRoles, getAdminSecurityAlerts, getAdminUsers, getAuditLogs, getAdminMessageTemplates, updateAdminMessageTemplate, getModerationQueue, getAdminAllProducts, setAdminProductStatus, getReportCase, getReportCases, releaseReportCase, listLocations, registerProducer, reportEvidenceUrl, saveAdminCategory, saveAdminLocation, setAdminProducerStatus, setAdminProducerTrustLevel, setAdminUserRoles, updateAdminCategory, updateAdminLocation, updateAdminSecurityAlert, updateReportCase, updateReportPriority, getAdminAccounts, createAdminAccount, getAdminSmtpSettings, saveAdminSmtpSettings, testAdminSmtpSettings, type AdminAccount, type AdminCategory, type AdminLocation, type AdminMetrics, type AdminMessageTemplate, type AdminProducer, type AdminProducerDetail, type AdminProducerAppeal, type AdminProductRow, type AdminRole, type AdminUser, type ModerationItem, type Paginated, type PublicLocation, type ReportCase, type ReportCaseDetail, type RiskAlert, type ProducerVerificationLevel, type SmtpSettings } from '../api/client'
 import { SiteFooter, SiteHeader } from './shared/SiteChrome'
 import AdminMfaRecoveryPage from '../components/AdminMfaRecoveryPage'
 import { InfoPage } from './shared/InfoPage'
@@ -348,7 +350,7 @@ function AdminHomePage() {
   useEffect(() => { void getAdminMetrics().then(setMetrics).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No pudimos cargar el panel.')) }, [])
   useEffect(() => { let active = true; void getAdminPermissions().then((permissions) => { if (active) setCanReviewMfaRecovery(permissions.includes('security.mfa_recovery.review')) }).catch(() => { if (active) setCanReviewMfaRecovery(false) }); return () => { active = false } }, [])
   const recoveryLocked = error.includes('El acceso administrativo está bloqueado')
-  return <AdminShell><main className="admin-content"><p className="eyebrow eyebrow--quiet">OPERACIÓN DEL MERCADO</p><h1>Administración</h1>{error ? <div className="empty-products" role="alert"><strong>{recoveryLocked ? 'El acceso administrativo está bloqueado durante la recuperación de MFA.' : error}</strong>{recoveryLocked && <p>Vuelve a ingresar para continuar con la reinscripción de tu autenticador.</p>}<Link className="button button--primary" to="/adminsc1car">{recoveryLocked ? 'Volver a ingresar' : 'Ingresar'}</Link></div> : !metrics ? <p role="status">Cargando métricas operativas…</p> : <><p>Indicadores agregados para orientar la operación. Las intenciones de contacto no equivalen a conversaciones ni ventas.</p><section className="admin-metric-grid"><article><span>Productores</span><strong>{Object.values(metrics.producers).reduce((sum, count) => sum + Number(count), 0)}</strong><small>{Object.entries(metrics.producers).map(([key, value]) => `${key}: ${value}`).join(' · ')}</small></article><article><span>Publicaciones</span><strong>{Object.values(metrics.products).reduce((sum, count) => sum + Number(count), 0)}</strong><small>{Object.entries(metrics.products).map(([key, value]) => `${key}: ${value}`).join(' · ')}</small></article><article><span>Casos abiertos</span><strong>{metrics.reports_open}</strong><small>Denuncias nuevas o en revisión</small></article><article><span>Intenciones de contacto</span><strong>{metrics.contact_intentions_30d}</strong><small>Últimos 30 días</small></article><article><span>Búsquedas sin resultados</span><strong>{metrics.searches_without_results_30d}</strong><small>Últimos 30 días</small></article><article><span>Tiempo medio de moderación</span><strong>{metrics.average_moderation_hours_30d === null ? '—' : `${metrics.average_moderation_hours_30d} h`}</strong><small>Hasta la primera decisión humana · {metrics.moderation_decisions_30d} decisiones en 30 días</small></article></section><nav className="admin-links" aria-label="Herramientas administrativas"><Link to="/admin/publicaciones">Cola de moderación <ArrowRight size={15} /></Link><Link to="/admin/denuncias">Casos y denuncias <ArrowRight size={15} /></Link><Link to="/admin/alertas">Alertas de seguridad <ArrowRight size={15} /></Link>{canReviewMfaRecovery && <Link to="/admin/seguridad/recuperacion-mfa">Recuperación de MFA <ShieldCheck size={15} /></Link>}<Link to="/admin/apelaciones">Apelaciones de productores <ArrowRight size={15} /></Link><Link to="/admin/registro-asistido">Registro asistido <ArrowRight size={15} /></Link><Link to="/admin/productores">Directorio de productores <ArrowRight size={15} /></Link><Link to="/admin/catalogos">Categorías y ubicaciones <ArrowRight size={15} /></Link><Link to="/admin/mensajes">Mensajes de contacto <ArrowRight size={15} /></Link><Link to="/admin/usuarios">Usuarios y permisos <ArrowRight size={15} /></Link><Link to="/admin/reportes">Métricas <ArrowRight size={15} /></Link><Link to="/admin/auditoria">Auditoría <ArrowRight size={15} /></Link></nav></>}</main></AdminShell>
+  return <AdminShell><main className="admin-content"><p className="eyebrow eyebrow--quiet">OPERACIÓN DEL MERCADO</p><h1>Administración</h1>{error ? <div className="empty-products" role="alert"><strong>{recoveryLocked ? 'El acceso administrativo está bloqueado durante la recuperación de MFA.' : error}</strong>{recoveryLocked && <p>Vuelve a ingresar para continuar con la reinscripción de tu autenticador.</p>}<Link className="button button--primary" to="/adminsc1car">{recoveryLocked ? 'Volver a ingresar' : 'Ingresar'}</Link></div> : !metrics ? <p role="status">Cargando métricas operativas…</p> : <><p>Indicadores agregados para orientar la operación. Las intenciones de contacto no equivalen a conversaciones ni ventas.</p><section className="admin-metric-grid"><article><span>Productores</span><strong>{Object.values(metrics.producers).reduce((sum, count) => sum + Number(count), 0)}</strong><small>{Object.entries(metrics.producers).map(([key, value]) => `${key}: ${value}`).join(' · ')}</small></article><article><span>Publicaciones</span><strong>{Object.values(metrics.products).reduce((sum, count) => sum + Number(count), 0)}</strong><small>{Object.entries(metrics.products).map(([key, value]) => `${key}: ${value}`).join(' · ')}</small></article><article><span>Casos abiertos</span><strong>{metrics.reports_open}</strong><small>Denuncias nuevas o en revisión</small></article><article><span>Intenciones de contacto</span><strong>{metrics.contact_intentions_30d}</strong><small>Últimos 30 días</small></article><article><span>Búsquedas sin resultados</span><strong>{metrics.searches_without_results_30d}</strong><small>Últimos 30 días</small></article><article><span>Tiempo medio de moderación</span><strong>{metrics.average_moderation_hours_30d === null ? '—' : `${metrics.average_moderation_hours_30d} h`}</strong><small>Hasta la primera decisión humana · {metrics.moderation_decisions_30d} decisiones en 30 días</small></article></section><nav className="admin-links" aria-label="Herramientas administrativas"><Link to="/admin/publicaciones">Cola de moderación <ArrowRight size={15} /></Link><Link to="/admin/denuncias">Casos y denuncias <ArrowRight size={15} /></Link><Link to="/admin/alertas">Alertas de seguridad <ArrowRight size={15} /></Link>{canReviewMfaRecovery && <Link to="/admin/seguridad/recuperacion-mfa">Recuperación de MFA <ShieldCheck size={15} /></Link>}<Link to="/admin/apelaciones">Apelaciones de productores <ArrowRight size={15} /></Link><Link to="/admin/historias">Historias de productores <ArrowRight size={15} /></Link><Link to="/admin/registro-asistido">Registro asistido <ArrowRight size={15} /></Link><Link to="/admin/productores">Directorio de productores <ArrowRight size={15} /></Link><Link to="/admin/catalogos">Categorías y ubicaciones <ArrowRight size={15} /></Link><Link to="/admin/mensajes">Mensajes de contacto <ArrowRight size={15} /></Link><Link to="/admin/usuarios">Usuarios y permisos <ArrowRight size={15} /></Link><Link to="/admin/reportes">Métricas <ArrowRight size={15} /></Link><Link to="/admin/auditoria">Auditoría <ArrowRight size={15} /></Link><Link to="/admin/correo">Ajustes de correo <ArrowRight size={15} /></Link></nav></>}</main></AdminShell>
 }
 
 function AdminProducersPage({ assistedOnly = false }: { assistedOnly?: boolean }) {
@@ -479,6 +481,54 @@ function AdminProducersPage({ assistedOnly = false }: { assistedOnly?: boolean }
     {!assistedOnly && <>{error && <p role="status">{error}</p>}{error && error.includes('cuenta creada') ? null : error ? <div className="empty-products" role="alert"><strong>{error}</strong><Link className="button button--primary" to="/adminsc1car">Ingresar</Link></div> : !results ? <p role="status">Cargando productores…</p> : <><p className="catalog-result-count">{results.total} {results.total === 1 ? 'productor' : 'productores'} encontrados</p>{results.data.length ? <div className="dashboard-list">{results.data.map((producer) => <article className="dashboard-row" key={producer.id}><div><h2>{producer.public_name}</h2><p>{producer.account && <>{producer.account.name} · {producer.account.email} · </>}{producer.products_count} ofertas</p><span className={`status-pill status-pill--${producer.profile_status}`}>{producer.profile_status}</span></div><div className="admin-producer-actions"><Link className="button button--quiet button--small" to={`/admin/productores/${producer.id}`}>Ver ficha</Link>{producer.profile_status === 'active' && canSuspend && <button ref={statusTriggerRef} className="button button--outline button--small" type="button" onClick={(event) => openStatusDialog(event, producer)}>Suspender</button>}{producer.profile_status !== 'active' && canAssist && <button ref={statusTriggerRef} className="button button--outline button--small" type="button" onClick={(event) => openStatusDialog(event, producer)}>{producer.profile_status === 'suspended' ? 'Reactivar' : 'Activar'}</button>}</div></article>)}</div> : <div className="empty-products"><strong>No encontramos productores con esos filtros</strong><span>Prueba con otro nombre o estado.</span></div>}{results.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={page <= 1} onClick={() => goToPage(page - 1)}>Página anterior</button><span>Página {results.current_page} de {results.last_page}</span><button className="button button--outline button--small" disabled={page >= results.last_page} onClick={() => goToPage(page + 1)}>Página siguiente</button></nav>}</>}</>}</main>{statusTarget && <ConfirmActionDialog title={statusTarget.profile_status === 'active' ? 'Suspender perfil' : statusTarget.profile_status === 'suspended' ? 'Reactivar perfil' : 'Activar perfil'} accessibleName={`Cambiar estado de ${statusTarget.public_name}`} description={statusTarget.profile_status === 'active' ? `Al suspender a ${statusTarget.public_name}, sus ofertas dejarán de estar disponibles.` : statusTarget.profile_status === 'suspended' ? `Al reactivar a ${statusTarget.public_name}, sus ofertas publicadas volverán a revisión humana.` : `Al activar a ${statusTarget.public_name}, sus ofertas seguirán sujetas a revisión humana antes de aparecer en el catálogo.`} confirmLabel={statusTarget.profile_status === 'active' ? 'Suspender perfil' : statusTarget.profile_status === 'suspended' ? 'Reactivar perfil' : 'Activar perfil'} busyLabel={statusTarget.profile_status === 'active' ? 'Suspendiendo…' : statusTarget.profile_status === 'suspended' ? 'Reactivando…' : 'Activando…'} busy={statusBusy} error={statusError} confirmFormId="admin-producer-status-form" initialFocusId="admin-producer-status-reason" onCancel={closeStatusDialog}><ValidatedForm id="admin-producer-status-form" className="auth-form" onSubmit={(event) => void saveProducerStatus(event)}><TextAreaField id="admin-producer-status-reason" name="reason" label={statusTarget.profile_status === 'active' ? 'Motivo de suspensión' : statusTarget.profile_status === 'suspended' ? 'Motivo de reactivación' : 'Motivo de activación'} value={statusReason} onChange={setStatusReason} minLength={5} maxLength={1000} rows={3} required disabled={statusBusy} hint="El motivo se guardará en la bitácora del perfil." /></ValidatedForm></ConfirmActionDialog>}</AdminShell>
 }
 
+// Reference value for the 128-dimension face descriptor: lower means more alike.
+const FACE_MATCH_REFERENCE = 0.6
+
+function AdminBiometricReview({ detail, check, onUpdated }: { detail: AdminProducerDetail; check: AdminBiometricCheck; onUpdated: (detail: AdminProducerDetail) => void }) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const statusLabel = { pending: 'Pendiente de revisión', approved: 'Aprobada', rejected: 'Rechazada' }[check.status]
+
+  async function decide(decision: 'approve' | 'reject') {
+    if (reason.trim().length < 10) { setError('Explica la decisión con al menos diez caracteres.'); return }
+    setBusy(true); setError('')
+    try {
+      await decideBiometricCheck(detail.producer.id, check.id, decision, reason.trim())
+      onUpdated({
+        ...detail,
+        biometric_check: { ...check, status: decision === 'approve' ? 'approved' : 'rejected', selfie_url: null, cedula_url: null, review_reason: reason.trim(), reviewed_at: new Date().toISOString() },
+        producer: decision === 'approve' ? { ...detail.producer, verification_level: 'biometric_verified' } : detail.producer,
+      })
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo guardar la decisión.') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <section className="dashboard-list admin-producer-history" aria-labelledby="biometric-review-title">
+      <h2 id="biometric-review-title">Verificación biométrica</h2>
+      <p><strong>{statusLabel}.</strong> Las pruebas se hacen en el navegador del productor: tómalas como orientación y compara tú las fotos.</p>
+      {check.match_distance !== null && <p>Parecido calculado: {check.match_distance.toFixed(3)} ({check.match_distance <= FACE_MATCH_REFERENCE ? 'dentro' : 'fuera'} del valor de referencia {FACE_MATCH_REFERENCE}).</p>}
+      {check.review_reason && <p>Motivo: {check.review_reason}</p>}
+      {check.status === 'pending' && (
+        <>
+          <div className="admin-biometric-photos">
+            {check.selfie_url && <figure><img src={check.selfie_url} alt="Foto en vivo del productor" /><figcaption>Foto en vivo</figcaption></figure>}
+            {check.cedula_url && <figure><img src={check.cedula_url} alt="Cédula del productor" /><figcaption>Cédula</figcaption></figure>}
+          </div>
+          <TextAreaField id="biometric-review-reason" name="reason" label="Motivo de la decisión" value={reason} onChange={setReason} />
+          {error && <p role="alert">{error}</p>}
+          <div className="catalog-admin-actions">
+            <button className="button button--primary" type="button" disabled={busy} onClick={() => void decide('approve')}>Aprobar Verificado Pro</button>
+            <button className="button button--outline" type="button" disabled={busy} onClick={() => void decide('reject')}>Rechazar</button>
+          </div>
+          <p>Al decidir, las fotos se borran y solo queda el resultado.</p>
+        </>
+      )}
+    </section>
+  )
+}
+
 function AdminTrustReview({ detail, onUpdated }: { detail: AdminProducerDetail; onUpdated: (detail: AdminProducerDetail) => void }) {
   const [permissions, setPermissions] = useState<string[]>([])
   const [level, setLevel] = useState<Exclude<ProducerVerificationLevel, 'unverified'>>(detail.producer.verification_level === 'unverified' ? 'contact_confirmed' : detail.producer.verification_level)
@@ -489,26 +539,30 @@ function AdminTrustReview({ detail, onUpdated }: { detail: AdminProducerDetail; 
   const [busy, setBusy] = useState(false)
   useEffect(() => { void getAdminPermissions().then(setPermissions).catch(() => setPermissions([])) }, [])
   const canReview = permissions.includes('producers.verify')
-  const options = detail.producer.verification_level === 'contact_confirmed'
-    ? [{ value: 'identity_reviewed', label: 'Identidad revisada' }]
-    : detail.producer.verification_level === 'identity_reviewed'
-      ? [{ value: 'producer_validated', label: 'Productor validado' }, { value: 'contact_confirmed', label: 'Contacto confirmado' }]
-      : detail.producer.verification_level === 'producer_validated'
-        ? [{ value: 'identity_reviewed', label: 'Identidad revisada' }, { value: 'contact_confirmed', label: 'Contacto confirmado' }]
-        : []
+  const verified = { value: 'identity_reviewed', label: 'Verificado (RUC y documento revisados)' }
+  const superCarnes = { value: 'producer_validated', label: 'Productor Super Carnes' }
+  const removeReview = { value: 'contact_confirmed', label: 'Retirar verificación' }
+  const options = {
+    unverified: [],
+    contact_confirmed: [verified],
+    identity_reviewed: [superCarnes, removeReview],
+    biometric_verified: [superCarnes, verified, removeReview],
+    producer_validated: [verified, removeReview],
+  }[detail.producer.verification_level]
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (reason.trim().length < 5) { setFieldError('Explica la decisión con al menos cinco caracteres.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       const updated = await setAdminProducerTrustLevel(detail.producer.id, level, reason.trim())
-      setMessage('Nivel actualizado y cambio guardado en la auditoría.')
+      setMessage(updated.auto_activated ? 'Nivel actualizado. El perfil se activó automáticamente — sus ofertas aprobadas ya son visibles en el catálogo.' : 'Nivel actualizado y cambio guardado en la auditoría.')
       setReason(''); setFieldError('')
-      onUpdated({ ...detail, producer: { ...detail.producer, verification_level: updated.verification_level }, trust_reviews: [{ from_level: detail.producer.verification_level, to_level: updated.verification_level, reason: reason.trim(), actor: 'Tú', created_at: new Date().toISOString() }, ...detail.trust_reviews] })
+      const updatedProducer = { ...detail.producer, verification_level: updated.verification_level, ...(updated.profile_status ? { profile_status: updated.profile_status, suspension_reason: null } : {}) }
+      onUpdated({ ...detail, producer: updatedProducer, trust_reviews: [{ from_level: detail.producer.verification_level, to_level: updated.verification_level, reason: reason.trim(), actor: 'Tú', created_at: new Date().toISOString() }, ...detail.trust_reviews] })
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo actualizar el nivel.') }
     finally { setBusy(false) }
   }
-  return <section className="dashboard-list admin-producer-history" aria-labelledby="trust-review-title"><h2 id="trust-review-title">Nivel de revisión</h2><p>Los niveles describen las comprobaciones realizadas; no garantizan calidad, pago ni entrega.</p><VerificationBadge level={detail.producer.verification_level} /><p>El nivel público efectivo baja a “Contacto sin confirmar” si el teléfono deja de estar verificado.</p>{canReview && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><SelectField id="trust-review-level" name="level" label="Nuevo nivel" value={level} disabled={busy || options.length === 0} onChange={(event) => setLevel(event.currentTarget.value as typeof level)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SelectField><TextAreaField id="trust-review-reason" name="reason" label="Motivo de revisión" value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="No adjuntes documentos ni datos sensibles; registra solo la decisión y su fundamento." /><button className="button button--primary" disabled={busy || options.length === 0} aria-busy={busy}>{busy ? 'Guardando…' : 'Guardar nivel'}</button></ValidatedForm>}{!canReview && <p>Tu cuenta puede consultar el historial, pero no cambiar el nivel de revisión.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}<h3>Historial de cambios</h3>{(detail.trust_reviews ?? []).length ? detail.trust_reviews.map((review, index) => <article className="dashboard-row" key={`${review.created_at}-${index}`}><div><strong>{review.from_level.replaceAll('_', ' ')} → {review.to_level.replaceAll('_', ' ')}</strong><p>{review.reason}</p><small>{review.actor ?? 'Sistema'} · {new Date(review.created_at).toLocaleString('es-PA')}</small></div></article>) : <p>No hay revisiones de identidad registradas.</p>}</section>
+  return <section className="dashboard-list admin-producer-history" aria-labelledby="trust-review-title"><h2 id="trust-review-title">Nivel de revisión</h2><p>Los niveles describen las comprobaciones realizadas; no garantizan calidad, pago ni entrega.</p><VerificationBadge level={detail.producer.verification_level} internal /><p>El nivel público efectivo baja a “Contacto sin confirmar” si el teléfono deja de estar verificado.</p>{canReview && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><SelectField id="trust-review-level" name="level" label="Nuevo nivel" value={level} disabled={busy || options.length === 0} onChange={(event) => setLevel(event.currentTarget.value as typeof level)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SelectField><TextAreaField id="trust-review-reason" name="reason" label="Motivo de revisión" value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="No adjuntes documentos ni datos sensibles; registra solo la decisión y su fundamento." /><button className="button button--primary" disabled={busy || options.length === 0} aria-busy={busy}>{busy ? 'Guardando…' : 'Guardar nivel'}</button></ValidatedForm>}{!canReview && <p>Tu cuenta puede consultar el historial, pero no cambiar el nivel de revisión.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}<h3>Historial de cambios</h3>{(detail.trust_reviews ?? []).length ? detail.trust_reviews.map((review, index) => <article className="dashboard-row" key={`${review.created_at}-${index}`}><div><strong>{review.from_level.replaceAll('_', ' ')} → {review.to_level.replaceAll('_', ' ')}</strong><p>{review.reason}</p><small>{review.actor ?? 'Sistema'} · {new Date(review.created_at).toLocaleString('es-PA')}</small></div></article>) : <p>No hay revisiones de identidad registradas.</p>}</section>
 
 }
 
@@ -537,7 +591,7 @@ function AdminProducerStatusControl({ detail, onUpdated }: { detail: AdminProduc
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo actualizar el estado del productor.') }
     finally { setBusy(false) }
   }
-  return <section className="dashboard-list admin-producer-history" aria-labelledby="producer-status-title"><h2 id="producer-status-title">Estado del perfil</h2><p>Suspender oculta las publicaciones disponibles. Reactivar devuelve las ofertas publicadas a revisión humana; activar un perfil nuevo no publica sus ofertas.</p>{detail.producer.suspension_reason && <p><strong>Motivo registrado:</strong> {detail.producer.suspension_reason}</p>}{canChange && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><TextAreaField id="producer-status-reason" name="reason" label={suspended ? 'Motivo de reactivación' : pending ? 'Motivo de activación' : 'Motivo de suspensión'} value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="El motivo se guarda en la bitácora del perfil." /><button className={suspended || pending ? 'button button--primary' : 'button button--outline'} disabled={busy} aria-busy={busy}>{busy ? suspended ? 'Reactivando…' : pending ? 'Activando…' : 'Suspendiendo…' : suspended ? 'Reactivar perfil' : pending ? 'Activar perfil' : 'Suspender perfil'}</button></ValidatedForm>}{!canChange && <p>Tu cuenta puede consultar el estado, pero no cambiarlo.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}</section>
+  return <section className="dashboard-list admin-producer-history" aria-labelledby="producer-status-title"><h2 id="producer-status-title">Estado del perfil</h2><p>Suspender oculta las publicaciones disponibles. Reactivar devuelve las ofertas publicadas a revisión humana. Activar un perfil pendiente hace visibles sus ofertas ya aprobadas.</p>{detail.producer.suspension_reason && <p><strong>Motivo registrado:</strong> {detail.producer.suspension_reason}</p>}{canChange && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><TextAreaField id="producer-status-reason" name="reason" label={suspended ? 'Motivo de reactivación' : pending ? 'Motivo de activación' : 'Motivo de suspensión'} value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="El motivo se guarda en la bitácora del perfil." /><button className={suspended || pending ? 'button button--primary' : 'button button--outline'} disabled={busy} aria-busy={busy}>{busy ? suspended ? 'Reactivando…' : pending ? 'Activando…' : 'Suspendiendo…' : suspended ? 'Reactivar perfil' : pending ? 'Activar perfil' : 'Suspender perfil'}</button></ValidatedForm>}{!canChange && <p>Tu cuenta puede consultar el estado, pero no cambiarlo.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}</section>
 }
 
 function AdminProducerDetailPage() {
@@ -619,35 +673,61 @@ function AdminProducerDetailPage() {
               <div>
                 <h1>{detail.producer.public_name}</h1>
                 <p className="producer-detail-header__meta">
-                  {detail.producer.activity ?? 'Actividad no indicada'} · {detail.producer.location?.name ?? 'Ubicación no indicada'}
+                  {detail.producer.activity ?? 'Sin actividad'} · {[detail.producer.location?.name, detail.producer.location?.parent?.name].filter(Boolean).join(', ') || 'Sin ubicación'}
                 </p>
-                <p className="producer-detail-header__email">{detail.account.email}</p>
                 <div className="producer-detail-header__pills">
                   <span className={`status-pill status-pill--${detail.producer.profile_status}`}>{detail.producer.profile_status}</span>
-                  <span className={`status-pill ${detail.producer.contact_level === 'unverified' ? 'status-pill--pending' : 'status-pill--published'}`}>
-                    {detail.producer.contact_level === 'unverified' ? 'Contacto sin confirmar' : 'Contacto confirmado'}
-                  </span>
+                  {detail.producer.contact_level === 'unverified'
+                    ? <span className="status-pill status-pill--pending">Sin Verified PRO</span>
+                    : <VerificationBadge level={detail.producer.verification_level} internal />}
                   <span className="status-pill status-pill--pending">{detail.producer.registration_method === 'assisted' ? 'Registro asistido' : 'Registro directo'}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── Contact alert banner (only when unverified) ── */}
-          {detail.producer.contact_level === 'unverified' && (
+          {/* ── Registration data card ── */}
+          <section className="producer-detail-regcard">
+            <h2 className="producer-detail-regcard__title">Datos de registro</h2>
+            <div className="producer-detail-regcard__grid">
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Nombre completo</span><span className="producer-detail-regfield__value">{detail.account.name}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Nombre público</span><span className="producer-detail-regfield__value">{detail.producer.public_name}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Correo electrónico</span><span className="producer-detail-regfield__value">{detail.account.email}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Teléfono</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.phone_private ?? '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Cédula</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.cedula ?? '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">RUC</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.ruc ? `${detail.producer.ruc} DV ${detail.producer.ruc_dv ?? '—'}` : '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Actividad</span><span className="producer-detail-regfield__value">{detail.producer.activity ?? '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Tipo de negocio</span><span className="producer-detail-regfield__value">{detail.producer.vendor_type ?? 'productor'}</span></div>
+              {(detail.producer.payment_methods ?? []).length > 0 && <div className="producer-detail-regfield" style={{ gridColumn: '1/-1' }}><span className="producer-detail-regfield__label">Métodos de pago</span><span className="producer-detail-regfield__value">{(detail.producer.payment_methods ?? []).map((m: string) => m === 'efectivo' ? 'Efectivo' : m === 'yappy' ? 'Yappy' : m === 'transferencia' ? 'Transferencia bancaria' : m === 'tarjeta' ? 'Tarjeta de crédito/débito' : m === 'cheque' ? 'Cheque' : m === 'credito' ? 'Crédito / Cuenta abierta' : m).join(', ')}</span></div>}
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Ubicación</span><span className="producer-detail-regfield__value">{[detail.producer.location?.name, detail.producer.location?.parent?.name].filter(Boolean).join(', ') || '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Registrado</span><span className="producer-detail-regfield__value">{new Date(detail.account.created_at).toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+              {detail.producer.registered_by && <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Registrado por</span><span className="producer-detail-regfield__value">{detail.producer.registered_by}</span></div>}
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Foto de cédula</span><span className="producer-detail-regfield__value">{detail.producer.has_cedula_photo ? (detail.producer.cedula_photo_url ? <a href={detail.producer.cedula_photo_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subida') : '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Pacto social</span><span className="producer-detail-regfield__value">{detail.producer.has_pacto_social ? (detail.producer.pacto_social_url ? <a href={detail.producer.pacto_social_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subido') : '—'}</span></div>
+              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Aviso de operación</span><span className="producer-detail-regfield__value">{detail.producer.has_aviso_operacion ? (detail.producer.aviso_operacion_url ? <a href={detail.producer.aviso_operacion_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subido') : '—'}</span></div>
+            </div>
+            {detail.producer.description && (
+              <div className="producer-detail-regcard__description">
+                <span className="producer-detail-regfield__label">Descripción del negocio</span>
+                <p>{detail.producer.description}</p>
+              </div>
+            )}
+          </section>
+
+          {/* ── Verified PRO action ── */}
+          {detail.producer.contact_level === 'unverified' ? (
             <div className="producer-detail-alert">
-              <strong>Contacto sin confirmar</strong>
-              <span>Llama o escríbele al productor para verificar que tiene acceso a su teléfono, luego confirma aquí.</span>
-              <button className="button button--primary button--small" type="button" disabled={contactBusy} aria-busy={contactBusy} onClick={() => void handleConfirmContact()}>
-                {contactBusy ? 'Confirmando…' : 'Confirmar contacto'}
+              <div className="producer-detail-alert__body">
+                <strong>Pendiente: Verified PRO</strong>
+                <span>Llama al productor al número registrado, confirma su identidad y otorga el distintivo.</span>
+              </div>
+              <button className="button button--primary" type="button" disabled={contactBusy} aria-busy={contactBusy} onClick={() => void handleConfirmContact()}>
+                {contactBusy ? 'Otorgando…' : 'Otorgar Verified PRO'}
               </button>
               {contactError && <p role="alert">{contactError}</p>}
             </div>
-          )}
-          {contactMessage && (
-            <div className="producer-detail-success">
-              {contactMessage}
-            </div>
+          ) : (
+            contactMessage ? <div className="producer-detail-success">{contactMessage}</div> : null
           )}
 
           {/* ── Two-column body ── */}
@@ -657,6 +737,7 @@ function AdminProducerDetailPage() {
             <div className="producer-detail-actions">
               <AdminProducerStatusControl detail={detail} onUpdated={setDetail} />
               <AdminTrustReview detail={detail} onUpdated={setDetail} />
+              {detail.biometric_check && <AdminBiometricReview detail={detail} check={detail.biometric_check} onUpdated={setDetail} />}
 
               {/* Consents */}
               <section className="dashboard-list admin-producer-history">
@@ -676,6 +757,11 @@ function AdminProducerDetailPage() {
               {/* Publications */}
               <section className="dashboard-list admin-producer-history">
                 <h2>Publicaciones ({detail.products.length})</h2>
+                {detail.producer.profile_status !== 'active' && detail.products.some((p) => p.status === 'published') && (
+                  <p role="alert" style={{ background: 'var(--color-warning-bg, #fff8e1)', border: '1px solid var(--color-warning, #f59e0b)', borderRadius: '6px', padding: '0.6rem 0.8rem', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+                    Hay ofertas aprobadas pero el perfil está <strong>{detail.producer.profile_status}</strong>. Activa el perfil para que sean visibles en el catálogo público.
+                  </p>
+                )}
                 {moderateSuccess && <p role="status" className="form-help" style={{ marginBottom: '0.5rem' }}>{moderateSuccess}</p>}
                 {moderateError && <p role="alert" style={{ marginBottom: '0.5rem' }}>{moderateError}</p>}
                 {detail.products.length
@@ -695,6 +781,7 @@ function AdminProducerDetailPage() {
                       {moderateTarget?.id === product.id && (
                         <ValidatedForm className="moderation-decision-form" style={{ width: '100%' }} noValidate onSubmit={(event) => void handleModerateProduct(event)}>
                           <TextAreaField id={`detail-mod-reason-${product.id}`} name="reason" label={moderateTarget.decision === 'approve' ? 'Nota de revisión' : 'Motivo de la decisión'} value={moderateReason} onChange={(value) => { setModerateReason(value); setModerateReasonError('') }} error={moderateReasonError} minLength={5} maxLength={1000} rows={3} required hint="El motivo quedará en el historial del productor." />
+                          {moderateError && <p role="alert" style={{ color: 'var(--color-danger, #c0392b)', margin: '0.5rem 0' }}>{moderateError}</p>}
                           <div className="moderation-decision-form__actions">
                             <button className="button button--primary" type="submit" disabled={moderateBusy} aria-busy={moderateBusy}>Guardar decisión</button>
                             <button className="button button--outline" type="button" onClick={() => setModerateTarget(null)}>Cancelar</button>
@@ -704,21 +791,6 @@ function AdminProducerDetailPage() {
                     </article>
                   ))
                   : <p>Sin publicaciones.</p>}
-              </section>
-
-              {/* Verification attempts */}
-              <section className="dashboard-list admin-producer-history">
-                <h2>Intentos de verificación</h2>
-                {detail.verifications.length
-                  ? detail.verifications.map((v) => (
-                    <article className="dashboard-row" key={v.id}>
-                      <div>
-                        <strong>{v.channel.toLocaleUpperCase('es-PA')} · <span className={`status-pill status-pill--${v.status === 'verified' ? 'published' : 'pending'}`}>{v.status}</span></strong>
-                        <small>{v.verified_at ? `Confirmada ${new Date(v.verified_at).toLocaleString('es-PA')}` : `${v.attempts_count} intentos`}</small>
-                      </div>
-                    </article>
-                  ))
-                  : <p>Sin intentos registrados.</p>}
               </section>
 
               {/* Publication status history */}
@@ -757,6 +829,101 @@ function AdminProducerDetailPage() {
           </div>
         </>}
   </main></AdminShell>
+}
+
+const STORY_QUEUE_TABS: Array<{ status: 'pending' | 'published' | 'rejected'; label: string }> = [
+  { status: 'pending', label: 'Pendientes' },
+  { status: 'published', label: 'Publicadas' },
+  { status: 'rejected', label: 'Devueltas' },
+]
+
+function AdminStoriesPage() {
+  const [status, setStatus] = useState<'pending' | 'published' | 'rejected'>('pending')
+  const [stories, setStories] = useState<OwnedProducerStory[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [loadError, setLoadError] = useState('')
+  const [notes, setNotes] = useState<Record<number, string>>({})
+  const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({})
+  const [busy, setBusy] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let current = true
+    setStories(null)
+    setLoadError('')
+    void getAdminStories(status).then((result) => { if (current) { setStories(result.data); setTotal(result.total) } })
+      .catch((reason: unknown) => { if (current) setLoadError(reason instanceof Error ? reason.message : 'No pudimos cargar las historias.') })
+    return () => { current = false }
+  }, [status])
+
+  async function decide(story: OwnedProducerStory, decision: 'approve' | 'reject' | 'unpublish') {
+    const note = notes[story.id]?.trim() ?? ''
+    if (decision !== 'approve' && note.length < 5) {
+      setFieldErrors((current) => ({ ...current, [story.id]: 'Explica al productor qué debe cambiar (mínimo cinco caracteres).' }))
+      document.getElementById(`story-note-${story.id}`)?.focus()
+      return
+    }
+    setFieldErrors((current) => ({ ...current, [story.id]: '' }))
+    setBusy(story.id)
+    setError('')
+    try {
+      await decideStory(story.id, decision, note)
+      setStories((current) => current?.filter((item) => item.id !== story.id) ?? [])
+      setTotal((value) => Math.max(0, value - 1))
+      setMessage(decision === 'approve' ? `"${story.title}" ya es pública en /historias.` : decision === 'reject' ? `"${story.title}" fue devuelta al productor con tu comentario.` : `"${story.title}" se retiró de la página pública.`)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'No pudimos guardar la decisión.') }
+    finally { setBusy(null) }
+  }
+
+  return (
+    <AdminShell>
+      <main className="admin-content admin-stories">
+        <p className="eyebrow eyebrow--quiet">ADMINISTRACIÓN · MODERACIÓN</p>
+        <h1>Historias de productores</h1>
+        <p>Revisa cada historia antes de que sea pública: que sea respetuosa, que no incluya datos personales sensibles y que el video o la foto correspondan al productor.</p>
+        <div className="admin-stories__tabs" role="tablist" aria-label="Estado de las historias">
+          {STORY_QUEUE_TABS.map((tab) => <button key={tab.status} type="button" role="tab" aria-selected={status === tab.status} onClick={() => { setMessage(''); setStatus(tab.status) }}>{tab.label}{status === tab.status && stories ? ` (${total})` : ''}</button>)}
+        </div>
+        {message && <p className="admin-stories__message" role="status">{message}</p>}
+        {error && <p role="alert">{error}</p>}
+        {loadError ? <p role="alert">{loadError}</p> : stories === null ? <p role="status">Cargando historias…</p> : stories.length === 0 ? (
+          <div className="empty-products"><strong>{status === 'pending' ? 'No hay historias pendientes' : 'No hay historias en esta lista'}</strong><span>{status === 'pending' ? 'Cuando un productor comparta su historia aparecerá aquí para revisión.' : 'Cambia de pestaña para ver otras historias.'}</span></div>
+        ) : (
+          <ul className="admin-stories__list">
+            {stories.map((story) => (
+              <li key={story.id} className="admin-stories__item">
+                <div className="admin-stories__media">
+                  {story.thumbnail_url ? <img src={story.thumbnail_url} alt={`Foto de la historia ${story.title}`} /> : <span>Sin foto</span>}
+                  {story.video && <a className="text-link" href={story.video.provider === 'youtube' ? `https://www.youtube.com/watch?v=${story.video.id}` : `https://vimeo.com/${story.video.id}`} target="_blank" rel="noreferrer">Ver video en {story.video.provider === 'youtube' ? 'YouTube' : 'Vimeo'} <ArrowUpRight size={14} aria-hidden="true" /></a>}
+                </div>
+                <div className="admin-stories__copy">
+                  <p className="admin-stories__producer">{story.producer ? <Link to={`/productores/${story.producer.slug}`} target="_blank" rel="noreferrer">{story.producer.public_name}</Link> : 'Productor'}{story.producer?.profile_status && story.producer.profile_status !== 'active' ? ` · perfil ${story.producer.profile_status}` : ''}{story.submitted_at ? ` · enviada el ${new Date(story.submitted_at).toLocaleString('es-PA')}` : ''}</p>
+                  <h2>{story.title}</h2>
+                  {story.quote && <p className="admin-stories__quote">“{story.quote}”</p>}
+                  <p className="admin-stories__body">{story.body}</p>
+                  {story.review_note && status !== 'pending' && <p className="admin-stories__note">Nota de revisión: {story.review_note}</p>}
+                  <label className="admin-stories__field" htmlFor={`story-note-${story.id}`}>Comentario para el productor {status === 'pending' ? '(obligatorio para devolver)' : '(obligatorio para retirar)'}</label>
+                  <textarea id={`story-note-${story.id}`} rows={2} value={notes[story.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [story.id]: event.target.value }))} aria-invalid={Boolean(fieldErrors[story.id])} aria-describedby={fieldErrors[story.id] ? `story-note-error-${story.id}` : undefined} />
+                  {fieldErrors[story.id] && <p id={`story-note-error-${story.id}`} className="form-field__error" role="alert">{fieldErrors[story.id]}</p>}
+                  <div className="admin-stories__actions">
+                    {status === 'pending' && <>
+                      <button className="button button--primary" type="button" disabled={busy === story.id} onClick={() => void decide(story, 'approve')}>Aprobar y publicar</button>
+                      <button className="button button--outline" type="button" disabled={busy === story.id} onClick={() => void decide(story, 'reject')}>Devolver con comentario</button>
+                    </>}
+                    {status === 'published' && <>
+                      <Link className="button button--outline" to={`/historias/${story.id}`} target="_blank" rel="noreferrer">Ver publicada <ArrowUpRight size={15} aria-hidden="true" /></Link>
+                      <button className="button button--outline" type="button" disabled={busy === story.id} onClick={() => void decide(story, 'unpublish')}>Retirar de la página</button>
+                    </>}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </main>
+    </AdminShell>
+  )
 }
 
 function AdminProducerAppealsPage() {
@@ -1031,7 +1198,7 @@ function AdminCatalogsPage() {
     finally { setCatalogBusy(null) }
   }
 
-  const rootCategories = categories?.filter((category) => category.active && category.parent_id === null) ?? []
+  const parentCategoryOptions = categoryTreeOptions(categories ?? []).filter((category) => category.active && categoryPath(categories ?? [], category.id).length < 3)
   const expectedLocationParentLevel = locationLevel === 'district' ? 'province' : locationLevel === 'corregimiento' ? 'district' : null
   const validLocationParents = locations?.filter((place) => place.active && place.level === expectedLocationParentLevel) ?? []
 
@@ -1039,7 +1206,7 @@ function AdminCatalogsPage() {
     const parent = categories.find((item) => item.id === category.parent_id)
     const canActivate = !parent || parent.active
     if (editingCategoryId === category.id) return <article className="catalog-admin-row catalog-admin-row--editing" key={category.id}><ValidatedForm className="admin-category-edit-form auth-form" onSubmit={(event) => void editCategory(event)}><Field id={`admin-category-edit-${category.id}`} name="name" label="Nombre de categoría" type="text" value={categoryEditName} onChange={(event) => { setCategoryEditName(event.currentTarget.value); setCategoryEditError('') }} minLength={2} maxLength={100} required autoFocus disabled={catalogBusy !== null} error={categoryEditError} />{categoryEditError && <p role="alert">{categoryEditError}</p>}<div className="catalog-admin-actions"><button className="button button--primary button--small" type="submit" disabled={catalogBusy !== null} aria-busy={catalogBusy === 'category'}>{catalogBusy === 'category' ? 'Guardando…' : 'Guardar nombre'}</button><button className="button button--outline button--small" type="button" disabled={catalogBusy !== null} onClick={cancelEditCategory}>Cancelar</button></div></ValidatedForm></article>
-    return <article className="catalog-admin-row" key={category.id}><span><strong>{parent ? `${parent.name} › ${category.name}` : category.name}</strong><small> · {category.products_count} ofertas · {category.active ? 'activa' : 'inactiva'}</small></span><span className="catalog-admin-actions"><button ref={categoryEditTriggerRef} className="text-link" type="button" disabled={catalogBusy !== null} onClick={(event) => { categoryEditTriggerRef.current = event.currentTarget; startEditCategory(category) }}>Editar</button>{category.active ? <button className="text-link" type="button" disabled={catalogBusy !== null} onClick={() => void deactivate('categories', category.id)}>Desactivar</button> : <button className="text-link" type="button" disabled={catalogBusy !== null || !canActivate} title={!canActivate ? 'Activa primero la categoría principal.' : undefined} onClick={() => void activateCategory(category)}>Reactivar</button>}</span></article>  }) : <p>No hay categorías todavía. Agrega una categoría principal para habilitar el catálogo.</p>}<ValidatedForm className="auth-form" noValidate onSubmit={(event) => void addCategory(event)}><h3>Agregar categoría</h3><Field id="admin-category-name" name="name" label="Nombre" type="text" minLength={2} maxLength={100} required error={categoryNameError} onChange={() => setCategoryNameError('')} /><SelectField id="admin-category-parent" name="parent_id" label="Categoría principal" defaultValue="" hint="Sin padre, crearás una categoría principal. Si eliges una, crearás una subcategoría."><option value="">Ninguna · categoría principal</option>{rootCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</SelectField><button className="button button--primary" type="submit" disabled={catalogBusy !== null} aria-busy={catalogBusy === 'category'}>{catalogBusy === 'category' ? 'Guardando…' : 'Agregar categoría'}</button></ValidatedForm></section><section className="dashboard-list"><h2>Ubicaciones</h2>{locations.length ? locations.map((place) => {
+    return <article className="catalog-admin-row" key={category.id}><span><strong>{categoryPath(categories, category.id).map((item) => item.name).join(' › ')}</strong><small> · {category.products_count} ofertas · {category.active ? 'activa' : 'inactiva'}</small></span><span className="catalog-admin-actions"><button ref={categoryEditTriggerRef} className="text-link" type="button" disabled={catalogBusy !== null} onClick={(event) => { categoryEditTriggerRef.current = event.currentTarget; startEditCategory(category) }}>Editar</button>{category.active ? <button className="text-link" type="button" disabled={catalogBusy !== null} onClick={() => void deactivate('categories', category.id)}>Desactivar</button> : <button className="text-link" type="button" disabled={catalogBusy !== null || !canActivate} title={!canActivate ? 'Activa primero la categoría principal.' : undefined} onClick={() => void activateCategory(category)}>Reactivar</button>}</span></article>  }) : <p>No hay categorías todavía. Agrega una categoría principal para habilitar el catálogo.</p>}<ValidatedForm className="auth-form" noValidate onSubmit={(event) => void addCategory(event)}><h3>Agregar categoría</h3><Field id="admin-category-name" name="name" label="Nombre" type="text" minLength={2} maxLength={100} required error={categoryNameError} onChange={() => setCategoryNameError('')} /><SelectField id="admin-category-parent" name="parent_id" label="Categoría principal" defaultValue="" hint="Sin padre, crearás una categoría principal. Si eliges una, crearás una subcategoría. El árbol admite hasta tres niveles."><option value="">Ninguna · categoría principal</option>{parentCategoryOptions.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}</SelectField><button className="button button--primary" type="submit" disabled={catalogBusy !== null} aria-busy={catalogBusy === 'category'}>{catalogBusy === 'category' ? 'Guardando…' : 'Agregar categoría'}</button></ValidatedForm></section><section className="dashboard-list"><h2>Ubicaciones</h2>{locations.length ? locations.map((place) => {
     const parent = locations.find((item) => item.id === place.parent_id)
     const canActivate = !parent || parent.active
     return <article className="catalog-admin-row" key={place.id}><span><strong>{place.name}</strong><small>{parent ? ` · ${parent.name}` : ''} · {place.level} · {place.active ? 'activa' : 'inactiva'}</small></span><span className="catalog-admin-actions"><AdminLocationEditor place={place} locations={locations} busy={catalogBusy !== null} onSave={(name, parentId) => editLocation(place, name, parentId)} />{place.active ? <button className="text-link" type="button" disabled={catalogBusy !== null} onClick={() => void deactivate('locations', place.id)}>Desactivar</button> : <button className="text-link" type="button" disabled={catalogBusy !== null || !canActivate} title={!canActivate ? 'Activa primero la ubicación padre.' : undefined} onClick={() => void activateLocation(place)}>Reactivar</button>}</span></article>
@@ -1340,8 +1507,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="admin-shell">
       <aside className="admin-sidebar">
         <div className="admin-sidebar__brand">
-          <Sprout size={19} />
-          <span>El Empujoncito</span>
+          <span className="brand"><BrandLogo light tagline={false} /></span>
+          <span className="admin-sidebar__badge">Admin</span>
         </div>
         <nav className="admin-sidebar__nav" aria-label="Panel de administración">
           <NavLink to="/admin" end className={navClass}><LayoutDashboard size={16} /><span>Dashboard</span></NavLink>
@@ -1349,6 +1516,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <p className="admin-nav-label">MODERACIÓN</p>
           <NavLink to="/admin/publicaciones" className={navClass}><ShieldCheck size={16} /><span>Cola de publicaciones</span></NavLink>
           <NavLink to="/admin/apelaciones" className={navClass}><MessageSquare size={16} /><span>Apelaciones</span></NavLink>
+          <NavLink to="/admin/historias" className={navClass}><BookOpen size={16} /><span>Historias</span></NavLink>
 
           <p className="admin-nav-label">TRUST & SAFETY</p>
           <NavLink to="/admin/denuncias" className={navClass}><Flag size={16} /><span>Casos y denuncias</span></NavLink>
@@ -1362,6 +1530,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <NavLink to="/admin/catalogos" className={navClass}><Tag size={16} /><span>Categorías</span></NavLink>
           <NavLink to="/admin/mensajes" className={navClass}><MessageSquare size={16} /><span>Mensajes WhatsApp</span></NavLink>
           <NavLink to="/admin/usuarios" className={navClass}><Users size={16} /><span>Usuarios y permisos</span></NavLink>
+          <NavLink to="/admin/correo" className={navClass}><MessageSquare size={16} /><span>Correo SMTP</span></NavLink>
 
           <p className="admin-nav-label">DATOS</p>
           <NavLink to="/admin/reportes" className={navClass}><BarChart2 size={16} /><span>Métricas</span></NavLink>
@@ -1381,6 +1550,108 @@ export function AdminShell({ children }: { children: ReactNode }) {
   )
 }
 
+function AdminEmailSettingsPage() {
+  const [settings, setSettings] = useState<SmtpSettings | null>(null)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+  const [testEmail, setTestEmail] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
+  const [passwordChanged, setPasswordChanged] = useState(false)
+
+  useEffect(() => {
+    void getAdminSmtpSettings()
+      .then((data) => { setSettings(data); setTestEmail(data.username || '') })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No se pudo cargar la configuración.'))
+  }, [])
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!settings) return
+    setSaving(true); setSaveMsg(''); setError('')
+    try {
+      const payload: Partial<SmtpSettings> = { ...settings }
+      if (!passwordChanged) delete payload.password
+      await saveAdminSmtpSettings(payload)
+      setSaveMsg('Configuración guardada correctamente.')
+      setPasswordChanged(false)
+      const fresh = await getAdminSmtpSettings()
+      setSettings(fresh)
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'No se pudo guardar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setTesting(true); setTestResult(null)
+    try {
+      const result = await testAdminSmtpSettings(testEmail)
+      setTestResult(result)
+    } catch (reason: unknown) {
+      setTestResult({ ok: false, error: reason instanceof Error ? reason.message : 'Error desconocido' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <AdminShell>
+      <main className="admin-content">
+        <p className="eyebrow eyebrow--quiet">CONFIGURACIÓN · CORREO</p>
+        <h1>Ajustes de correo SMTP</h1>
+        <p>Configura el servidor de salida para las notificaciones automáticas: bienvenida al registrarse, perfil aprobado, publicación aprobada y similares.</p>
+        {error && <div className="empty-products" role="alert"><strong>{error}</strong></div>}
+        {!settings && !error && <p role="status">Cargando configuración…</p>}
+        {settings && (
+          <ValidatedForm className="auth-form" style={{ maxWidth: '520px' }} onSubmit={(e) => void handleSave(e)}>
+            <Field id="smtp-host" name="host" label="Servidor SMTP" value={settings.host} onChange={(e) => setSettings({ ...settings, host: e.currentTarget.value })} required />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <Field id="smtp-port" name="port" label="Puerto" type="number" value={String(settings.port)} onChange={(e) => setSettings({ ...settings, port: Number(e.currentTarget.value) })} required />
+              <SelectField id="smtp-encryption" name="encryption" label="Cifrado" value={settings.encryption} onChange={(e) => setSettings({ ...settings, encryption: e.currentTarget.value as SmtpSettings['encryption'] })}>
+                <option value="ssl">SSL (465)</option>
+                <option value="tls">TLS / STARTTLS (587)</option>
+                <option value="none">Sin cifrado</option>
+              </SelectField>
+            </div>
+            <Field id="smtp-username" name="username" label="Usuario (correo de envío)" type="email" value={settings.username} onChange={(e) => setSettings({ ...settings, username: e.currentTarget.value })} required />
+            <Field id="smtp-password" name="password" label={settings.password === '••••••••' && !passwordChanged ? 'Contraseña (guardada — escribe para cambiar)' : 'Contraseña'} type="password" value={passwordChanged ? settings.password : (settings.password === '••••••••' ? '' : settings.password)} onChange={(e) => { setPasswordChanged(true); setSettings({ ...settings, password: e.currentTarget.value }) }} autoComplete="new-password" />
+            <Field id="smtp-from-address" name="from_address" label="Dirección remitente" type="email" value={settings.from_address} onChange={(e) => setSettings({ ...settings, from_address: e.currentTarget.value })} required />
+            <Field id="smtp-from-name" name="from_name" label="Nombre remitente" value={settings.from_name} onChange={(e) => setSettings({ ...settings, from_name: e.currentTarget.value })} required />
+            {saveMsg && <p role="status" style={{ color: 'var(--color-success, green)' }}>{saveMsg}</p>}
+            <button className="button button--primary" type="submit" disabled={saving} aria-busy={saving}>{saving ? 'Guardando…' : 'Guardar configuración'}</button>
+          </ValidatedForm>
+        )}
+
+        <h2 style={{ marginTop: '2.5rem' }}>Probar configuración</h2>
+        <p>Envía un correo de prueba para verificar que la configuración funciona.</p>
+        <ValidatedForm className="auth-form" style={{ maxWidth: '520px' }} onSubmit={(e) => void handleTest(e)}>
+          <Field id="smtp-test-to" name="to" label="Enviar a" type="email" value={testEmail} onChange={(e) => setTestEmail(e.currentTarget.value)} required />
+          {testResult && (
+            testResult.ok
+              ? <p role="status" style={{ color: 'var(--color-success, green)' }}>✓ Correo enviado correctamente.</p>
+              : <p role="alert" style={{ color: 'var(--color-danger, red)' }}>✗ {testResult.error ?? 'Error al enviar.'}</p>
+          )}
+          <button className="button button--outline" type="submit" disabled={testing || !settings} aria-busy={testing}>{testing ? 'Enviando…' : 'Enviar correo de prueba'}</button>
+        </ValidatedForm>
+
+        <h2 style={{ marginTop: '2.5rem' }}>Correos que se envían automáticamente</h2>
+        <ul style={{ lineHeight: '2' }}>
+          <li><strong>Cuenta creada</strong> — al registrarse un productor nuevo</li>
+          <li><strong>Perfil aprobado</strong> — cuando el admin activa el perfil</li>
+          <li><strong>Perfil suspendido</strong> — cuando el admin suspende el perfil</li>
+          <li><strong>Publicación aprobada</strong> — cuando el admin publica una oferta</li>
+          <li><strong>Publicación necesita cambios</strong> — cuando el admin pide cambios</li>
+          <li><strong>Publicación rechazada</strong> — cuando el admin rechaza una oferta</li>
+        </ul>
+      </main>
+    </AdminShell>
+  )
+}
+
 function AdminRoutes() {
   return (
     <Routes>
@@ -1395,12 +1666,14 @@ function AdminRoutes() {
       <Route path="/admin/registro-asistido" element={<AdminProducersPage assistedOnly />} />
       <Route path="/admin/productores/:id" element={<AdminProducerDetailPage />} />
       <Route path="/admin/apelaciones" element={<AdminProducerAppealsPage />} />
+      <Route path="/admin/historias" element={<AdminStoriesPage />} />
       <Route path="/admin/catalogos" element={<AdminCatalogsPage />} />
       <Route path="/admin/mensajes" element={<AdminMessageTemplatesPage />} />
       <Route path="/admin/reportes" element={<AdminMetricsPage />} />
       <Route path="/admin/metricas" element={<AdminMetricsPage />} />
       <Route path="/admin/auditoria" element={<AuditPage />} />
       <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+      <Route path="/admin/correo" element={<AdminEmailSettingsPage />} />
       <Route path="/admin/mfa" element={<AdminMfaSetupPage />} />
       <Route path="/admin/seguridad/recuperacion-mfa" element={<AdminMfaRecoveryPage />} />
       <Route path="*" element={<InfoPage title="No encontramos esta página" description="Revisa la dirección o vuelve al catálogo para explorar las ofertas." />} />

@@ -12,11 +12,11 @@ export type Testimonial = {
  * En desarrollo local se muestra un ejemplo marcado como tal para revisar el diseño.
  *
  * Ejemplo:
- *   { quote: 'Gracias a El Empujoncito he podido llegar a más personas.', name: 'Nombre Apellido', role: 'Productora de plantas, Coclé' },
+ *   { quote: 'Gracias a Mercapro he podido llegar a más personas.', name: 'Nombre Apellido', role: 'Productora de plantas, Coclé' },
  */
 export const TESTIMONIALS: Testimonial[] = []
 
 export const TESTIMONIAL_DESIGN_SAMPLE: Testimonial[] = [
-  { quote: 'Gracias a El Empujoncito he podido llegar a más personas y seguir creciendo.', name: 'Ejemplo de testimonio', role: 'Reemplazar por un testimonio real autorizado' },
+  { quote: 'Gracias a Mercapro he podido llegar a más personas y seguir creciendo.', name: 'Ejemplo de testimonio', role: 'Reemplazar por un testimonio real autorizado' },
   { quote: 'Ahora mis clientes me escriben directo por WhatsApp para pedir mis productos.', name: 'Ejemplo de testimonio', role: 'Reemplazar por un testimonio real autorizado' },
 ]

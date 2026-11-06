@@ -2,35 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { PublicLocation } from '../api/client'
+import { loadGeo, normalizeName, type GeoCollection, type GeoProps } from './panamaGeo'
 
 const PANAMA_CENTER: [number, number] = [8.4, -80.1]
 const PANAMA_BOUNDS: [[number, number], [number, number]] = [[6.8, -83.2], [9.8, -77.0]]
-
-// ── GeoJSON types ────────────────────────────────────────────────────────────
-type GeoProps = { provincia: string; distrito: string; corregimiento: string; id: string }
-type GeoFeature = {
-  type: 'Feature'
-  properties: GeoProps
-  geometry:
-    | { type: 'Polygon'; coordinates: number[][][] }
-    | { type: 'MultiPolygon'; coordinates: number[][][][] }
-}
-type GeoCollection = { type: 'FeatureCollection'; features: GeoFeature[] }
-
-// ── Module-level GeoJSON cache ───────────────────────────────────────────────
-let geoCache: GeoCollection | null = null
-let geoPromise: Promise<GeoCollection> | null = null
-
-async function loadGeo(): Promise<GeoCollection> {
-  if (geoCache) return geoCache
-  if (!geoPromise) {
-    geoPromise = fetch('/panama_corregimientos.geo.json')
-      .then((r) => r.json() as Promise<GeoCollection>)
-      .then((d) => { geoCache = d; return d })
-      .catch(() => { geoPromise = null; return { type: 'FeatureCollection', features: [] } })
-  }
-  return geoPromise
-}
 
 // ── Ray-casting point-in-polygon ─────────────────────────────────────────────
 function pipRing(x: number, y: number, ring: number[][]): boolean {
@@ -51,17 +26,6 @@ function geocodeLocal(lat: number, lng: number, geo: GeoCollection): GeoProps | 
     }
   }
   return null
-}
-
-// ── Name matching ─────────────────────────────────────────────────────────────
-function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\b(distrito de|provincia de|corregimiento de)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 function findMatch(candidates: PublicLocation[], ...terms: (string | undefined)[]): PublicLocation | undefined {

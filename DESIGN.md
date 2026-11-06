@@ -1,27 +1,27 @@
 ---
 version: alpha
-name: Marketplace Solidario Super Carnes
-description: Catálogo comunitario panameño para encontrar productores locales y contactarlos directamente.
+name: Mercapro
+description: Plataforma gratuita que conecta a productores y artesanos de Panamá con compradores. Apoyando lo nuestro.
 colors:
-  primary: "#003399"
-  secondary: "#1649B8"
-  accent: "#FFD400"
-  background: "#F3F6FC"
+  primary: "#005EC4"
+  secondary: "#F15A24"
+  accent: "#F15A24"
+  background: "#F7FAFD"
   surface: "#FFFFFF"
-  text: "#18243A"
-  muted: "#66748D"
-  border: "#D6DFEF"
-  success: "#1649B8"
-  warning: "#8B5B0B"
-  danger: "#9F3530"
-  focus: "#1649B8"
+  text: "#0B1D3D"
+  muted: "#5D6B82"
+  border: "#DCE5EF"
+  success: "#299565"
+  warning: "#E6A23C"
+  danger: "#D94F43"
+  focus: "#005EC4"
 typography:
   display:
-    fontFamily: "Fraunces, Georgia, serif"
+    fontFamily: "Causten Round, Causten, system-ui, sans-serif"
   body:
-    fontFamily: "Atkinson Hyperlegible, system-ui, sans-serif"
+    fontFamily: "Causten, Causten Round, system-ui, sans-serif"
   utility:
-    fontFamily: "Atkinson Hyperlegible, system-ui, sans-serif"
+    fontFamily: "Causten Round, system-ui, sans-serif"
 rounded:
   sm: "0.45rem"
   md: "0.8rem"
@@ -48,7 +48,7 @@ components:
     rounded: "0.8rem"
   harvest-label:
     backgroundColor: "{colors.accent}"
-    textColor: "#003399"
+    textColor: "#FFFFFF"
   status-success:
     backgroundColor: "{colors.success}"
     textColor: "{colors.surface}"

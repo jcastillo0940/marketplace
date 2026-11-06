@@ -2,8 +2,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 export type ContactMessageTemplates = { product: string; producer: string }
 export const DEFAULT_CONTACT_MESSAGE_TEMPLATES: ContactMessageTemplates = {
-  product: 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?',
-  producer: 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?',
+  product: 'Hola, vi tu oferta de {product_title} en Mercapro. ¿Sigue disponible?',
+  producer: 'Hola, encontré el perfil de {producer_name} en Mercapro. ¿Me puedes contar sobre tus ofertas?',
 }
 let publicTemplatesRequest: Promise<ContactMessageTemplates> | null = null
 export function clearContactMessageTemplatesCache(): void { publicTemplatesRequest = null }
@@ -41,19 +41,25 @@ export async function updateAdminMessageTemplate(key: 'product' | 'producer', bo
   return (await response.json() as { data: AdminMessageTemplate }).data
 }
 
-export type ProducerVerificationLevel = 'unverified' | 'contact_confirmed' | 'identity_reviewed' | 'producer_validated'
+export type ProducerVerificationLevel = 'unverified' | 'contact_confirmed' | 'identity_reviewed' | 'biometric_verified' | 'producer_validated'
+export type VendorType = 'productor' | 'cooperativa' | 'distribuidor'
+export type PaymentMethod = 'efectivo' | 'yappy' | 'transferencia' | 'tarjeta' | 'cheque' | 'credito'
+
 export type ApiProduct = {
   id: number
   slug: string
   title: string
   description: string
   unit: string
-  price_type: 'fixed' | 'from' | 'contact'
+  minimum_order: string | null
+  price_type: 'fixed' | 'range' | 'from' | 'contact'
   price_amount: string | null
+  price_max?: string | null
   currency: 'PAB' | 'USD'
   stock_quantity: string | null
   delivery_method: string
   status: string
+  published_at?: string | null
   category: { name: string; slug: string }
   producer: { public_name: string; slug: string; contact_level: string; verification_level: ProducerVerificationLevel; verification_label?: string; phone_public?: string | null; location?: { name: string; parent?: { name: string; parent?: { name: string } } } }
   images: Array<{ id: number; url: string; thumbnail_url?: string; alt_text: string | null; position: number }>
@@ -255,7 +261,7 @@ export async function getAdminMe(): Promise<{ name: string; email: string } | nu
   return { name: result.data.name, email: result.data.email }
 }
 
-export async function registerProducer(payload: { name: string; email: string; password: string; public_name: string; activity?: string; location_id: number; phone: string; terms_version: string; privacy_version: string; producer_authorized?: boolean; terms_confirmed?: boolean; privacy_confirmed?: boolean }, assisted = false): Promise<void> {
+export async function registerProducer(payload: { ruc?: string; ruc_dv?: string; name: string; email?: string; password: string; public_name: string; activity?: string; vendor_type?: VendorType; payment_methods?: PaymentMethod[]; location_id: number; phone: string; terms_version: string; privacy_version: string; producer_authorized?: boolean; terms_confirmed?: boolean; privacy_confirmed?: boolean }, assisted = false): Promise<void> {
   const token = await csrfToken()
   const endpoint = assisted ? '/admin/producers/assisted' : '/auth/register'
   const response = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify(payload) })
@@ -274,10 +280,10 @@ export async function saveProductDraft(form: FormData): Promise<void> {
   }
 }
 
-export async function getProducerProduct(id: string): Promise<{ id: number; title: string; description: string; unit: string; price_type: 'fixed' | 'from' | 'contact'; price_amount: string | null; currency: 'PAB' | 'USD'; stock_quantity: string | null; delivery_method: string; category_id: number; status: string; images: Array<{ id: number; url: string; alt_text: string | null; position: number }> }> {
+export async function getProducerProduct(id: string): Promise<{ id: number; title: string; description: string; unit: string; minimum_order: string | null; price_type: 'fixed' | 'range' | 'from' | 'contact'; price_amount: string | null; price_max?: string | null; currency: 'PAB' | 'USD'; stock_quantity: string | null; delivery_method: string; category_id: number; status: string; images: Array<{ id: number; url: string; alt_text: string | null; position: number }> }> {
   const response = await fetch(`${API_BASE}/me/products/${encodeURIComponent(id)}`, { credentials: 'include', headers: { Accept: 'application/json' } })
   if (!response.ok) throw new Error(response.status === 404 ? 'No encontramos esa publicación en tu cuenta.' : 'Inicia sesión para editar tus publicaciones.')
-  const result = await response.json() as { data: { id: number; title: string; description: string; unit: string; price_type: 'fixed' | 'from' | 'contact'; price_amount: string | null; currency: 'PAB' | 'USD'; stock_quantity: string | null; delivery_method: string; category_id: number; status: string; images: Array<{ id: number; url: string; alt_text: string | null; position: number }> } }
+  const result = await response.json() as { data: { id: number; title: string; description: string; unit: string; minimum_order: string | null; price_type: 'fixed' | 'range' | 'from' | 'contact'; price_amount: string | null; price_max?: string | null; currency: 'PAB' | 'USD'; stock_quantity: string | null; delivery_method: string; category_id: number; status: string; images: Array<{ id: number; url: string; alt_text: string | null; position: number }> } }
   return result.data
 }
 
@@ -337,13 +343,13 @@ export type ProducerMetrics = {
   period_days: 30
 }
 
-export async function getProducerDashboard(): Promise<{ user: { name: string; email: string }; profile: { public_name: string; slug: string; activity: string | null; description: string | null; location_id: number | null; phone_private: string; contact_level: string; profile_status: string; suspension_reason: string | null } | null; products: ProducerDashboardProduct[] }> {
+export async function getProducerDashboard(): Promise<{ user: { name: string; email: string }; profile: { public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null; products: ProducerDashboardProduct[] }> {
   const [userResponse, productsResponse] = await Promise.all([
     fetch(`${API_BASE}/me`, { credentials: 'include', headers: { Accept: 'application/json' } }),
     fetch(`${API_BASE}/me/products`, { credentials: 'include', headers: { Accept: 'application/json' } }),
   ])
   if (!userResponse.ok || !productsResponse.ok) throw new Error('Inicia sesión para ver tu panel de productor.')
-  const user = await userResponse.json() as { data: { name: string; email: string; profile: { public_name: string; slug: string; activity: string | null; description: string | null; location_id: number | null; phone_private: string; contact_level: string; profile_status: string; suspension_reason: string | null } | null } }
+  const user = await userResponse.json() as { data: { name: string; email: string; profile: { public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null } }
   const products = await productsResponse.json() as { data: ProducerDashboardProduct[] }
   return { user: user.data, profile: user.data.profile, products: products.data }
 }
@@ -383,8 +389,10 @@ export async function submitProducerAppeal(reason: string): Promise<void> {
 
 export async function updateProducerProfile(form: FormData): Promise<void> {
   const token = await csrfToken()
-  const body = Object.fromEntries(form)
+  const body: Record<string, unknown> = Object.fromEntries(form)
   if (!body.location_id) body.location_id = ''
+  body.payment_methods = form.getAll('payment_methods[]')
+  delete body['payment_methods[]']
   const response = await fetch(`${API_BASE}/me/profile`, { method: 'PUT', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify(body) })
   if (!response.ok) {
     const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
@@ -467,9 +475,11 @@ export async function decideModerationBulk(ids: number[], decision: BulkModerati
   return result.data
 }
 
-export type ProducerPublicProfile = { id: number; slug: string; public_name: string; activity: string | null; description: string | null; contact_level: string; verification_level: ProducerVerificationLevel; verification_label: string; phone_public: string | null; location: { name: string; parent?: { name: string; parent?: { name: string } } } | null; products: ApiProduct[] }
+export type ProducerPublicProfile = {
+  verified_documents?: string[]
+ id: number; slug: string; public_name: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; contact_level: string; verification_level: ProducerVerificationLevel; verification_label: string; phone_public: string | null; location: { name: string; parent?: { name: string; parent?: { name: string } } } | null; member_since?: string | null; stories?: Array<{ id: number; title: string; quote: string | null; published_at: string | null }>; products: ApiProduct[] }
 
-export type PublicProducerSummary = { id: number; slug: string; public_name: string; activity: string | null; description: string | null; contact_level: string; verification_level: ProducerVerificationLevel; verification_label: string; products_count: number; location: { name: string; parent?: { name: string } | null } | null }
+export type PublicProducerSummary = { id: number; slug: string; public_name: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; contact_level: string; verification_level: ProducerVerificationLevel; verification_label: string; products_count: number; location: { name: string; parent?: { name: string } | null } | null }
 
 export async function getPublicProducers(params: URLSearchParams, signal?: AbortSignal): Promise<Paginated<PublicProducerSummary>> {
   const response = await fetch(`${API_BASE}/producers?${params.toString()}`, { signal, headers: { Accept: 'application/json' } })
@@ -539,8 +549,11 @@ export async function updateReportPriority(id: number, priority: ReportCase['pri
 }
 
 export type AdminProducer = { id: number; public_name: string; slug: string; activity: string | null; profile_status: string; contact_level: string; verification_level: ProducerVerificationLevel; products_count: number; account: { name: string; email: string } | null }
+export type AdminBiometricCheck = { id: number; status: 'pending' | 'approved' | 'rejected'; match_distance: number | null; liveness_challenges: string[]; selfie_url: string | null; cedula_url: string | null; review_reason: string | null; reviewed_at: string | null; created_at: string }
+
 export type AdminProducerDetail = {
-  producer: { id: number; public_name: string; slug: string; activity: string | null; description: string | null; profile_status: string; suspension_reason: string | null; contact_level: string; verification_level: ProducerVerificationLevel; phone_verified_at: string | null; registration_method: string; registered_by: string | null; location: { name: string; parent?: { name: string } | null } | null }
+  biometric_check?: AdminBiometricCheck | null
+  producer: { id: number; public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; profile_status: string; suspension_reason: string | null; contact_level: string; verification_level: ProducerVerificationLevel; phone_verified_at: string | null; phone_private: string | null; cedula: string | null; ruc: string | null; ruc_dv: string | null; registration_method: string; registered_by: string | null; location: { name: string; parent?: { name: string } | null } | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; cedula_photo_url: string | null; pacto_social_url: string | null; aviso_operacion_url: string | null }
   account: { name: string; email: string; created_at: string }
   consents: Array<{ id: number; consent_type: string; version: string; accepted_at: string }>
   verifications: Array<{ id: number; channel: string; status: string; verified_at: string | null; expires_at: string | null; attempts_count: number }>
@@ -571,10 +584,10 @@ export async function setAdminProducerStatus(id: number, profile_status: 'active
   if (!response.ok || !result.data) throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo actualizar el estado del productor.')
   return result.data
 }
-export async function setAdminProducerTrustLevel(id: number, level: Exclude<ProducerVerificationLevel, 'unverified'>, reason: string): Promise<{ verification_level: ProducerVerificationLevel; verification_label: string }> {
+export async function setAdminProducerTrustLevel(id: number, level: Exclude<ProducerVerificationLevel, 'unverified'>, reason: string): Promise<{ verification_level: ProducerVerificationLevel; verification_label: string; profile_status?: string; auto_activated?: boolean }> {
   const token = await csrfToken()
   const response = await fetch(`${API_BASE}/admin/producers/${id}/trust-level`, { method: 'PUT', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ level, reason }) })
-  const result = await response.json().catch(() => ({})) as { data?: { verification_level: ProducerVerificationLevel; verification_label: string }; message?: string; errors?: Record<string, string[]> }
+  const result = await response.json().catch(() => ({})) as { data?: { verification_level: ProducerVerificationLevel; verification_label: string; profile_status?: string; auto_activated?: boolean }; message?: string; errors?: Record<string, string[]> }
   if (!response.ok || !result.data) throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo actualizar el nivel de revisión.')
   return result.data
 }
@@ -708,6 +721,49 @@ export async function createAdminAccount(name: string, email: string, password: 
   return result.data
 }
 
+// ── SMTP settings ─────────────────────────────────────────────────────────────
+
+export type SmtpSettings = {
+  host: string
+  port: number
+  encryption: 'ssl' | 'tls' | 'none'
+  username: string
+  password: string
+  from_address: string
+  from_name: string
+}
+
+export async function getAdminSmtpSettings(): Promise<SmtpSettings> {
+  const response = await fetch(`${API_BASE}/admin/settings/smtp`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No se pudo cargar la configuración SMTP.')
+  const result = await response.json() as { data: SmtpSettings }
+  return result.data
+}
+
+export async function saveAdminSmtpSettings(settings: Partial<SmtpSettings>): Promise<void> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/settings/smtp`, {
+    method: 'PUT', credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token },
+    body: JSON.stringify(settings),
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No se pudo guardar.')
+  }
+}
+
+export async function testAdminSmtpSettings(to: string): Promise<{ ok: boolean; error?: string }> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/settings/smtp/test`, {
+    method: 'POST', credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token },
+    body: JSON.stringify({ to }),
+  })
+  const result = await response.json() as { data: { ok: boolean; error?: string } }
+  return result.data
+}
+
 // ── Auth session ──────────────────────────────────────────────────────────────
 
 export type SessionUser = { name: string; email: string }
@@ -734,4 +790,127 @@ export async function logoutUser(): Promise<void> {
   const token = await csrfToken()
   await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token } })
   sessionCache = null
+}
+
+// ── Historias de productores ─────────────────────────────────────────────────
+export type StoryVideo = { provider: 'youtube' | 'vimeo'; id: string }
+export type ProducerStory = {
+  id: number
+  title: string
+  quote: string | null
+  body: string
+  video: StoryVideo | null
+  image_url: string | null
+  thumbnail_url: string | null
+  published_at: string | null
+  producer: { public_name: string; slug: string; activity: string | null; location: { name: string; parent?: { name: string; parent?: { name: string } | null } | null } | null; profile_status?: string } | null
+}
+export type OwnedProducerStory = ProducerStory & { status: 'pending' | 'published' | 'rejected'; review_note: string | null; submitted_at: string | null; reviewed_at: string | null }
+
+async function storyError(response: Response, fallback: string): Promise<never> {
+  const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+  throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || fallback)
+}
+
+export async function listStories(page = 1, perPage = 12, signal?: AbortSignal): Promise<Paginated<ProducerStory>> {
+  const response = await fetch(`${API_BASE}/stories?page=${page}&per_page=${perPage}`, { signal, headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No pudimos cargar las historias. Inténtalo de nuevo.')
+  return response.json() as Promise<Paginated<ProducerStory>>
+}
+
+export async function getStory(id: string, signal?: AbortSignal): Promise<ProducerStory> {
+  const response = await fetch(`${API_BASE}/stories/${encodeURIComponent(id)}`, { signal, headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(response.status === 404 ? 'Esta historia no está disponible.' : 'No pudimos cargar la historia.')
+  return (await response.json() as { data: ProducerStory }).data
+}
+
+export async function getMyStories(): Promise<OwnedProducerStory[]> {
+  const response = await fetch(`${API_BASE}/me/stories`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(response.status === 401 ? 'Inicia sesión para ver tus historias.' : 'No pudimos cargar tus historias.')
+  return (await response.json() as { data: OwnedProducerStory[] }).data
+}
+
+/** Crea o edita una historia; cualquier cambio la envía de nuevo a revisión. */
+export async function saveMyStory(form: FormData, id?: number): Promise<OwnedProducerStory> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/me/stories${id ? `/${id}` : ''}`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token }, body: form })
+  if (!response.ok) return storyError(response, 'No pudimos guardar tu historia. Tus datos siguen en el formulario.')
+  return (await response.json() as { data: OwnedProducerStory }).data
+}
+
+export async function deleteMyStory(id: number): Promise<void> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/me/stories/${id}`, { method: 'DELETE', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token } })
+  if (!response.ok) return storyError(response, 'No pudimos retirar la historia.')
+}
+
+export async function getAdminStories(status: 'pending' | 'published' | 'rejected' = 'pending'): Promise<Paginated<OwnedProducerStory>> {
+  const response = await fetch(`${API_BASE}/admin/stories?status=${status}`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(response.status === 401 ? 'Inicia sesión con acceso administrativo.' : 'Tu cuenta no tiene permiso para revisar historias.')
+  return response.json() as Promise<Paginated<OwnedProducerStory>>
+}
+
+export async function decideStory(id: number, decision: 'approve' | 'reject' | 'unpublish', note: string): Promise<void> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/stories/${id}/decision`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ decision, note: note.trim() || null }) })
+  if (!response.ok) return storyError(response, 'No pudimos registrar la decisión.')
+}
+
+/** URL de reproducción incrustada; YouTube sin cookies de seguimiento. */
+export function storyEmbedUrl(video: StoryVideo): string {
+  return video.provider === 'youtube' ? `https://www.youtube-nocookie.com/embed/${video.id}?rel=0` : `https://player.vimeo.com/video/${video.id}?dnt=1`
+}
+
+export function storyVideoThumbnail(video: StoryVideo): string | null {
+  return video.provider === 'youtube' ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` : null
+}
+
+export async function getProducerDocuments(): Promise<{ has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean }> {
+  const response = await fetch(`${API_BASE}/me/documents`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No pudimos verificar el estado de tus documentos.')
+  return (await response.json() as { data: { has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean } }).data
+}
+
+export type BiometricStatus = { eligible: boolean; latest: { status: 'pending' | 'approved' | 'rejected'; review_reason: string | null; created_at: string } | null }
+
+export async function getBiometricStatus(): Promise<BiometricStatus> {
+  const response = await fetch(`${API_BASE}/me/biometric`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('No pudimos consultar tu verificación.')
+  return (await response.json() as { data: BiometricStatus }).data
+}
+
+export async function submitBiometricCheck(input: { selfie: Blob; cedula: Blob; matchDistance: number; challenges: string[] }): Promise<void> {
+  const token = await csrfToken()
+  const body = new FormData()
+  body.append('selfie', input.selfie, 'selfie.jpg')
+  body.append('cedula', input.cedula, 'cedula.jpg')
+  body.append('match_distance', input.matchDistance.toFixed(3))
+  input.challenges.forEach((challenge) => body.append('liveness_challenges[]', challenge))
+  body.append('consent', '1')
+  const response = await fetch(`${API_BASE}/me/biometric`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token }, body })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No pudimos enviar tu verificación.')
+  }
+}
+
+export async function decideBiometricCheck(producerId: number, checkId: number, decision: 'approve' | 'reject', reason: string): Promise<void> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/admin/producers/${producerId}/biometric/${checkId}/decision`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ decision, reason }) })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No pudimos guardar la decisión.')
+  }
+}
+
+export async function uploadProducerDocument(type: 'cedula_photo' | 'pacto_social' | 'aviso_operacion', file: File): Promise<void> {
+  const token = await csrfToken()
+  const body = new FormData()
+  body.append('type', type)
+  body.append('file', file)
+  const response = await fetch(`${API_BASE}/me/documents`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': token }, body })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
+    throw new Error(Object.values(result.errors ?? {}).flat().join(' ') || result.message || 'No pudimos subir el documento. Verifica el tipo y tamaño del archivo (máx. 10 MB).')
+  }
 }

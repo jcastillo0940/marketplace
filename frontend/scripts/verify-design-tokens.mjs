@@ -24,7 +24,7 @@ if (missing.length) {
   throw new Error(`Runtime CSS tokens differ from DESIGN.md: ${missing.map(([, name]) => name).join(', ')}`)
 }
 
-for (const [role, family] of [['display', 'Fraunces'], ['body', 'Atkinson Hyperlegible']]) {
+for (const [role, family] of [['display', 'Causten Round'], ['body', 'Causten']]) {
   if (!design.includes(family)) throw new Error(`DESIGN.md must define the ${role} type role.`)
   if (!tokens.includes(family)) throw new Error(`Runtime CSS is missing the ${role} type family.`)
 }

@@ -25,15 +25,19 @@ export default function ActivitySelect({ name = 'activity', defaultValue, onChan
   const parents = categories.filter((c) => c.parent_id === null)
   const childrenOf = (parentId: number) => categories.filter((c) => c.parent_id === parentId)
 
+  if (loading) {
+    return <select name={name} disabled={true} required={required}><option value="">Cargando…</option></select>
+  }
+
   return (
     <select
       name={name}
       defaultValue={defaultValue ?? ''}
-      disabled={disabled || loading}
+      disabled={disabled}
       required={required}
       onChange={onChange ? (e) => onChange(e.target.value) : undefined}
     >
-      <option value="">{loading ? 'Cargando…' : 'Selecciona una actividad'}</option>
+      <option value="">Selecciona una actividad</option>
       {parents.map((parent) => {
         const children = childrenOf(parent.id)
         if (children.length > 0) {

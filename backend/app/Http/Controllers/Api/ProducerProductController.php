@@ -84,9 +84,11 @@ class ProducerProductController extends Controller
             'title' => ['required', 'string', 'min:3', 'max:120'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')->where('active', true)],
             'description' => ['required', 'string', 'min:20', 'max:3000'],
-            'unit' => ['required', 'string', 'max:40'],
-            'price_type' => ['nullable', 'in:fixed,from,contact'],
-            'price_amount' => ['nullable', 'numeric', 'min:0', 'required_if:price_type,fixed,from'],
+            'unit' => ['required', 'string', Rule::in(Product::UNITS)],
+            'minimum_order' => ['nullable', 'string', 'max:100'],
+            'price_type' => ['required', 'in:fixed,range'],
+            'price_amount' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'price_max' => ['nullable', 'required_if:price_type,range', 'numeric', 'gt:price_amount', 'max:99999999'],
             'currency' => ['nullable', 'in:PAB,USD'],
             'stock_quantity' => ['nullable', 'numeric', 'min:0'],
             'delivery_method' => ['required', 'string', 'max:120'],
@@ -94,16 +96,17 @@ class ProducerProductController extends Controller
             'images.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300,max_width=6000,max_height=6000', 'max:5120'],
         ]);
         $profile = ProducerProfile::where('user_id', $request->user()->id)->firstOrFail();
+        abort_if($profile->profile_status === 'suspended', 403, 'Tu perfil está suspendido. No puedes publicar ofertas.');
         $mediaDisk = config('filesystems.media');
         $slug = Str::slug($data['title']).'-'.Str::lower(Str::random(7));
-        $priceType = $data['price_type'] ?? 'contact';
+        $priceType = $data['price_type'];
         $storedPaths = [];
         try {
             $product = DB::transaction(function () use ($data, $profile, $request, $slug, $mediaDisk, $photoOptimizer, $priceType, &$storedPaths): Product {
                 $product = $profile->products()->create([
                     'category_id' => $data['category_id'], 'created_by' => $request->user()->id,
-                    'slug' => $slug, 'title' => $data['title'], 'description' => $data['description'], 'unit' => $data['unit'],
-                    'price_type' => $priceType, 'price_amount' => $priceType === 'contact' ? null : ($data['price_amount'] ?? null),
+                    'slug' => $slug, 'title' => $data['title'], 'description' => $data['description'], 'unit' => $data['unit'], 'minimum_order' => $data['minimum_order'] ?? null,
+                    'price_type' => $priceType, 'price_amount' => $data['price_amount'], 'price_max' => $priceType === 'range' ? $data['price_max'] : null,
                     'currency' => $data['currency'] ?? 'PAB', 'stock_quantity' => $data['stock_quantity'] ?? null,
                     'delivery_method' => $data['delivery_method'], 'status' => 'pending',
                 ]);
@@ -152,9 +155,11 @@ class ProducerProductController extends Controller
             'title' => ['required', 'string', 'min:3', 'max:120'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')->where('active', true)],
             'description' => ['required', 'string', 'min:20', 'max:3000'],
-            'unit' => ['required', 'string', 'max:40'],
-            'price_type' => ['required', 'in:fixed,from,contact'],
-            'price_amount' => ['nullable', 'numeric', 'min:0', 'required_if:price_type,fixed,from'],
+            'unit' => ['required', 'string', Rule::in(Product::UNITS)],
+            'minimum_order' => ['nullable', 'string', 'max:100'],
+            'price_type' => ['required', 'in:fixed,range'],
+            'price_amount' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'price_max' => ['nullable', 'required_if:price_type,range', 'numeric', 'gt:price_amount', 'max:99999999'],
             'currency' => ['nullable', 'in:PAB,USD'],
             'stock_quantity' => ['nullable', 'numeric', 'min:0'],
             'delivery_method' => ['required', 'string', 'max:120'],
@@ -167,12 +172,8 @@ class ProducerProductController extends Controller
         if ($requiresReview) {
             $data += $request->validate(['reason' => ['required', 'string', 'min:5', 'max:1000']]);
         }
-        $data['price_amount'] = $data['price_amount'] ?? null;
         $data['currency'] = $data['currency'] ?? 'PAB';
-        $data['price_type'] = $data['price_type'] ?? 'contact';
-        if ($data['price_type'] === 'contact') {
-            $data['price_amount'] = null;
-        }
+        $data['price_max'] = $data['price_type'] === 'range' ? $data['price_max'] : null;
         $mediaDisk = config('filesystems.media');
         $storedPaths = [];
         $removedImages = [];

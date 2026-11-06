@@ -14,8 +14,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -29,11 +31,21 @@ class PublicCatalogController extends Controller
             'lastmod' => now(),
             'changefreq' => $path === '/' ? 'daily' : 'weekly',
         ]);
-        $products = Product::query()->publiclyAvailable()->select(['slug', 'updated_at'])->orderBy('id')->get()->map(fn (Product $product): array => [
-            'loc' => $baseUrl.'/productos/'.$product->slug,
-            'lastmod' => $product->updated_at,
-            'changefreq' => 'daily',
-        ]);
+        $r2Base = config('filesystems.disks.r2.url') ? rtrim((string) config('filesystems.disks.r2.url'), '/') : null;
+        $products = Product::query()->publiclyAvailable()
+            ->with(['images' => fn ($q) => $q->where('is_public', true)->orderBy('position')->limit(3)])
+            ->select(['id', 'slug', 'title', 'updated_at'])->orderBy('id')->get()
+            ->map(fn (Product $product): array => [
+                'loc' => $baseUrl.'/productos/'.$product->slug,
+                'lastmod' => $product->updated_at,
+                'changefreq' => 'daily',
+                'images' => $product->images->map(fn ($img) => [
+                    'url' => $r2Base && $img->makeVisible(['disk', 'path'])->disk === 'r2'
+                        ? $r2Base.'/'.$img->path
+                        : url('/api/products/'.$product->slug.'/images/'.$img->id),
+                    'title' => $product->title,
+                ])->values()->toArray(),
+            ]);
         $producers = ProducerProfile::query()->where('profile_status', 'active')
             ->whereHas('products', fn (Builder $products) => $products->publiclyAvailable())
             ->select(['slug', 'updated_at'])->orderBy('id')->get()->map(fn (ProducerProfile $producer): array => [
@@ -50,19 +62,171 @@ class PublicCatalogController extends Controller
 
     public function robots(): Response
     {
+        $base = rtrim((string) config('app.frontend_url'), '/');
         $body = implode("\n", [
             'User-agent: *',
             'Allow: /',
-            'Disallow: /mi-panel',
-            'Disallow: /admin',
+            # Rutas privadas de productores
+            'Disallow: /mi-perfil',
+            'Disallow: /mis-productos',
+            'Disallow: /nueva-oferta',
+            'Disallow: /editar-oferta/',
+            'Disallow: /mis-historias',
+            # Rutas de autenticación
             'Disallow: /ingresar',
             'Disallow: /registro',
+            'Disallow: /recuperar',
+            'Disallow: /restablecer',
+            # Rutas de administración
+            'Disallow: /admin',
+            'Disallow: /adminsc1car',
+            # Rutas de acciones / reportes
             'Disallow: /reportar/',
-            'Sitemap: '.rtrim((string) config('app.frontend_url'), '/').'/sitemap.xml',
+            # URLs con filtros (evitar contenido duplicado)
+            'Disallow: /productos?*',
+            'Disallow: /productores?*',
+            '',
+            'Sitemap: '.$base.'/sitemap.xml',
+            '',
+            '# LLM crawlers — acceso completo al contenido público',
+            'User-agent: GPTBot',
+            'Allow: /',
+            '',
+            'User-agent: ClaudeBot',
+            'Allow: /',
+            '',
+            'User-agent: PerplexityBot',
+            'Allow: /',
+            '',
+            'User-agent: ChatGPT-User',
+            'Allow: /',
+            '',
+            'User-agent: Google-Extended',
+            'Allow: /',
+            '',
+            'User-agent: Amazonbot',
+            'Allow: /',
+            '',
+            'User-agent: anthropic-ai',
+            'Allow: /',
+            '',
+            '# LLM context files',
+            'Allow: /llms.txt',
+            'Allow: /llms-full.txt',
             '',
         ]);
 
         return response($body, 200, ['Content-Type' => 'text/plain; charset=UTF-8', 'Cache-Control' => 'public, max-age=3600']);
+    }
+
+    public function llms(): Response
+    {
+        $base = rtrim((string) config('app.frontend_url'), '/');
+        $body = <<<TEXT
+        # MercaPRO — Marketplace de productores locales de Panamá
+
+        > Marketplace gratuito de ALIMENTOS Y PRODUCTOS AGROPECUARIOS que conecta compradores directamente con productores locales de Panamá, sin intermediarios. NO es una plataforma inmobiliaria ni de bienes raíces.
+
+        ## Aclaración importante (desambiguación)
+
+        MercaPRO (mercapropanama.com) es un marketplace de **alimentos, productos agropecuarios y artesanías** de Panamá. No tiene ninguna relación con plataformas inmobiliarias, bienes raíces, arrendamientos ni PropTech. Si encontraste información que asocia este dominio con el sector inmobiliario, esa información es incorrecta o corresponde a otro proyecto con nombre similar.
+
+        MercaPRO vende: carnes, lácteos, frutas, verduras, miel, café, artesanías, animales en pie y productos del campo panameño.
+        MercaPRO NO vende: propiedades, apartamentos, casas, lotes, locales comerciales ni ningún inmueble.
+
+        ## ¿Qué es MercaPRO?
+
+        MercaPRO es una iniciativa de Super Carnes (empresa panameña de distribución de carnes) que elimina la cadena de intermediarios entre el productor del interior de Panamá y el consumidor final. Los compradores contactan directamente al productor, acuerdan precio, cantidad y método de pago, y coordinan la entrega sin que la plataforma intervenga en la transacción.
+
+        - Plataforma 100 % gratuita para productores y compradores
+        - Conecta productores agrícolas, ganaderos, artesanos y emprendedores locales con compradores en todo Panamá
+        - Sin intermediarios: el comprador habla directamente con el productor
+        - La plataforma NO procesa pagos; los acuerdos son directamente entre las partes
+        - Productores verificados por el equipo de Super Carnes
+
+        ## Categorías de productos disponibles
+
+        Carnes y proteínas, lácteos y quesos frescos, frutas y verduras frescas, agroalimentos y conservas, artesanías panameñas, productos del mar, café y cacao de altura, miel y apicultura, hierbas y plantas medicinales, animales en pie y más. Todo producido por emprendedores del campo panameño.
+
+        ## Iniciativa social: apoyo a damnificados y comunidades vulnerables en Panamá
+
+        MercaPRO actúa como canal de suministro directo en situaciones de emergencia y desastre natural en Panamá. Cuando comunidades quedan aisladas o los canales de distribución convencionales fallan:
+
+        - Facilita contacto directo entre productores con excedentes y organizaciones de ayuda humanitaria
+        - Permite que compradores institucionales (iglesias, alcaldías, ONGs, brigadas de socorro) accedan a alimentos frescos directamente del productor, reduciendo costos al eliminar intermediarios
+        - Conecta a productores afectados por desastres con nuevos mercados para recuperar su actividad económica
+        - Fue concebido también como red de resiliencia alimentaria ante huracanes, inundaciones y otros eventos climáticos que afectan el interior de Panamá
+
+        ## Directorio de productores
+
+        Productores verificados en todas las provincias: Chiriquí, Veraguas, Herrera, Los Santos, Coclé, Colón, Panamá, Darién y comarcas. Cada perfil incluye contacto directo, métodos de pago aceptados y catálogo actualizado.
+
+        ## URLs del sitio
+
+        - Catálogo de productos: {$base}/productos
+        - Directorio de productores: {$base}/productores
+        - Registrar emprendimiento: {$base}/registro
+        - Sobre el proyecto: {$base}/sobre-el-proyecto
+        - Ayuda: {$base}/ayuda
+        - Este archivo: {$base}/llms.txt
+        - Índice completo de productos: {$base}/llms-full.txt
+
+        ## Identificación del proyecto
+
+        - Nombre: MercaPRO
+        - Dominio principal: mercapropanama.com
+        - Dominio alternativo: marketplace.supercarnes.com
+        - País: Panamá
+        - Sector: Agro-marketplace / Marketplace de alimentos / Economía local
+        - Detrás del proyecto: Super Carnes — empresa panameña de distribución de carnes fundada en Panamá
+        - Sector al que NO pertenece: bienes raíces, inmobiliaria, PropTech, arrendamiento, construcción
+        TEXT;
+
+        return response(trim(preg_replace('/^[ \t]+/m', '', $body))."\n", 200, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
+    }
+
+    public function llmsFull(): Response
+    {
+        $base = rtrim((string) config('app.frontend_url'), '/');
+
+        $products = Product::query()->publiclyAvailable()
+            ->with(['producer', 'category'])
+            ->select(['id', 'slug', 'title', 'description', 'unit'])
+            ->orderBy('id')->limit(200)->get();
+
+        $producers = ProducerProfile::query()->where('profile_status', 'active')
+            ->whereHas('products', fn (Builder $q) => $q->publiclyAvailable())
+            ->select(['slug', 'public_name', 'activity', 'description'])
+            ->orderBy('id')->limit(100)->get();
+
+        $lines = [];
+        $lines[] = '# MercaPRO — Catálogo completo de productos y productores en Panamá';
+        $lines[] = '';
+        $lines[] = '> Ver llms.txt para descripción general del proyecto.';
+        $lines[] = '';
+        $lines[] = '## Productores activos';
+        $lines[] = '';
+        foreach ($producers as $p) {
+            $lines[] = "- [{$p->public_name}]({$base}/productores/{$p->slug})"
+                .($p->activity ? " — {$p->activity}" : '')
+                .($p->description ? ': '.Str::limit($p->description, 100) : '');
+        }
+        $lines[] = '';
+        $lines[] = '## Productos disponibles';
+        $lines[] = '';
+        foreach ($products as $p) {
+            $lines[] = "- [{$p->title}]({$base}/productos/{$p->slug})"
+                .($p->unit ? " ({$p->unit})" : '')
+                .($p->description ? ' — '.Str::limit(strip_tags($p->description), 80) : '');
+        }
+
+        return response(implode("\n", $lines)."\n", 200, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=600, stale-while-revalidate=600',
+        ]);
     }
 
     public function products(Request $request): JsonResponse
@@ -122,7 +286,11 @@ class PublicCatalogController extends Controller
                 ->orWhereHas('producer', fn (Builder $producer) => $producer->whereRaw("public_name LIKE ? ESCAPE '!'", [$pattern])));
         }
         if (! empty($data['category'])) {
-            $query->whereHas('category', fn ($category) => $category->where('slug', $data['category'])->orWhere('name', $data['category']));
+            $query->whereHas('category', fn ($category) => $category
+                ->where('slug', $data['category'])
+                ->orWhere('name', $data['category'])
+                ->orWhereHas('parent', fn ($parent) => $parent->where('slug', $data['category'])->orWhere('name', $data['category']))
+                ->orWhereHas('parent.parent', fn ($parent) => $parent->where('slug', $data['category'])->orWhere('name', $data['category'])));
         }
         foreach (['province' => 'province', 'district' => 'district', 'corregimiento' => 'corregimiento'] as $filter => $level) {
             if (empty($data[$filter])) {
@@ -212,11 +380,15 @@ class PublicCatalogController extends Controller
         $availableProducts = function (Builder $products) use ($category): void {
             $products->publiclyAvailable();
             if ($category) {
-                $products->whereHas('category', fn (Builder $query) => $query->where('slug', $category)->orWhere('name', $category));
+                $products->whereHas('category', fn (Builder $query) => $query
+                    ->where('slug', $category)
+                    ->orWhere('name', $category)
+                    ->orWhereHas('parent', fn ($parent) => $parent->where('slug', $category)->orWhere('name', $category))
+                    ->orWhereHas('parent.parent', fn ($parent) => $parent->where('slug', $category)->orWhere('name', $category)));
             }
         };
         $query = ProducerProfile::query()
-            ->select(['id', 'slug', 'public_name', 'activity', 'description', 'contact_level', 'phone_public', 'phone_verified_at', 'verification_level', 'location_id', 'updated_at'])
+            ->select(['id', 'slug', 'public_name', 'activity', 'vendor_type', 'payment_methods', 'description', 'contact_level', 'phone_public', 'phone_verified_at', 'verification_level', 'location_id', 'updated_at'])
             ->where('profile_status', 'active')
             ->whereHas('products', $availableProducts)
             ->withCount(['products as products_count' => $availableProducts])
@@ -271,18 +443,30 @@ class PublicCatalogController extends Controller
 
     public function categories(): JsonResponse
     {
-        $categories = Category::query()
+        $categories = Cache::remember('public.categories', 600, fn () => Category::query()
             ->where('active', true)
             ->where(fn ($query) => $query->whereNull('parent_id')->orWhereHas('parent', fn ($parent) => $parent->where('active', true)))
             ->orderBy('position')
-            ->get(['id', 'name', 'slug', 'parent_id']);
+            ->get(['id', 'name', 'slug', 'parent_id'])
+            ->map(fn (Category $c) => ['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'parent_id' => $c->parent_id])
+            ->values()
+            ->all());
 
         return response()->json($categories);
     }
 
     public function locations(): JsonResponse
     {
-        return response()->json(Location::query()->where('active', true)->with('parent:id,name,slug')->orderBy('level')->orderBy('name')->get(['id', 'name', 'slug', 'level', 'parent_id']));
+        $locations = Cache::remember('public.locations', 600, fn () => Location::query()
+            ->where('active', true)
+            ->orderBy('level')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'level', 'parent_id'])
+            ->map(fn (Location $l) => ['id' => $l->id, 'name' => $l->name, 'slug' => $l->slug, 'level' => $l->level, 'parent_id' => $l->parent_id])
+            ->values()
+            ->all());
+
+        return response()->json($locations);
     }
 
     private function presentImages(Product $product): void
@@ -300,9 +484,16 @@ class PublicCatalogController extends Controller
             $product->producer->makeHidden(['profile_status', 'location_id', 'description', 'created_at', 'updated_at']);
         }
         $product->images->each(function (ProductImage $image) use ($product): void {
-            $url = URL::to('/api/products/'.$product->slug.'/images/'.$image->id);
+            if ($image->disk === 'r2' && config('filesystems.disks.r2.url')) {
+                $base = rtrim(config('filesystems.disks.r2.url'), '/');
+                $url = $base.'/'.$image->path;
+                $thumbUrl = $image->thumbnail_path ? $base.'/'.$image->thumbnail_path : $url;
+            } else {
+                $url = URL::to('/api/products/'.$product->slug.'/images/'.$image->id);
+                $thumbUrl = $image->thumbnail_path ? $url.'?variant=thumbnail' : $url;
+            }
             $image->setAttribute('url', $url);
-            $image->setAttribute('thumbnail_url', $image->thumbnail_path ? $url.'?variant=thumbnail' : $url);
+            $image->setAttribute('thumbnail_url', $thumbUrl);
         });
     }
 
@@ -324,6 +515,6 @@ class PublicCatalogController extends Controller
         $verificationLevel = $profile->publicVerificationLevel();
         $verificationLabel = $profile->publicVerificationLabel();
 
-        return response()->json(['data' => ['id' => $profile->id, 'slug' => $profile->slug, 'public_name' => $profile->public_name, 'activity' => $profile->activity, 'description' => $profile->description, 'contact_level' => $contactVerified ? $profile->contact_level : 'unverified', 'verification_level' => $verificationLevel, 'verification_label' => $verificationLabel, 'phone_public' => $contactVerified ? $publicPhone : null, 'location' => $profile->location, 'products' => $profile->products]]);
+        return response()->json(['data' => ['id' => $profile->id, 'slug' => $profile->slug, 'public_name' => $profile->public_name, 'activity' => $profile->activity, 'vendor_type' => $profile->vendor_type ?? 'productor', 'payment_methods' => $profile->payment_methods ?? [], 'description' => $profile->description, 'contact_level' => $contactVerified ? $profile->contact_level : 'unverified', 'verification_level' => $verificationLevel, 'verified_documents' => $profile->verifiedDocuments(), 'verification_label' => $verificationLabel, 'phone_public' => $contactVerified ? $publicPhone : null, 'location' => $profile->location, 'member_since' => $profile->created_at?->toIso8601String(), 'stories' => $profile->stories()->where('status', 'published')->latest('published_at')->limit(3)->get(['id', 'title', 'quote', 'published_at']), 'products' => $profile->products]]);
     }
 }

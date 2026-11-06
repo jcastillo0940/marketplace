@@ -19,7 +19,7 @@ describe('route group contract', () => {
   it('renders the public home route', async () => {
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: /encuentra emprendedores de nuestra tierra/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /plataforma para conectar gratis a productores y artesanos con compradores/i })).toBeInTheDocument()
   })
 
   it('renders the public not-found page for unknown paths', async () => {
@@ -97,8 +97,8 @@ describe('marketplace home', () => {
   it('gives buyers practical safety guidance and a route to report an offer', () => {
     render(<MemoryRouter initialEntries={['/seguridad']}><App /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Compra con cuidado' })).toBeInTheDocument()
-    expect(screen.getByText(/no compartas contraseñas ni códigos de verificación/i)).toBeInTheDocument()
-    expect(screen.getByText(/la plataforma no procesa pagos/i)).toBeInTheDocument()
+    expect(screen.getByText(/nunca compartas contraseñas ni códigos que te lleguen por mensaje/i)).toBeInTheDocument()
+    expect(screen.getByText(/mercapro no procesa pagos ni cobra comisiones/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /explorar ofertas/i })).toHaveAttribute('href', '/productos')
     expect(screen.getByRole('link', { name: /reportar una oferta/i })).toHaveAttribute('href', '/productos')
   })
@@ -470,7 +470,7 @@ describe('marketplace home', () => {
     const bitmap = { width: 2400, height: 1200, close: vi.fn() }
     const compressedPhoto = new Blob([new Uint8Array(200 * 1024)], { type: 'image/webp' })
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => ({ drawImage: vi.fn() }) as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => ({ drawImage: vi.fn() }) as never)
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => callback(compressedPhoto))
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost:8000')
@@ -910,7 +910,7 @@ describe('marketplace home', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: /encuentra emprendedores de nuestra tierra/i }),
+      screen.getByRole('heading', { name: /plataforma para conectar gratis a productores y artesanos con compradores/i }),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /ver todos los productos/i })).toHaveAttribute(
       'href',
@@ -952,11 +952,11 @@ describe('marketplace home', () => {
     expect(screen.getByRole('img', { name: 'Tomates' })).toHaveAttribute('fetchpriority', 'high')
     expect(screen.getByRole('img', { name: 'Tomates' })).toHaveAttribute('src', 'https://api.example/images/tomates.jpg')
     expect(screen.getByRole('img', { name: 'Tomates' })).toHaveAttribute('decoding', 'async')
-    await waitFor(() => expect(document.title).toBe('Tomate local · El Empujoncito'))
+    await waitFor(() => expect(document.title).toBe('Tomate local · Mercapro'))
     expect(document.head.querySelector('meta[property="og:image"]')).toHaveAttribute('content', 'https://api.example/images/tomates.jpg')
     expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3000/productos/tomate-local')
     view.unmount()
-    await waitFor(() => expect(document.title).toBe('El Empujoncito · El interior produce, Panamá conecta'))
+    await waitFor(() => expect(document.title).toBe('Mercapro · Apoyando lo nuestro'))
     expect(document.head.querySelector('meta[property="og:image"]')).not.toBeInTheDocument()
     expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3000/')
     vi.unstubAllGlobals()
@@ -985,7 +985,7 @@ describe('marketplace home', () => {
     expect(contactLink).toHaveAttribute('href', expect.stringContaining('wa.me/50760001111'))
     const destination = new URL(contactLink.getAttribute('href')!)
     expect(destination.searchParams.get('text')).toContain('Tomate local')
-    expect(destination.searchParams.get('text')).toContain('El Empujoncito')
+    expect(destination.searchParams.get('text')).toContain('Mercapro')
     await user.click(contactLink)
     expect(await screen.findByRole('dialog', { name: /antes de continuar a whatsapp/i })).toBeInTheDocument()
     const editableMessage = screen.getByRole('textbox', { name: /mensaje para el productor/i })
@@ -993,9 +993,11 @@ describe('marketplace home', () => {
     await user.type(editableMessage, 'Hola, ¿todavía tienes tomate?')
     expect(screen.getByRole('link', { name: /continuar a whatsapp/i })).toHaveAttribute('href', expect.stringContaining(encodeURIComponent('Hola, ¿todavía tienes tomate?')))
     expect(screen.getByText(/confirma disponibilidad, precio y entrega/i)).toBeInTheDocument()
-    expect(screen.getByText(/no envíes dinero por adelantado sin verificar/i)).toBeInTheDocument()
-    expect(screen.getByText(/antes de abrir un enlace de pago, confirma la solicitud por un canal independiente/i)).toBeInTheDocument()
-    expect(screen.getByText(/confirma el pago directamente en tu cuenta/i)).toBeInTheDocument()
+    expect(screen.getByText(/no procesa pagos, no cobra comisiones a clientes ni a productores y no organiza entregas/i)).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByText(/no envíes dinero por adelantado/i).tagName).toBe('STRONG')
+    expect(screen.getByText(/si te mandan un enlace de pago, confírmalo/i)).toBeInTheDocument()
+    expect(screen.getByText(/revisa el pago en tu propia cuenta/i)).toBeInTheDocument()
+    expect(screen.getByRole('dialog').textContent).not.toMatch(/OTP/)
     expect(screen.getByText(/registraremos este clic como intención de contacto, no como una venta/i)).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: /continuar a whatsapp/i }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/contact-events') && init?.method === 'POST' && JSON.parse(String(init.body)).channel === 'whatsapp')).toBe(true))
@@ -1080,7 +1082,7 @@ describe('marketplace home', () => {
     await user.click(await screen.findByRole('link', { name: 'Llamar' }))
     const dialog = await screen.findByRole('dialog', { name: /antes de iniciar la llamada/i })
     expect(dialog).toHaveTextContent(/no envíes dinero por adelantado/i)
-    expect(dialog).toHaveTextContent(/antes de abrir un enlace de pago, confirma la solicitud por un canal independiente/i)
+    expect(dialog).toHaveTextContent(/si te mandan un enlace de pago, confírmalo/i)
     expect(dialog).toHaveTextContent(/no confíes solo en capturas o comprobantes/i)
     expect(screen.getByRole('link', { name: /iniciar llamada/i })).toHaveAttribute('href', 'tel:+50760001111')
     await user.click(screen.getByRole('button', { name: 'Volver' }))
@@ -2107,7 +2109,7 @@ describe('legal pages and registration consent', () => {
   it('shows the terms and privacy pages from the footer', () => {
     const terms = render(<MemoryRouter initialEntries={['/terminos']}><App /></MemoryRouter>)
     expect(screen.getAllByRole('heading', { name: /términos y condiciones/i })[0]).toBeInTheDocument()
-    expect(screen.getByText(/Super Carnes no es parte de la compraventa entre usuarios/i)).toBeInTheDocument()
+    expect(screen.getByText(/Mercapro no es parte de la compraventa entre usuarios/i)).toBeInTheDocument()
     terms.unmount()
 
     render(<MemoryRouter initialEntries={['/privacidad']}><App /></MemoryRouter>)

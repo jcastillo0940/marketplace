@@ -9,7 +9,7 @@ class AdminMfaRecoveryApproval extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['request_id', 'approver_id', 'decision', 'reason', 'decided_at'];
+    protected $fillable = ['request_id', 'approver_type', 'approver_id', 'decision', 'reason', 'decided_at'];
 
     protected function casts(): array
     {
@@ -21,8 +21,11 @@ class AdminMfaRecoveryApproval extends Model
         return $this->belongsTo(AdminMfaRecoveryRequest::class, 'request_id');
     }
 
+    /** Resolves the approver as either a User or AdminUser depending on approver_type. */
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approver_id');
+        return $this->approver_type === 'admin_user'
+            ? $this->belongsTo(\App\Models\AdminUser::class, 'approver_id')
+            : $this->belongsTo(User::class, 'approver_id');
     }
 }

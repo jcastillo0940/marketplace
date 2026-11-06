@@ -163,6 +163,9 @@ class ProducerVerificationLevelTest extends TestCase
             'phone_verified_at' => now(),
             'contact_level' => 'contact_confirmed',
             'profile_status' => 'active',
+            'ruc' => '8-100-'.$user->id,
+            'ruc_dv' => '45',
+            'cedula_photo_path' => 'documents/test/cedula_photo.jpg',
         ], $attributes));
     }
 }

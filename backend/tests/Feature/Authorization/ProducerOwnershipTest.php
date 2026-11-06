@@ -154,7 +154,7 @@ class ProducerOwnershipTest extends TestCase
             'title' => 'Yuca fresca seleccionada',
             'category_id' => $product->category_id,
             'description' => 'Yuca cosechada esta semana y seleccionada en la finca familiar.',
-            'unit' => 'libra', 'price_type' => 'contact', 'currency' => 'PAB',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB',
             'delivery_method' => 'Retiro coordinado',
         ];
 
@@ -221,7 +221,7 @@ class ProducerOwnershipTest extends TestCase
                 'title' => 'Plátano de la finca',
                 'category_id' => $product->category_id,
                 'description' => 'Plátanos maduros cosechados en la finca familiar esta semana.',
-                'unit' => 'docena', 'price_type' => 'contact', 'delivery_method' => 'Retiro coordinado',
+                'unit' => 'docena', 'price_type' => 'fixed', 'price_amount' => '1.50', 'delivery_method' => 'Retiro coordinado',
             ];
 
             $this->actingAs($owner)->patchJson("/api/me/products/{$product->id}", $data)
@@ -325,10 +325,10 @@ class ProducerOwnershipTest extends TestCase
         $category = Category::query()->where('slug', 'del-campo')->firstOrFail();
         $user = User::factory()->create();
         $producer = $user->producerProfile()->create(['slug' => 'manos-de-azuero', 'public_name' => 'Manos de Azuero', 'activity' => 'Agricultura familiar', 'description' => 'Cultivamos alimentos frescos en Azuero.', 'phone_private' => '+50761112222', 'phone_public' => '+50761112222', 'phone_verified_at' => now(), 'contact_level' => 'contact_confirmed', 'profile_status' => 'active', 'location_id' => $district->id]);
-        $producer->products()->create(['category_id' => $category->id, 'created_by' => $user->id, 'slug' => 'yuca-manos-azuero', 'title' => 'Yuca fresca', 'description' => 'Yuca cosechada esta semana en Las Tablas.', 'unit' => 'libra', 'price_type' => 'contact', 'currency' => 'PAB', 'delivery_method' => 'Acordar con productor', 'status' => ProductStatus::Published, 'published_at' => now()]);
+        $producer->products()->create(['category_id' => $category->id, 'created_by' => $user->id, 'slug' => 'yuca-manos-azuero', 'title' => 'Yuca fresca', 'description' => 'Yuca cosechada esta semana en Las Tablas.', 'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB', 'delivery_method' => 'Acordar con productor', 'status' => ProductStatus::Published, 'published_at' => now()]);
         $inactiveUser = User::factory()->create();
         $inactive = $inactiveUser->producerProfile()->create(['slug' => 'manos-suspendidas', 'public_name' => 'Manos suspendidas', 'phone_private' => '+50763334444', 'profile_status' => 'suspended', 'location_id' => $district->id]);
-        $inactive->products()->create(['category_id' => $category->id, 'created_by' => $inactiveUser->id, 'slug' => 'yuca-suspendida', 'title' => 'Yuca suspendida', 'description' => 'Una oferta que no debe mostrarse.', 'unit' => 'libra', 'price_type' => 'contact', 'currency' => 'PAB', 'delivery_method' => 'Acordar con productor', 'status' => ProductStatus::Published, 'published_at' => now()]);
+        $inactive->products()->create(['category_id' => $category->id, 'created_by' => $inactiveUser->id, 'slug' => 'yuca-suspendida', 'title' => 'Yuca suspendida', 'description' => 'Una oferta que no debe mostrarse.', 'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB', 'delivery_method' => 'Acordar con productor', 'status' => ProductStatus::Published, 'published_at' => now()]);
 
         $response = $this->getJson('/api/producers?q=Manos&province=los-santos&district=las-tablas&category=del-campo')->assertOk();
         $response->assertJsonPath('total', 1)->assertJsonPath('data.0.slug', 'manos-de-azuero')->assertJsonPath('data.0.products_count', 1)->assertJsonPath('data.0.location.name', 'Las Tablas')->assertJsonMissing(['phone_private' => '+50761112222'])->assertJsonMissing(['phone_public' => '+50761112222']);
@@ -522,7 +522,7 @@ class ProducerOwnershipTest extends TestCase
             'title' => 'Yuca cosechada hoy',
             'category_id' => Category::query()->where('active', true)->valueOrFail('id'),
             'description' => 'Yuca fresca cosechada esta semana en la finca familiar.',
-            'unit' => 'libra',
+            'unit' => 'lb',
             'price_type' => 'fixed',
             'price_amount' => '0.75',
             'currency' => 'PAB',
@@ -536,7 +536,7 @@ class ProducerOwnershipTest extends TestCase
             'title' => 'Yuca fresca de Las Tablas',
             'category_id' => Category::query()->where('active', true)->valueOrFail('id'),
             'description' => 'Yuca fresca cosechada esta semana en la finca familiar de Las Tablas.',
-            'unit' => 'libra',
+            'unit' => 'lb',
             'price_type' => 'fixed',
             'price_amount' => '0.75',
             'currency' => 'PAB',
@@ -1004,7 +1004,7 @@ class ProducerOwnershipTest extends TestCase
         $this->actingAs($owner)->patchJson('/api/me/products/'.$product->id, [
             'title' => 'Yuca fresca del productor', 'category_id' => $product->category_id,
             'description' => 'Yuca cultivada en la finca familiar de Las Tablas y cosechada esta semana.',
-            'unit' => 'libra', 'price_type' => 'from', 'price_amount' => '2.50', 'currency' => 'USD', 'stock_quantity' => '12.5', 'delivery_method' => 'Recogida en punto acordado',
+            'unit' => 'lb', 'price_type' => 'range', 'price_amount' => '2.50', 'price_max' => '3.50', 'currency' => 'USD', 'stock_quantity' => '12.5', 'delivery_method' => 'Recogida en punto acordado',
         ])->assertOk();
         $this->assertSame(ProductStatus::Rejected, $product->fresh()->status);
         $this->assertDatabaseHas('products', ['id' => $product->id, 'currency' => 'USD', 'price_amount' => '2.50', 'stock_quantity' => '12.50']);
@@ -1222,7 +1222,7 @@ class ProducerOwnershipTest extends TestCase
         $image = new UploadedFile(base_path('tests/fixture-product.jpg'), 'yuca.jpg', 'image/jpeg', null, true);
         $response = $this->actingAs($user)->post('/api/me/products', [
             'title' => 'Yuca del patio', 'category_id' => 1, 'description' => 'Yuca fresca cosechada esta semana en el patio familiar.',
-            'unit' => 'libra', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
             'stock_quantity' => '18.5',
             'delivery_method' => 'Recogida en punto acordado', 'images' => [$image],
         ], ['Accept' => 'application/json'])->assertCreated();
@@ -1262,7 +1262,7 @@ class ProducerOwnershipTest extends TestCase
         $this->actingAs($user)->post('/api/me/products', [
             'title' => 'Productos de la finca', 'category_id' => Category::query()->where('active', true)->valueOrFail('id'),
             'description' => 'Productos frescos cosechados esta semana en la finca familiar.',
-            'unit' => 'libra', 'price_type' => 'contact', 'currency' => 'PAB',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB',
             'delivery_method' => 'Recogida en punto acordado', 'images' => [$firstPhoto, $secondPhoto],
         ], ['Accept' => 'application/json'])->assertStatus(500);
 
@@ -1287,7 +1287,7 @@ class ProducerOwnershipTest extends TestCase
 
         $response = $this->actingAs($user)->post('/api/me/products', [
             'title' => 'Yuca media alterna', 'category_id' => 1, 'description' => 'Yuca fresca cosechada esta semana en el patio familiar.',
-            'unit' => 'libra', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
             'delivery_method' => 'Recogida en punto acordado', 'images' => [$image],
         ], ['Accept' => 'application/json'])->assertCreated();
         $storedImage = Product::findOrFail($response->json('data.id'))->images()->firstOrFail();
@@ -1314,7 +1314,7 @@ class ProducerOwnershipTest extends TestCase
 
         $response = $this->actingAs($user)->post('/api/me/products', [
             'title' => 'Yuca optimizada', 'category_id' => 1, 'description' => 'Yuca fresca cosechada esta semana en el patio familiar.',
-            'unit' => 'libra', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
+            'unit' => 'lb', 'price_type' => 'fixed', 'price_amount' => '0.75', 'currency' => 'PAB',
             'delivery_method' => 'Recogida en punto acordado', 'images' => [$image],
         ], ['Accept' => 'application/json'])->assertCreated();
         $storedImage = Product::findOrFail($response->json('data.id'))->images()->firstOrFail();
@@ -1409,7 +1409,7 @@ class ProducerOwnershipTest extends TestCase
         $this->actingAs($product->producer->user)->patchJson("/api/me/products/{$product->id}", [
             'title' => $product->title, 'category_id' => $product->category_id,
             'description' => $product->description, 'unit' => $product->unit,
-            'price_type' => 'contact', 'price_amount' => null, 'currency' => 'PAB',
+            'price_type' => 'fixed', 'price_amount' => '1.50', 'currency' => 'PAB',
             'delivery_method' => $product->delivery_method, 'reason' => 'Retiré una foto repetida.',
             'remove_image_ids' => [$removed->id],
         ])->assertOk()->assertJsonPath('data.status', 'pending');

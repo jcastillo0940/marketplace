@@ -12,9 +12,9 @@ class ProducerProfile extends Model
 {
     use HasFactory;
 
-    protected $hidden = ['user_id', 'registered_by', 'registration_method', 'phone_private', 'phone_verified_at', 'suspension_reason', 'cedula'];
+    protected $hidden = ['user_id', 'registered_by', 'registration_method', 'phone_private', 'phone_verified_at', 'suspension_reason', 'cedula', 'ruc', 'ruc_dv', 'cedula_photo_path', 'pacto_social_path', 'aviso_operacion_path'];
 
-    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description', 'cedula'];
+    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'vendor_type', 'payment_methods', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description', 'cedula', 'ruc', 'ruc_dv', 'cedula_photo_path', 'pacto_social_path', 'aviso_operacion_path'];
 
     public function registeredBy(): BelongsTo
     {
@@ -23,7 +23,10 @@ class ProducerProfile extends Model
 
     protected function casts(): array
     {
-        return ['phone_verified_at' => 'datetime'];
+        return [
+            'phone_verified_at' => 'datetime',
+            'payment_methods' => 'array',
+        ];
     }
 
     public function user(): BelongsTo
@@ -44,6 +47,11 @@ class ProducerProfile extends Model
     public function appeals(): HasMany
     {
         return $this->hasMany(ProducerAppeal::class);
+    }
+
+    public function stories(): HasMany
+    {
+        return $this->hasMany(ProducerStory::class);
     }
 
     public function consents(): HasMany
@@ -69,6 +77,35 @@ class ProducerProfile extends Model
 
         return ProducerVerificationLevel::tryFrom((string) $this->verification_level)?->value
             ?? ProducerVerificationLevel::ContactConfirmed->value;
+    }
+
+    public function biometricChecks(): HasMany
+    {
+        return $this->hasMany(ProducerBiometricCheck::class);
+    }
+
+    public function hasLegalDocument(): bool
+    {
+        return ! empty($this->cedula_photo_path) || ! empty($this->pacto_social_path) || ! empty($this->aviso_operacion_path);
+    }
+
+    /**
+     * Legal documents a public visitor may know were reviewed. Names only, never the values.
+     *
+     * @return list<string>
+     */
+    public function verifiedDocuments(): array
+    {
+        $level = ProducerVerificationLevel::from($this->publicVerificationLevel());
+        if (in_array($level, [ProducerVerificationLevel::Unverified, ProducerVerificationLevel::ContactConfirmed], true)) {
+            return [];
+        }
+
+        return array_values(array_filter([
+            ! empty($this->ruc) ? 'ruc' : null,
+            ! empty($this->pacto_social_path) ? 'pacto_social' : null,
+            ! empty($this->aviso_operacion_path) ? 'aviso_operacion' : null,
+        ]));
     }
 
     public function publicVerificationLabel(): string

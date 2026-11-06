@@ -66,11 +66,22 @@ class AdminMfaRecoveryWorkflow
             $lockedRequest = AdminMfaRecoveryRequest::query()->lockForUpdate()->findOrFail($request->id);
             $this->expireRequestIfNeeded($lockedRequest);
             abort_unless($actor->isInternalStaff() && $actor->two_factor_confirmed_at && $actor->hasPermission('security.mfa_recovery.review'), 403);
-            abort_if((int) $actor->id === (int) $target->id, 403, 'No puedes revisar tu propia solicitud.');
+            // Self-approval check: only meaningful when actor and target are both Users
+            // (same table). AdminUser actors are a separate identity store and can never
+            // be the same person as a User target in this architecture.
+            if ($actor instanceof User) {
+                abort_if((int) $actor->id === (int) $target->id, 403, 'No puedes revisar tu propia solicitud.');
+            }
+            $approverType = $actor instanceof User ? 'user' : 'admin_user';
             abort_unless($lockedRequest->status?->isOpen(), 409, 'La solicitud ya no está abierta.');
-            abort_if($lockedRequest->approvals()->where('approver_id', $actor->id)->exists(), 409, 'Ya registraste una decisión para esta solicitud.');
+            abort_if(
+                $lockedRequest->approvals()->where('approver_type', $approverType)->where('approver_id', $actor->id)->exists(),
+                409,
+                'Ya registraste una decisión para esta solicitud.'
+            );
 
             $lockedRequest->approvals()->create([
+                'approver_type' => $approverType,
                 'approver_id' => $actor->id,
                 'decision' => $decision,
                 'reason' => trim($reason),

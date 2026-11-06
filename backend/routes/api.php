@@ -4,9 +4,13 @@ use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AdminMfaRecoveryController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BiometricVerificationController;
+use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\SensitiveFileController;
 use App\Http\Controllers\Api\MessageTemplateController;
 use App\Http\Controllers\Api\ProducerAppealController;
 use App\Http\Controllers\Api\ProducerProductController;
+use App\Http\Controllers\Api\ProducerStoryController;
 use App\Http\Controllers\Api\PublicCatalogController;
 use App\Http\Controllers\Api\TrustSafetyController;
 use App\Models\Category;
@@ -62,6 +66,9 @@ Route::get('/categories', [PublicCatalogController::class, 'categories']);
 Route::get('/locations', [PublicCatalogController::class, 'locations']);
 Route::get('/producers', [PublicCatalogController::class, 'producers']);
 Route::get('/producers/{slug}', [PublicCatalogController::class, 'producer']);
+Route::get('/stories', [ProducerStoryController::class, 'index']);
+Route::get('/stories/{id}', [ProducerStoryController::class, 'show'])->whereNumber('id');
+Route::get('/stories/{id}/image', [ProducerStoryController::class, 'publicImage'])->whereNumber('id');
 Route::post('/contact-events', [TrustSafetyController::class, 'contact'])->middleware('throttle:public-actions');
 Route::post('/reports', [TrustSafetyController::class, 'report'])->middleware('throttle:public-actions');
 
@@ -104,6 +111,15 @@ Route::middleware(['web', 'auth:sanctum'])->group(function (): void {
     Route::post('/me/products/{id}/submit', [ProducerProductController::class, 'submit'])->whereNumber('id')->middleware('throttle:product-writes');
     Route::post('/me/products/{id}/transition', [ProducerProductController::class, 'transition'])->whereNumber('id')->middleware('throttle:product-writes');
     Route::post('/me/products/{id}/renew', [ProducerProductController::class, 'renew'])->whereNumber('id')->middleware('throttle:product-writes');
+    Route::get('/me/stories', [ProducerStoryController::class, 'mine']);
+    Route::post('/me/stories', [ProducerStoryController::class, 'store'])->middleware('throttle:product-writes');
+    Route::post('/me/stories/{id}', [ProducerStoryController::class, 'update'])->whereNumber('id')->middleware('throttle:product-writes');
+    Route::delete('/me/stories/{id}', [ProducerStoryController::class, 'destroy'])->whereNumber('id')->middleware('throttle:product-writes');
+    Route::get('/me/stories/{id}/image', [ProducerStoryController::class, 'ownerImage'])->whereNumber('id');
+    Route::get('/me/documents', [DocumentController::class, 'status']);
+    Route::post('/me/documents', [DocumentController::class, 'upload'])->middleware('throttle:product-writes');
+    Route::get('/me/biometric', [BiometricVerificationController::class, 'status']);
+    Route::post('/me/biometric', [BiometricVerificationController::class, 'store'])->middleware('throttle:product-writes');
 });
 
 Route::middleware(['web', 'auth:admin', 'admin.mfa'])->prefix('admin')->group(function (): void {
@@ -130,7 +146,13 @@ Route::middleware(['web', 'auth:admin', 'admin.mfa'])->prefix('admin')->group(fu
     Route::post('/producers/assisted', [AuthController::class, 'registerAssisted']);
     Route::get('/producers/{id}', [AdminController::class, 'producerDetail'])->whereNumber('id');
     Route::put('/producers/{id}/trust-level', [AdminController::class, 'setProducerTrustLevel'])->whereNumber('id');
+    Route::get('/producers/{id}/documents/{type}', [SensitiveFileController::class, 'document'])->whereNumber('id')->whereIn('type', ['cedula_photo', 'pacto_social', 'aviso_operacion']);
+    Route::get('/producers/{id}/biometric/{checkId}/{kind}', [SensitiveFileController::class, 'biometric'])->whereNumber('id')->whereNumber('checkId')->whereIn('kind', ['selfie', 'cedula']);
+    Route::post('/producers/{id}/biometric/{checkId}/decision', [BiometricVerificationController::class, 'decide'])->whereNumber('id')->whereNumber('checkId');
     Route::post('/producers/{id}/confirm-contact', [AdminController::class, 'confirmProducerContact'])->whereNumber('id');
+    Route::get('/stories', [ProducerStoryController::class, 'queue']);
+    Route::post('/stories/{id}/decision', [ProducerStoryController::class, 'decide'])->whereNumber('id');
+    Route::get('/stories/{id}/image', [ProducerStoryController::class, 'adminImage'])->whereNumber('id');
     Route::get('/producer-appeals', [ProducerAppealController::class, 'queue']);
     Route::put('/producer-appeals/{id}', [ProducerAppealController::class, 'decide'])->whereNumber('id');
     Route::put('/producers/{id}/status', [AdminController::class, 'setProducerStatus'])->whereNumber('id');
@@ -152,4 +174,7 @@ Route::middleware(['web', 'auth:admin', 'admin.mfa'])->prefix('admin')->group(fu
     Route::put('/users/{id}/roles', [AdminController::class, 'setUserRoles'])->whereNumber('id');
     Route::get('/admin-accounts', [AdminController::class, 'adminAccounts']);
     Route::post('/admin-accounts', [AdminController::class, 'createAdminAccount']);
+    Route::get('/settings/smtp', [AdminController::class, 'getSmtpSettings']);
+    Route::put('/settings/smtp', [AdminController::class, 'saveSmtpSettings']);
+    Route::post('/settings/smtp/test', [AdminController::class, 'testSmtpSettings']);
 });

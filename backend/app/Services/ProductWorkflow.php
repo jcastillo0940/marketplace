@@ -55,7 +55,7 @@ class ProductWorkflow
                     throw ValidationException::withMessages(['category_id' => ['Selecciona una categoría activa antes de enviar o aprobar la publicación.']]);
                 }
             }
-            if ($target === 'published' && $producer->profile_status !== 'active') {
+            if ($target === 'published' && $producer->profile_status !== 'active' && $adminActorId === null) {
                 throw ValidationException::withMessages(['producer' => ['No se puede publicar la oferta hasta que el perfil del productor esté activo.']]);
             }
             if ($target === 'published' && $producer->phone_verified_at === null && $adminActorId === null) {

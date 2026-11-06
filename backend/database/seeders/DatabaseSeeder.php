@@ -35,8 +35,8 @@ class DatabaseSeeder extends Seeder
             $role->permissions()->sync(Permission::whereIn('name', $config['permissions'])->pluck('id'));
         }
         foreach ([
-            'product' => 'Hola, vi tu oferta de {product_title} en El Empujoncito. ¿Sigue disponible?',
-            'producer' => 'Hola, encontré el perfil de {producer_name} en El Empujoncito. ¿Me puedes contar sobre tus ofertas?',
+            'product' => 'Hola, vi tu oferta de {product_title} en Mercapro. ¿Sigue disponible?',
+            'producer' => 'Hola, encontré el perfil de {producer_name} en Mercapro. ¿Me puedes contar sobre tus ofertas?',
         ] as $key => $body) {
             MessageTemplate::query()->firstOrCreate(['key' => $key], ['body' => $body]);
         }

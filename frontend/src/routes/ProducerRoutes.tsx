@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, CheckCircle2, ChevronRight, LayoutDashboard, LogOut, Menu, Package, Plus, User, X } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { AlertCircle, ArrowRight, BookOpen, Camera, CheckCircle2, ChevronRight, LayoutDashboard, LogOut, Menu, Package, Plus, User, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { BrandLogo } from '../components/BrandLogo'
 import ActivitySelect from '../components/ActivitySelect'
 import LocationPicker from '../components/LocationPicker'
 import TextAreaField from '../components/TextAreaField'
@@ -11,12 +12,18 @@ import { ProducerReviewSubmission } from '../components/ProducerReviewSubmission
 import { compressProductPhoto } from '../api/photo-optimizer'
 import {
   clearSessionCache, getProducerAppeals, getProducerMetrics, getProducerDashboard,
-  getProducerProduct, getSessionUser, listCategories, listLocations, logoutUser,
-  renewProducerProduct, saveProductDraft, startPhoneVerification, submitProducerAppeal,
-  transitionProducerProduct, updateProduct, updateProducerProfile, verifyProducerPhone,
-  type ProducerAppealState, type ProducerDashboardProduct, type ProducerMetrics, type PublicLocation,
+  getBiometricStatus, getProducerProduct, getSessionUser, listCategories, listLocations, logoutUser,
+  renewProducerProduct, saveProductDraft, getMyStories, saveMyStory, deleteMyStory, submitProducerAppeal,
+  transitionProducerProduct, updateProduct, updateProducerProfile,
+  uploadProducerDocument, getProducerDocuments,
+  type OwnedProducerStory, type ProducerAppealState, type ProducerDashboardProduct, type ProducerMetrics, type PublicLocation,
 } from '../api/client'
-import { SiteFooter, SiteHeader } from './shared/SiteChrome'
+import VerificationBadge from '../components/VerificationBadge'
+import { categoryPath } from '../components/categoryTree'
+import type { BiometricStatus } from '../api/client'
+
+const BiometricCapture = lazy(() => import('../components/BiometricCapture'))
+
 import { InfoPage } from './shared/InfoPage'
 
 // ── Sidebar shell shared by all producer pages ────────────────────────────────
@@ -40,6 +47,7 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { to: '/mi-panel', Icon: LayoutDashboard, label: 'Inicio' },
     { to: '/mis-productos', Icon: Package, label: 'Mis publicaciones' },
+    { to: '/mis-historias', Icon: BookOpen, label: 'Mis historias' },
     { to: '/mi-perfil', Icon: User, label: 'Mi perfil' },
   ]
 
@@ -56,7 +64,7 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
       <aside className={`producer-sidebar${sidebarOpen ? ' producer-sidebar--open' : ''}`} aria-label="Menú del panel">
         <div className="producer-sidebar__header">
           <Link to="/" className="producer-sidebar__brand">
-            <span className="producer-sidebar__brand-name">El Empujoncito</span>
+            <span className="brand producer-sidebar__brand-name"><BrandLogo tagline={false} /></span>
             <span className="producer-sidebar__brand-sub">Panel del productor</span>
           </Link>
           <button className="producer-sidebar__close" aria-label="Cerrar menú" onClick={() => setSidebarOpen(false)}>
@@ -113,7 +121,7 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
           <button className="producer-topbar__menu" aria-label="Abrir menú" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
           </button>
-          <Link to="/" className="producer-topbar__brand">El Empujoncito</Link>
+          <Link to="/" className="brand producer-topbar__brand" aria-label="Mercapro, inicio"><BrandLogo tagline={false} /></Link>
           <Link to="/mis-productos/nuevo" className="button button--primary button--small producer-topbar__publish" aria-label="Publicar nuevo producto">
             <Plus size={15} aria-hidden="true" />
             <span>Publicar</span>
@@ -130,7 +138,6 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
 // ── Profile / settings page ───────────────────────────────────────────────────
 
 function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: boolean }) {
-  const [challenge, setChallenge] = useState<{ phone: string; code?: string } | null>(null)
   const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof getProducerDashboard>> | null>(null)
   const [locations, setLocations] = useState<PublicLocation[]>([])
   const [locationsLoading, setLocationsLoading] = useState(true)
@@ -161,7 +168,7 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
     { done: Boolean(profile.description?.trim()), label: 'Descripción del negocio' },
     { done: Boolean(profile.activity), label: 'Tipo de actividad' },
     { done: Boolean(profile.location_id), label: 'Ubicación aproximada' },
-    { done: profile.contact_level === 'contact_confirmed', label: 'Teléfono verificado' },
+    { done: profile.contact_level === 'contact_confirmed', label: 'Teléfono confirmado' },
   ] : []
   const doneCnt = completionChecks.filter((c) => c.done).length
   const pct = completionChecks.length ? Math.round(doneCnt / completionChecks.length * 100) : 0
@@ -225,7 +232,6 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
                       setSaveSuccess(true)
                       const data = await getProducerDashboard()
                       setDashboard(data)
-                      setChallenge(null)
                     } catch (error) {
                       setMessage(error instanceof Error ? error.message : 'No se pudo guardar el perfil.')
                     }
@@ -237,6 +243,49 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
 
                   <label>Actividad
                     <ActivitySelect defaultValue={profile.activity} />
+                  </label>
+
+                  <label>Tipo de emprendimiento
+                    <select name="vendor_type" defaultValue={profile.vendor_type ?? 'productor'}>
+                      <option value="productor">Personal / Productor individual</option>
+                      <option value="cooperativa">Cooperativa</option>
+                      <option value="distribuidor">PYME / Empresa</option>
+                    </select>
+                    <small>¿Cómo describirías tu operación?</small>
+                  </label>
+
+                  <fieldset style={{ border: 'none', padding: 0 }}>
+                    <legend style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 10 }}>Métodos de pago que aceptas</legend>
+                    <ul className="payment-toggles">
+                      {([
+                        ['efectivo', 'Efectivo'],
+                        ['yappy', 'Yappy'],
+                        ['transferencia', 'Transferencia bancaria'],
+                        ['tarjeta', 'Tarjeta de crédito/débito'],
+                        ['cheque', 'Cheque'],
+                        ['credito', 'Crédito / Cuenta abierta'],
+                      ] as const).map(([value, label]) => {
+                        const checked = (profile.payment_methods ?? []).includes(value)
+                        return (
+                          <li key={value} className="payment-toggle">
+                            <input id={`prof-pm-${value}`} type="checkbox" name="payment_methods[]" value={value} defaultChecked={checked} />
+                            <label htmlFor={`prof-pm-${value}`} className="payment-toggle__label">{label}</label>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </fieldset>
+
+                  <label>Teléfono de contacto
+                    <input
+                      name="phone_private"
+                      type="tel"
+                      defaultValue={profile.phone_private}
+                      required
+                      maxLength={40}
+                      placeholder="+507 6000-0000"
+                    />
+                    <small>Solo lo usamos para verificar tu cuenta. Si lo cambias, tu distintivo Verified PRO se resetea.</small>
                   </label>
 
                   <label>Historia de tu negocio
@@ -273,6 +322,17 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
                     </p>
                   )}
 
+                  <fieldset className="location-fieldset">
+                    <legend>RUC (opcional)</legend>
+                    <label>Número de RUC
+                      <input name="ruc" defaultValue={profile.ruc ?? ''} maxLength={30} autoComplete="off" placeholder="8-123-4567" readOnly={profile.verification_level !== 'contact_confirmed' && profile.verification_level !== 'unverified'} />
+                    </label>
+                    <label>Dígito verificador
+                      <input name="ruc_dv" defaultValue={profile.ruc_dv ?? ''} maxLength={2} inputMode="numeric" autoComplete="off" pattern="[0-9]{1,2}" readOnly={profile.verification_level !== 'contact_confirmed' && profile.verification_level !== 'unverified'} />
+                    </label>
+                    <small>Solo el equipo de Mercapro lo ve. Es necesario para obtener la etiqueta Verificado.</small>
+                  </fieldset>
+
                   {saveSuccess && <p role="status" className="form-help" style={{ color: '#1a7f37' }}>✓ Perfil guardado correctamente.</p>}
                   {message && <p role="alert" className="producer-product-form__error">{message}</p>}
 
@@ -288,86 +348,82 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
               </section>
             )}
 
-            {/* ── Section 2: Contact verification ── */}
+            {/* ── Section 2: Verified PRO status ── */}
             <section className="producer-settings__section" id="verificar">
               <div className="producer-settings__section-head">
                 <CheckCircle2 size={18} aria-hidden="true" />
-                <h2>Contacto y verificación</h2>
+                <h2>Verificación</h2>
               </div>
 
               {profile.contact_level === 'contact_confirmed' ? (
                 <div className="producer-settings__verified">
-                  <CheckCircle2 size={22} style={{ color: '#1a7f37', flexShrink: 0 }} aria-hidden="true" />
-                  <div>
-                    <strong>Teléfono verificado</strong>
-                    <p>Tu número está confirmado y aparece en tu perfil cuando publicas una oferta.</p>
+                  <div className="verified-pro-badge-display">
+                    <VerificationBadge level={profile.verification_level} internal />
                   </div>
+                  <p style={{ marginTop: '.75rem', color: 'var(--color-muted)', fontSize: '.9rem' }}>
+                    {profile.verification_level === 'contact_confirmed'
+                      ? 'Tu teléfono está confirmado. Para obtener la etiqueta Verificado, agrega tu RUC y sube tu documento legal. Un administrador los revisará.'
+                      : 'Tu etiqueta aparece en tu perfil y en todos tus anuncios.'}
+                  </p>
+                  {profile.verification_level === 'identity_reviewed' && <ProducerBiometricSection />}
                 </div>
               ) : (
-                <>
+                <div className="producer-settings__pending-verification">
                   <p className="producer-settings__section-help">
-                    Confirma tu número para que los compradores puedan contactarte directamente.
-                    El teléfono solo aparece en tu perfil después de verificarlo.
+                    Un operador de MercaPro se comunicará contigo al número registrado para confirmar tu cuenta.
+                    Una vez confirmado, los compradores podrán ver tu número y contactarte.
                   </p>
-                  <div className="producer-settings__phone-row">
-                    <div>
-                      <p style={{ margin: '0 0 .5rem', fontWeight: 600 }}>Teléfono registrado</p>
-                      <p style={{ margin: 0, fontFamily: 'monospace', fontSize: '1.05rem' }}>{profile.phone_private}</p>
-                      {!verificationOnly && (
-                        <small style={{ color: 'var(--color-muted)' }}>
-                          Para cambiar el número, guarda el perfil primero con el nuevo teléfono.
-                        </small>
-                      )}
-                    </div>
-                    <button
-                      className="button button--outline"
-                      type="button"
-                      onClick={async () => {
-                        setMessage('')
-                        try {
-                          const result = await startPhoneVerification()
-                          setChallenge({ phone: profile.phone_private, code: result.development_code })
-                          setMessage(result.development_code
-                            ? `Código de desarrollo: ${result.development_code}`
-                            : 'Enviamos un código al número registrado.')
-                        } catch (error) {
-                          setMessage(error instanceof Error ? error.message : 'No se pudo iniciar la verificación.')
-                        }
-                      }}
-                    >
-                      Enviar código
-                    </button>
-                  </div>
-
-                  {challenge && (
-                    <ValidatedForm
-                      className="auth-form"
-                      style={{ marginTop: '1.25rem' }}
-                      onSubmit={async (event) => {
-                        event.preventDefault()
-                        const code = String(new FormData(event.currentTarget).get('code'))
-                        setMessage('')
-                        try {
-                          await verifyProducerPhone(challenge.phone, code)
-                          setDashboard(await getProducerDashboard())
-                          setMessage('')
-                          setChallenge(null)
-                        } catch (error) {
-                          setMessage(error instanceof Error ? error.message : 'No se pudo verificar el teléfono.')
-                        }
-                      }}
-                    >
-                      <label>Código de seis dígitos
-                        <input name="code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoFocus />
-                      </label>
-                      <button className="button button--primary" type="submit">Confirmar teléfono</button>
-                    </ValidatedForm>
+                  {!verificationOnly && (
+                    <p className="producer-settings__section-help" style={{ marginTop: '.75rem' }}>
+                      Para cambiar el número ve a la sección de datos del perfil arriba y guarda con el nuevo teléfono antes de la llamada.
+                    </p>
                   )}
-
-                  {message && <p role="status" style={{ marginTop: '.75rem' }}>{message}</p>}
-                </>
+                </div>
               )}
             </section>
+
+            {/* ── Section 3: Account data (read-only) ── */}
+            {!verificationOnly && (
+              <section className="producer-settings__section">
+                <div className="producer-settings__section-head">
+                  <User size={18} aria-hidden="true" />
+                  <h2>Datos de cuenta</h2>
+                </div>
+                <p className="producer-settings__section-help">
+                  Estos datos se registraron al crear tu cuenta y no se pueden cambiar desde aquí.
+                </p>
+                <div className="producer-readonly-grid">
+                  <div className="producer-readonly-field">
+                    <span className="producer-readonly-field__label">Nombre completo</span>
+                    <span className="producer-readonly-field__value">{dashboard.user.name}</span>
+                  </div>
+                  <div className="producer-readonly-field">
+                    <span className="producer-readonly-field__label">Correo electrónico</span>
+                    <span className="producer-readonly-field__value">{dashboard.user.email}</span>
+                  </div>
+                  <div className="producer-readonly-field">
+                    <span className="producer-readonly-field__label">Teléfono</span>
+                    <span className="producer-readonly-field__value" style={{ fontFamily: 'monospace' }}>{profile.phone_private}</span>
+                  </div>
+                  {profile.cedula && (
+                    <div className="producer-readonly-field">
+                      <span className="producer-readonly-field__label">Cédula</span>
+                      <span className="producer-readonly-field__value" style={{ fontFamily: 'monospace' }}>{profile.cedula}</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* ── Section 4: Documents ── */}
+            {!verificationOnly && (
+              <ProducerDocumentsSection
+                hasCedulaPhoto={profile.has_cedula_photo}
+                hasPactoSocial={profile.has_pacto_social}
+                hasAvisoOperacion={profile.has_aviso_operacion}
+                vendorType={profile.vendor_type ?? 'productor'}
+              />
+            )}
           </>
         )}
       </div>
@@ -375,7 +431,137 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
   )
 }
 
-// ── Product form (full-page — keeps SiteHeader for space) ─────────────────────
+// ── Documents section ─────────────────────────────────────────────────────────
+
+function ProducerBiometricSection() {
+  const [status, setStatus] = useState<BiometricStatus | null>(null)
+  const [capturing, setCapturing] = useState(false)
+  const [loadError, setLoadError] = useState('')
+
+  const refresh = useCallback(() => {
+    getBiometricStatus().then(setStatus).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'No pudimos consultar tu verificación.'))
+  }, [])
+  useEffect(refresh, [refresh])
+
+  if (loadError) return <p role="alert">{loadError}</p>
+  if (!status?.eligible) return null
+  if (status.latest?.status === 'pending') return <p role="status" className="producer-settings__section-help">Tu verificación Pro está en revisión. Te avisaremos cuando el equipo termine.</p>
+
+  return (
+    <div className="producer-biometric">
+      <h3>Obtén Verificado Pro</h3>
+      {status.latest?.status === 'rejected' && <p role="alert">No pudimos aprobar tu verificación: {status.latest.review_reason}</p>}
+      {capturing ? (
+        <Suspense fallback={<p role="status">Cargando…</p>}>
+          <BiometricCapture onCancel={() => setCapturing(false)} onDone={() => { setCapturing(false); refresh() }} />
+        </Suspense>
+      ) : (
+        <>
+          <p className="producer-settings__section-help">Confirma tu identidad con una foto de tu cédula y una foto en vivo. Es opcional y gratis.</p>
+          <button className="button button--primary" type="button" onClick={() => setCapturing(true)}>Empezar verificación</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+type ProducerDocumentType = 'cedula_photo' | 'pacto_social' | 'aviso_operacion'
+
+function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOperacion, vendorType }: { hasCedulaPhoto: boolean; hasPactoSocial: boolean; hasAvisoOperacion: boolean; vendorType: string }) {
+  const [uploaded, setUploaded] = useState<Record<ProducerDocumentType, boolean>>({ cedula_photo: hasCedulaPhoto, pacto_social: hasPactoSocial, aviso_operacion: hasAvisoOperacion })
+  const [status, setStatus] = useState<Partial<Record<ProducerDocumentType, string>>>({})
+
+  const documents: Array<{ type: ProducerDocumentType; title: string; action: string }> = [
+    ...(vendorType === 'productor' ? [{ type: 'cedula_photo' as const, title: 'Foto de cédula', action: 'Subir foto de cédula' }] : []),
+    ...(vendorType !== 'cooperativa' ? [{ type: 'aviso_operacion' as const, title: 'Aviso de operación', action: 'Subir aviso de operación' }] : []),
+    ...(vendorType !== 'productor' ? [{ type: 'pacto_social' as const, title: 'Pacto social / personería', action: 'Subir pacto social' }] : []),
+  ]
+
+  async function upload(type: ProducerDocumentType, file: File) {
+    setStatus((current) => ({ ...current, [type]: 'Subiendo…' }))
+    try {
+      await uploadProducerDocument(type, file)
+      const docs = await getProducerDocuments()
+      setUploaded({ cedula_photo: docs.has_cedula_photo, pacto_social: docs.has_pacto_social, aviso_operacion: docs.has_aviso_operacion })
+      setStatus((current) => ({ ...current, [type]: '✓ Subido correctamente.' }))
+    } catch (error) {
+      setStatus((current) => ({ ...current, [type]: error instanceof Error ? error.message : 'No se pudo subir el archivo.' }))
+    }
+  }
+
+  return (
+    <section className="producer-settings__section">
+      <div className="producer-settings__section-head">
+        <Package size={18} aria-hidden="true" />
+        <h2>Documentos de verificación</h2>
+      </div>
+      <p className="producer-settings__section-help">
+        Sube el documento que respalda tu RUC. Solo el equipo de Mercapro puede verlo.
+        {' '}Formatos aceptados: JPG, PNG, PDF · Máximo 10 MB por archivo.
+      </p>
+      <div className="producer-readonly-grid">
+        {documents.map((document) => (
+          <div key={document.type}>
+            <p style={{ marginBottom: 6, fontWeight: 600, fontSize: '0.85rem' }}>
+              {document.title} {uploaded[document.type] ? '✓' : '—'}
+            </p>
+            <label className="button button--outline button--small" style={{ cursor: 'pointer', display: 'inline-block' }}>
+              {uploaded[document.type] ? 'Reemplazar' : document.action}
+              <input type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.currentTarget.files?.[0]
+                  if (file) void upload(document.type, file)
+                }} />
+            </label>
+            {status[document.type] && <p style={{ marginTop: 6, fontSize: '0.8rem' }}>{status[document.type]}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ── Product form ──────────────────────────────────────────────────────────────
+
+const PRODUCT_UNITS = ['lb', 'kg', 'unidad', 'docena', 'caja', 'quintal', 'saco', 'galón', 'litro']
+
+/** Older products hold free text; anything that is not a standard unit must be chosen again. */
+function normalizeUnit(unit: string): string {
+  const normalized = unit.trim().toLowerCase()
+  return PRODUCT_UNITS.includes(normalized) ? normalized : ''
+}
+
+const PRODUCT_DRAFT_KEY = 'mercapro.product-draft'
+const PRODUCT_DRAFT_FIELDS = ['title', 'description', 'unit', 'minimum_order', 'stock_quantity', 'price_type', 'price_amount', 'price_max', 'currency', 'delivery_method'] as const
+
+type ProductDraft = Partial<Record<(typeof PRODUCT_DRAFT_FIELDS)[number], string>> & { category_id?: number }
+type ProductFormSeed = ProductDraft & { minimum_order?: string | null; stock_quantity?: string | number | null; price_amount?: string | null; price_max?: string | null }
+
+function readProductDraft(): ProductDraft | null {
+  try {
+    const stored = window.localStorage.getItem(PRODUCT_DRAFT_KEY)
+    return stored ? JSON.parse(stored) as ProductDraft : null
+  } catch {
+    return null
+  }
+}
+
+function writeProductDraft(draft: ProductDraft): boolean {
+  try {
+    window.localStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(draft))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function clearProductDraft() {
+  try {
+    window.localStorage.removeItem(PRODUCT_DRAFT_KEY)
+  } catch {
+    // Storage can be blocked; there is nothing to clear then.
+  }
+}
 
 function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const { id = '' } = useParams()
@@ -384,28 +570,47 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [photoError, setPhotoError] = useState('')
-  const [categoriesFromApi, setCategoriesFromApi] = useState<Array<{ id: number; name: string }>>([])
+  const [categoriesFromApi, setCategoriesFromApi] = useState<Array<{ id: number; name: string; parent_id: number | null }>>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [categoriesLoadError, setCategoriesLoadError] = useState('')
   const [categoriesRetry, setCategoriesRetry] = useState(0)
+  const [selectedParentId, setSelectedParentId] = useState('')
   const [initial, setInitial] = useState<Awaited<ReturnType<typeof getProducerProduct>> | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
+  const [selectedSubId, setSelectedSubId] = useState('')
   const [removedImageIds, setRemovedImageIds] = useState<number[]>([])
 
-  const [pvTitle, setPvTitle] = useState('')
-  const [pvDesc, setPvDesc] = useState('')
-  const [pvUnit, setPvUnit] = useState('')
-  const [pvPrice, setPvPrice] = useState('')
-  const [pvCurrency, setPvCurrency] = useState('PAB')
-  const [pvPriceType, setPvPriceType] = useState('contact')
+  const [draft, setDraft] = useState<ProductDraft | null>(() => editing ? null : readProductDraft())
+  const [draftRestored, setDraftRestored] = useState(() => draft !== null)
+  const [draftSavedAt, setDraftSavedAt] = useState('')
+  const [formKey, setFormKey] = useState(0)
+  const [addedCount, setAddedCount] = useState(0)
+  const draftTimer = useRef<number | undefined>(undefined)
+  const seed = (initial ?? draft ?? {}) as ProductFormSeed
+  const seedCategoryId = initial?.category_id ?? draft?.category_id
+
+  const [pvTitle, setPvTitle] = useState(draft?.title ?? '')
+  const [pvDesc, setPvDesc] = useState(draft?.description ?? '')
+  const [pvUnit, setPvUnit] = useState(draft?.unit ?? 'lb')
+  const [pvPrice, setPvPrice] = useState(draft?.price_amount ?? '')
+  const [pvCurrency, setPvCurrency] = useState(draft?.currency ?? 'PAB')
+  const [pvPriceType, setPvPriceType] = useState<'fixed' | 'range'>(draft?.price_type === 'range' ? 'range' : 'fixed')
+  const [pvPriceMax, setPvPriceMax] = useState(draft?.price_max ?? '')
   const [pvNewImgUrls, setPvNewImgUrls] = useState<string[]>([])
   const [pvImgIdx, setPvImgIdx] = useState(0)
   const pvObjUrls = useRef<string[]>([])
+  const [profileStatus, setProfileStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editing) {
+      void getProducerDashboard().then((d) => setProfileStatus(d.profile?.profile_status ?? null))
+    }
+  }, [editing])
 
   useEffect(() => {
     if (editing) {
       void getProducerProduct(id)
-        .then((product) => { setInitial(product); setSelectedCategoryId(String(product.category_id)) })
+        .then((product) => { setInitial(product) })
         .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'No pudimos cargar esta publicación.'))
     }
   }, [editing, id])
@@ -425,17 +630,73 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   }, [categoriesRetry])
 
   useEffect(() => {
+    if (!seedCategoryId || categoriesFromApi.length === 0) return
+    const path = categoryPath(categoriesFromApi, seedCategoryId)
+    if (path.length === 0) return
+    setSelectedParentId(String(path[0].id))
+    setSelectedSubId(path[1] ? String(path[1].id) : '')
+    setSelectedCategoryId(String(path[path.length - 1].id))
+  }, [seedCategoryId, categoriesFromApi])
+
+  useEffect(() => {
     if (initial) {
       setPvTitle(initial.title)
       setPvDesc(initial.description ?? '')
-      setPvUnit(initial.unit)
+      setPvUnit(normalizeUnit(initial.unit))
       setPvPrice(initial.price_amount != null ? String(initial.price_amount) : '')
       setPvCurrency(initial.currency ?? 'PAB')
-      setPvPriceType(initial.price_type ?? 'contact')
+      setPvPriceType(initial.price_type === 'range' ? 'range' : 'fixed')
+      setPvPriceMax(initial.price_max != null ? String(initial.price_max) : '')
     }
   }, [initial])
 
   useEffect(() => () => { pvObjUrls.current.forEach(URL.revokeObjectURL) }, [])
+  useEffect(() => () => { window.clearTimeout(draftTimer.current) }, [])
+
+  function scheduleDraftSave(event: React.FormEvent<HTMLElement>) {
+    if (editing) return
+    const form = (event.target as HTMLInputElement).form
+    if (!form) return
+    window.clearTimeout(draftTimer.current)
+    draftTimer.current = window.setTimeout(() => {
+      const values = new FormData(form)
+      const next: ProductDraft = {}
+      PRODUCT_DRAFT_FIELDS.forEach((field) => {
+        const value = values.get(field)
+        if (typeof value === 'string' && value !== '') next[field] = value
+      })
+      const categoryId = Number(values.get('category_id'))
+      if (categoryId > 0) next.category_id = categoryId
+      if (writeProductDraft(next)) setDraftSavedAt(new Date().toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' }))
+    }, 600)
+  }
+
+  function discardDraft() {
+    window.clearTimeout(draftTimer.current)
+    clearProductDraft()
+    setDraft(null)
+    setDraftRestored(false)
+    setDraftSavedAt('')
+    resetForNextProduct()
+    setSelectedParentId('')
+    setSelectedSubId('')
+    setSelectedCategoryId('')
+    setPvUnit('lb')
+    setPvCurrency('PAB')
+  }
+
+  function resetForNextProduct() {
+    setFormKey((key) => key + 1)
+    setPvTitle('')
+    setPvDesc('')
+    setPvPrice('')
+    setPvPriceMax('')
+    setPvPriceType('fixed')
+    pvObjUrls.current.forEach(URL.revokeObjectURL)
+    pvObjUrls.current = []
+    setPvNewImgUrls([])
+    setPvImgIdx(0)
+  }
 
   function validatePhotos(input: HTMLInputElement): string {
     const files = Array.from(input.files ?? [])
@@ -467,17 +728,26 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
   const clampedIdx = Math.min(pvImgIdx, Math.max(0, allPvImgs.length - 1))
   const currentPvImg = allPvImgs[clampedIdx] ?? null
   const pvCategoryName = categoriesFromApi.find((c) => String(c.id) === selectedCategoryId)?.name ?? ''
+  const parentCategories = categoriesFromApi.filter((c) => c.parent_id === null)
+  const subcategories = selectedParentId
+    ? categoriesFromApi.filter((c) => String(c.parent_id) === selectedParentId)
+    : []
+  const varieties = selectedSubId
+    ? categoriesFromApi.filter((c) => String(c.parent_id) === selectedSubId)
+    : []
 
   function pvPriceLabel() {
-    if (pvPriceType === 'contact' || !pvPrice) return 'Consultar'
     const n = parseFloat(pvPrice)
-    if (isNaN(n)) return 'Consultar'
+    if (isNaN(n)) return 'Precio pendiente'
     const prefix = pvCurrency === 'USD' ? 'US$' : 'B/.'
-    return pvPriceType === 'from' ? `Desde ${prefix} ${n.toFixed(2)}` : `${prefix} ${n.toFixed(2)}`
+    const max = parseFloat(pvPriceMax)
+    return pvPriceType === 'range' && !isNaN(max) ? `${prefix} ${n.toFixed(2)} – ${max.toFixed(2)}` : `${prefix} ${n.toFixed(2)}`
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const addAnother = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'another'
+    if (!selectedCategoryId) { setSaveError('Selecciona una categoría antes de continuar.'); return }
     const formElement = event.currentTarget
     const photoInput = formElement.elements.namedItem('images[]') as HTMLInputElement | null
     if (photoInput) {
@@ -491,16 +761,20 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
         return
       }
     }
-    const priceTypeSelect = formElement.elements.namedItem('price_type') as HTMLSelectElement | null
     const priceAmountInput = formElement.elements.namedItem('price_amount') as HTMLInputElement | null
-    if (priceTypeSelect && priceAmountInput && ['fixed', 'from'].includes(priceTypeSelect.value)) {
-      if (!priceAmountInput.value.trim()) {
-        priceAmountInput.setCustomValidity('Ingresa el precio para este tipo de publicación.')
-        priceAmountInput.reportValidity()
-        return
-      }
-    }
+    const priceMaxInput = formElement.elements.namedItem('price_max') as HTMLInputElement | null
     if (priceAmountInput) priceAmountInput.setCustomValidity('')
+    if (priceMaxInput) priceMaxInput.setCustomValidity('')
+    if (priceAmountInput && !(Number(priceAmountInput.value) > 0)) {
+      priceAmountInput.setCustomValidity('Ingresa un precio mayor que cero.')
+      priceAmountInput.reportValidity()
+      return
+    }
+    if (priceAmountInput && priceMaxInput && !(Number(priceMaxInput.value) > Number(priceAmountInput.value))) {
+      priceMaxInput.setCustomValidity('El precio máximo debe ser mayor que el precio mínimo.')
+      priceMaxInput.reportValidity()
+      return
+    }
     setSaveError('')
     setSaving(true)
     try {
@@ -530,7 +804,23 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
           : 'Guardamos los cambios. Puedes enviar la publicación a revisión desde tu panel.')
       } else {
         await saveProductDraft(form)
-        navigate('/mis-productos', { state: { notice: 'Tu anuncio fue enviado a revisión. El equipo lo aprobará pronto y aparecerá en el catálogo.' } })
+        window.clearTimeout(draftTimer.current)
+        clearProductDraft()
+        setDraftRestored(false)
+        setDraftSavedAt('')
+        if (addAnother) {
+          const title = String(form.get('title') ?? '')
+          setDraft({ unit: pvUnit, currency: pvCurrency, delivery_method: String(form.get('delivery_method') ?? ''), category_id: Number(selectedCategoryId) })
+          resetForNextProduct()
+          setAddedCount((count) => count + 1)
+          setMessage(`“${title}” se envió a revisión. Agrega el siguiente producto; dejamos la categoría y la entrega para ahorrarte tiempo.`)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+        const notice = profileStatus === 'pending'
+          ? 'Tu oferta quedó en revisión. Aparecerá en el catálogo cuando tu perfil y tu oferta sean aprobados.'
+          : 'Tu anuncio fue enviado a revisión. El equipo lo aprobará pronto y aparecerá en el catálogo.'
+        navigate('/mis-productos', { state: { notice } })
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'No se pudo guardar el borrador.'
@@ -541,60 +831,141 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
     }
   }
 
-  const formDisabled = saving || (editing && !initial) || categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0
+  const formDisabled = saving || (editing && !initial) || categoriesLoading || Boolean(categoriesLoadError) || parentCategories.length === 0
 
   return (
-    <div className="app-shell">
-      <SiteHeader />
-      <main className="product-form-page page-shell">
+    <ProducerShell>
+      <div className="product-form-page">
         <div className="product-form-layout">
-          <section className="product-form-col">
+          <section className="product-form-col" onChange={scheduleDraftSave}>
             <p className="eyebrow eyebrow--quiet">PORTAL DE PRODUCTORES</p>
             <h1 className="product-form-col__title">{editing ? 'Edita tu oferta' : 'Publica un producto'}</h1>
-            <ValidatedForm className="auth-form producer-product-form" onSubmit={handleSubmit} aria-busy={saving}>
+            {!editing && profileStatus === 'pending' && (
+              <div className="profile-completion-card" role="note" style={{ marginBottom: '1.5rem' }}>
+                <div className="profile-completion-card__head">
+                  <AlertCircle size={19} className="profile-completion-card__icon" aria-hidden="true" />
+                  <div>
+                    <strong>Tu perfil está en revisión</strong>
+                    <p>Podés crear ofertas ahora, pero aparecerán en el catálogo público solo cuando tanto tu perfil como cada oferta sean aprobados por el equipo.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!editing && draftRestored && (
+              <div className="product-draft-note" role="status">
+                <span>Recuperamos tu borrador. Vuelve a elegir las fotos antes de enviar.</span>
+                <button className="text-link" type="button" onClick={discardDraft}>Descartar borrador</button>
+              </div>
+            )}
+            <ValidatedForm key={formKey} className="auth-form producer-product-form" onSubmit={handleSubmit} aria-busy={saving}>
               {!editing || initial ? (
                 <>
                   <label>Nombre del producto
-                    <input name="title" defaultValue={initial?.title} minLength={3} maxLength={120} required
+                    <input name="title" defaultValue={seed.title} minLength={3} maxLength={120} required
                       onChange={(e) => setPvTitle(e.currentTarget.value)} />
                   </label>
 
                   <label>Categoría
-                    <select name="category_id" value={selectedCategoryId}
-                      onChange={(e) => setSelectedCategoryId(e.currentTarget.value)}
-                      disabled={categoriesLoading || Boolean(categoriesLoadError) || categoriesFromApi.length === 0} required>
-                      <option value="">{categoriesLoading ? 'Cargando categorías…' : categoriesFromApi.length ? 'Selecciona una categoría' : 'No hay categorías disponibles'}</option>
-                      {categoriesFromApi.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    <select
+                      value={selectedParentId}
+                      onChange={(e) => {
+                        const pid = e.currentTarget.value
+                        setSelectedParentId(pid)
+                        setSelectedSubId('')
+                        const subs = categoriesFromApi.filter((c) => String(c.parent_id) === pid)
+                        setSelectedCategoryId(subs.length === 0 ? pid : '')
+                      }}
+                      disabled={categoriesLoading || Boolean(categoriesLoadError) || parentCategories.length === 0}
+                    >
+                      <option value="">{categoriesLoading ? 'Cargando categorías…' : parentCategories.length ? 'Selecciona una categoría' : 'No hay categorías disponibles'}</option>
+                      {parentCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                     </select>
                   </label>
+                  {selectedParentId && subcategories.length > 0 && (
+                    <label>Subcategoría
+                      <select
+                        value={selectedSubId}
+                        onChange={(e) => {
+                          const subId = e.currentTarget.value
+                          setSelectedSubId(subId)
+                          setSelectedCategoryId(categoriesFromApi.some((c) => String(c.parent_id) === subId) ? '' : subId)
+                        }}
+                        required
+                      >
+                        <option value="">Selecciona una subcategoría</option>
+                        {subcategories.map((sub) => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {selectedSubId && varieties.length > 0 && (
+                    <label>Tipo específico
+                      <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.currentTarget.value)} required>
+                        <option value="">Selecciona el tipo</option>
+                        {varieties.map((variety) => <option key={variety.id} value={variety.id}>{variety.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {selectedParentId && subcategories.length > 0 && <input type="hidden" name="category_id" value={selectedCategoryId} />}
+                  {selectedParentId && subcategories.length === 0 && (
+                    <input type="hidden" name="category_id" value={selectedCategoryId} />
+                  )}
                   {categoriesLoading && <p role="status">Cargando categorías disponibles…</p>}
                   {categoriesLoadError && <div className="catalog-reference-error" role="alert"><span>No pudimos cargar las categorías. {categoriesLoadError}</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((n) => n + 1)}>Reintentar</button></div>}
-                  {!categoriesLoading && !categoriesLoadError && categoriesFromApi.length === 0 && <div className="catalog-reference-error" role="alert"><span>No hay categorías activas para publicar todavía.</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((n) => n + 1)}>Volver a consultar</button></div>}
+                  {!categoriesLoading && !categoriesLoadError && parentCategories.length === 0 && <div className="catalog-reference-error" role="alert"><span>No hay categorías activas para publicar todavía.</span><button className="text-link" type="button" onClick={() => setCategoriesRetry((n) => n + 1)}>Volver a consultar</button></div>}
 
                   <label>Descripción
-                    <textarea name="description" defaultValue={initial?.description} minLength={20} maxLength={3000} required rows={5}
+                    <textarea name="description" defaultValue={seed.description} minLength={20} maxLength={3000} required rows={5}
                       className="resize-none" style={{ resize: 'none' }}
                       onChange={(e) => setPvDesc(e.currentTarget.value)} />
                   </label>
 
                   <div className="form-row">
                     <label>Unidad de venta
-                      <input name="unit" defaultValue={initial?.unit} placeholder="libra, docena…" maxLength={40} required
-                        onChange={(e) => setPvUnit(e.currentTarget.value)} />
+                      <select name="unit" value={pvUnit} required onChange={(e) => setPvUnit(e.currentTarget.value)}>
+                        {!PRODUCT_UNITS.includes(pvUnit) && <option value="">Selecciona una unidad</option>}
+                        <option value="lb">Libra (lb)</option>
+                        <option value="kg">Kilogramo (kg)</option>
+                        <option value="unidad">Unidad</option>
+                        <option value="docena">Docena</option>
+                        <option value="caja">Caja</option>
+                        <option value="quintal">Quintal</option>
+                        <option value="saco">Saco</option>
+                        <option value="galón">Galón</option>
+                        <option value="litro">Litro</option>
+                      </select>
                     </label>
+                    <label>Pedido mínimo (opcional)
+                      <input name="minimum_order" defaultValue={seed.minimum_order ?? ''} placeholder="Ej: 5 lb, 1 caja" maxLength={100} />
+                      <small>Cantidad mínima que aceptas por pedido.</small>
+                    </label>
+                  </div>
+                  <div className="form-row">
                     <label>Stock disponible (opcional)
-                      <input name="stock_quantity" defaultValue={initial?.stock_quantity ?? ''} type="number" min="0" step="0.01" />
+                      <input name="stock_quantity" defaultValue={seed.stock_quantity ?? ''} type="number" min="0" step="0.01" />
                       <small>Déjalo vacío si prefieres no indicar cantidad.</small>
                     </label>
                   </div>
 
+                  <label>Tipo de precio
+                    <select name="price_type" value={pvPriceType} onChange={(e) => setPvPriceType(e.currentTarget.value === 'range' ? 'range' : 'fixed')}>
+                      <option value="fixed">Precio específico</option>
+                      <option value="range">Rango de precio</option>
+                    </select>
+                  </label>
+
                   <div className="form-row">
-                    <label>Precio (opcional)
-                      <input name="price_amount" defaultValue={initial?.price_amount ?? ''} type="number" min="0" step="0.01"
-                        onChange={(e) => setPvPrice(e.currentTarget.value)} />
+                    <label>{pvPriceType === 'range' ? 'Precio mínimo' : 'Precio'}
+                      <input name="price_amount" defaultValue={seed.price_amount ?? ''} type="number" min="0.01" step="0.01" required
+                        onChange={(e) => { e.currentTarget.setCustomValidity(''); setPvPrice(e.currentTarget.value) }} />
                     </label>
+                    {pvPriceType === 'range' && (
+                      <label>Precio máximo
+                        <input name="price_max" defaultValue={seed.price_max ?? ''} type="number" min="0.01" step="0.01" required
+                          onChange={(e) => { e.currentTarget.setCustomValidity(''); setPvPriceMax(e.currentTarget.value) }} />
+                      </label>
+                    )}
                     <label>Moneda
-                      <select name="currency" defaultValue={initial?.currency ?? 'PAB'}
+                      <select name="currency" defaultValue={seed.currency ?? 'PAB'}
                         onChange={(e) => setPvCurrency(e.currentTarget.value)}>
                         <option value="PAB">B/. · Balboa</option>
                         <option value="USD">US$ · Dólar estadounidense</option>
@@ -602,17 +973,8 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
                     </label>
                   </div>
 
-                  <label>Tipo de precio
-                    <select name="price_type" defaultValue={initial?.price_type ?? 'contact'}
-                      onChange={(e) => setPvPriceType(e.currentTarget.value)}>
-                      <option value="contact">Consultar</option>
-                      <option value="fixed">Precio fijo</option>
-                      <option value="from">Desde este precio</option>
-                    </select>
-                  </label>
-
                   <label>Entrega o recogida
-                    <input name="delivery_method" defaultValue={initial?.delivery_method} maxLength={120} required />
+                    <input name="delivery_method" defaultValue={seed.delivery_method} maxLength={120} required />
                   </label>
 
                   {editing && initial && ['published', 'paused', 'sold_out'].includes(initial.status) && (
@@ -665,9 +1027,14 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
               {saving && <p role="status" aria-live="polite">Preparando y guardando tus fotografías… Mantén esta página abierta mientras terminamos.</p>}
               {saveError && <p className="producer-product-form__error" role="alert">No pudimos guardar. <strong>{saveError}</strong></p>}
               {!saveError && message && <p role="status">{message}</p>}
-              <button className="button button--primary" type="submit" disabled={formDisabled} aria-busy={saving}>
-                {saving ? 'Enviando…' : saveError ? 'Reintentar' : editing ? 'Guardar cambios' : 'Enviar a revisión'}
-              </button>
+              {!editing && draftSavedAt && <p className="product-draft-saved" role="status">Guardado automáticamente ({draftSavedAt}). Las fotos no se guardan.</p>}
+              <div className="product-form-submit">
+                <button className="button button--primary" type="submit" disabled={formDisabled} aria-busy={saving}>
+                  {saving ? 'Enviando…' : saveError ? 'Reintentar' : editing ? 'Guardar cambios' : 'Enviar a revisión'}
+                </button>
+                {!editing && <button className="button button--outline" type="submit" value="another" disabled={formDisabled}>Enviar y añadir otro</button>}
+                {!editing && addedCount > 0 && <Link className="text-link" to="/mis-productos">Terminar ({addedCount} {addedCount === 1 ? 'enviado' : 'enviados'})</Link>}
+              </div>
             </ValidatedForm>
           </section>
 
@@ -711,7 +1078,7 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
                 <div className="product-card__footer" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e4eaf5' }}>
                   <p className="product-price">
                     <strong>{pvPriceLabel()}</strong>
-                    {pvPriceType !== 'contact' && pvPrice && pvUnit && <span>por {pvUnit}</span>}
+                    {pvPrice && pvUnit && <span>por {pvUnit}</span>}
                   </p>
                   <span className="text-link" aria-hidden="true">Ver oferta →</span>
                 </div>
@@ -723,9 +1090,8 @@ function ProducerProductForm({ editing = false }: { editing?: boolean }) {
             </p>
           </aside>
         </div>
-      </main>
-      <SiteFooter />
-    </div>
+      </div>
+    </ProducerShell>
   )
 }
 
@@ -841,7 +1207,7 @@ function ProducerDashboard() {
     { done: Boolean(dashboard.profile.description?.trim()), label: 'Agrega una descripción de tu negocio', href: '/mi-perfil' },
     { done: Boolean(dashboard.profile.activity), label: 'Indica tu tipo de actividad', href: '/mi-perfil' },
     { done: Boolean(dashboard.profile.location_id), label: 'Elige tu ubicación aproximada', href: '/mi-perfil' },
-    { done: dashboard.profile.contact_level === 'contact_confirmed', label: 'Verifica tu número de teléfono', href: '/mi-perfil#verificar' },
+    { done: dashboard.profile.contact_level === 'contact_confirmed', label: 'Confirma tu teléfono', href: '/mi-perfil#verificar' },
   ] : []
   const incompleteChecks = profileChecks.filter((c) => !c.done)
   const completionPct = profileChecks.length
@@ -924,6 +1290,19 @@ function ProducerDashboard() {
                 )}
                 {appealMessage && <p role="status">{appealMessage}</p>}
               </section>
+            )}
+
+            {/* Pending profile notice */}
+            {dashboard.profile?.profile_status === 'pending' && !profileSuspended && (
+              <div className="profile-completion-card" role="note">
+                <div className="profile-completion-card__head">
+                  <AlertCircle size={19} className="profile-completion-card__icon" aria-hidden="true" />
+                  <div>
+                    <strong>Tu perfil está en revisión</strong>
+                    <p>El equipo de MercaPRO está revisando tu cuenta. Podés crear y enviar ofertas mientras tanto — aparecerán en el catálogo público cuando tu perfil y cada oferta sean aprobados.</p>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Profile completion card */}
@@ -1334,6 +1713,203 @@ function ProducerProductsPage() {
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
+// ── Historias del productor ───────────────────────────────────────────────────
+
+const STORY_STATUS: Record<OwnedProducerStory['status'], { label: string; tone: string }> = {
+  pending: { label: 'En revisión', tone: 'pending' },
+  published: { label: 'Publicada', tone: 'published' },
+  rejected: { label: 'Requiere cambios', tone: 'rejected' },
+}
+const STORY_BODY_MIN = 80
+const STORY_BODY_MAX = 4000
+
+function ProducerStoryForm({ story, onSaved, onCancel }: { story: OwnedProducerStory | null; onSaved: (story: OwnedProducerStory) => void; onCancel?: () => void }) {
+  const [title, setTitle] = useState(story?.title ?? '')
+  const [quote, setQuote] = useState(story?.quote ?? '')
+  const [body, setBody] = useState(story?.body ?? '')
+  const [videoUrl, setVideoUrl] = useState(story?.video ? (story.video.provider === 'youtube' ? `https://youtu.be/${story.video.id}` : `https://vimeo.com/${story.video.id}`) : '')
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(story?.thumbnail_url ?? null)
+  const [removePhoto, setRemovePhoto] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => () => { if (photo && photoPreview?.startsWith('blob:')) URL.revokeObjectURL(photoPreview) }, [photo, photoPreview])
+
+  async function choosePhoto(file: File | undefined) {
+    if (!file) return
+    const optimized = await compressProductPhoto(file)
+    setPhoto(optimized)
+    setRemovePhoto(false)
+    setPhotoPreview(URL.createObjectURL(optimized))
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (body.trim().length < STORY_BODY_MIN) { setError(`Cuéntanos un poco más: la historia necesita al menos ${STORY_BODY_MIN} caracteres.`); return }
+    setSaving(true)
+    setError('')
+    const form = new FormData()
+    form.set('title', title)
+    form.set('quote', quote)
+    form.set('body', body)
+    form.set('video_url', videoUrl)
+    if (photo) form.set('image', photo)
+    if (removePhoto) form.set('remove_image', '1')
+    try {
+      onSaved(await saveMyStory(form, story?.id))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No pudimos guardar tu historia.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <ValidatedForm className="auth-form story-form" onSubmit={(event) => void submit(event)} aria-busy={saving}>
+      <label className="form-field"><span className="form-field__label">Título de tu historia</span>
+        <input name="title" required minLength={5} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Tres generaciones sembrando café en Boquete" />
+      </label>
+      <label className="form-field"><span className="form-field__label">Una frase que te represente <small>(opcional)</small></span>
+        <input name="quote" maxLength={220} value={quote} onChange={(event) => setQuote(event.target.value)} placeholder="Ej. Lo que sembramos con cariño se nota en cada taza." />
+        <span className="form-field__hint">Se muestra destacada, como una cita.</span>
+      </label>
+      <label className="form-field"><span className="form-field__label">Tu historia</span>
+        <textarea name="body" required minLength={STORY_BODY_MIN} maxLength={STORY_BODY_MAX} rows={10} value={body} onChange={(event) => setBody(event.target.value)} placeholder="¿Cómo empezaste? ¿Qué hace especial lo que produces? ¿Qué retos has superado y cómo sigues adelante?" />
+        <span className="form-field__hint">{body.trim().length}/{STORY_BODY_MAX} caracteres · mínimo {STORY_BODY_MIN}. Deja una línea en blanco para separar párrafos.</span>
+      </label>
+      <label className="form-field"><span className="form-field__label">Video <small>(opcional)</small></span>
+        <input name="video_url" type="url" inputMode="url" value={videoUrl} onChange={(event) => setVideoUrl(event.target.value)} placeholder="https://youtu.be/… o https://vimeo.com/…" />
+        <span className="form-field__hint">Sube tu video a YouTube o Vimeo y pega aquí el enlace.</span>
+      </label>
+      <div className="form-field">
+        <span className="form-field__label">Foto <small>(opcional)</small></span>
+        <div className="story-form__photo">
+          {photoPreview && !removePhoto ? <img src={photoPreview} alt="Vista previa de la foto de tu historia" /> : <span className="story-form__photo-empty"><Camera size={26} aria-hidden="true" /></span>}
+          <div className="story-form__photo-actions">
+            <label className="button button--outline button--small">{photoPreview && !removePhoto ? 'Cambiar foto' : 'Elegir foto'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event.target.files?.[0])} /></label>
+            {photoPreview && !removePhoto && <button className="text-link" type="button" onClick={() => { setPhoto(null); setPhotoPreview(null); setRemovePhoto(Boolean(story?.thumbnail_url)) }}>Quitar foto</button>}
+            <small>JPG, PNG o WEBP de al menos 300 × 300 px.</small>
+          </div>
+        </div>
+      </div>
+      {error && <p className="form-field__error" role="alert">{error}</p>}
+      <p className="story-form__notice"><AlertCircle size={16} aria-hidden="true" /> Revisaremos tu historia antes de publicarla. Si editas una historia publicada, volverá a revisión.</p>
+      <div className="reg-step-nav">
+        {onCancel && <button className="button button--quiet" type="button" onClick={onCancel} disabled={saving}>Cancelar</button>}
+        <button className="button button--primary" type="submit" disabled={saving}>{saving ? 'Enviando…' : story ? 'Guardar y enviar a revisión' : 'Enviar a revisión'} {!saving && <ArrowRight size={16} aria-hidden="true" />}</button>
+      </div>
+    </ValidatedForm>
+  )
+}
+
+function ProducerStoriesPage() {
+  const [stories, setStories] = useState<OwnedProducerStory[] | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [editing, setEditing] = useState<OwnedProducerStory | 'new' | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<OwnedProducerStory | null>(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    void getMyStories().then((items) => { setStories(items); if (!items.length) setEditing('new') })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No pudimos cargar tus historias.'))
+  }, [])
+
+  function saved(story: OwnedProducerStory) {
+    setStories((current) => current ? [story, ...current.filter((item) => item.id !== story.id)] : [story])
+    setEditing(null)
+    setNotice('¡Gracias por compartir! Tu historia quedó en revisión y te avisaremos cuando se publique.')
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    try {
+      await deleteMyStory(deleteTarget.id)
+      setStories((current) => current?.filter((item) => item.id !== deleteTarget.id) ?? null)
+      setNotice('Historia retirada.')
+      setDeleteTarget(null)
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : 'No pudimos retirar la historia.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <ProducerShell>
+      <div className="producer-dash producer-stories">
+        <div className="producer-dash__greeting">
+          <div>
+            <p className="eyebrow eyebrow--quiet">MIS HISTORIAS</p>
+            <h1>Comparte tu historia</h1>
+            <p className="producer-stories__lead">Cuéntale a los compradores quién eres, cómo trabajas y qué te mueve. Las historias aparecen en la página <Link to="/historias">Historias</Link> y en tu perfil.</p>
+          </div>
+          {editing === null && <button className="button button--primary" type="button" onClick={() => { setNotice(''); setEditing('new') }}><Plus size={16} aria-hidden="true" /> Nueva historia</button>}
+        </div>
+
+        {notice && <p className="producer-stories__notice" role="status"><CheckCircle2 size={18} aria-hidden="true" /> {notice}</p>}
+        {error && <div className="empty-products" role="alert"><strong>{error}</strong></div>}
+
+        {editing !== null && (
+          <div className="producer-stories__editor">
+            <section className="producer-card">
+              <h2>{editing === 'new' ? 'Nueva historia' : 'Editar historia'}</h2>
+              <ProducerStoryForm key={editing === 'new' ? 'new' : editing.id} story={editing === 'new' ? null : editing} onSaved={saved} onCancel={stories?.length ? () => setEditing(null) : undefined} />
+            </section>
+            <aside className="producer-stories__tips">
+              <h3>Ideas para tu historia</h3>
+              <ul>
+                <li>¿Cómo y cuándo empezaste? ¿Quién te enseñó?</li>
+                <li>¿Qué hace especial tu producto o tu forma de trabajar?</li>
+                <li>¿Qué retos has vivido y cómo sigues adelante?</li>
+                <li>¿Qué te gustaría que supieran quienes te compran?</li>
+              </ul>
+              <p>Un video corto grabado con el celular funciona muy bien: muéstranos tu finca, tu taller o tu cosecha.</p>
+            </aside>
+          </div>
+        )}
+
+        {stories === null && !error ? <p role="status">Cargando tus historias…</p> : stories && stories.length > 0 && (
+          <ul className="producer-stories__list">
+            {stories.map((story) => (
+              <li key={story.id} className="producer-stories__item">
+                {story.thumbnail_url ? <img src={story.thumbnail_url} alt="" /> : <span className="producer-stories__thumb" aria-hidden="true"><Package size={22} /></span>}
+                <div className="producer-stories__item-copy">
+                  <span className={`status-pill producer-stories__status producer-stories__status--${STORY_STATUS[story.status].tone}`}>{STORY_STATUS[story.status].label}</span>
+                  <h3>{story.title}</h3>
+                  <p>{story.body.slice(0, 140)}{story.body.length > 140 ? '…' : ''}</p>
+                  {story.status === 'rejected' && story.review_note && <p className="producer-stories__review"><AlertCircle size={15} aria-hidden="true" /> Comentario del equipo: {story.review_note}</p>}
+                </div>
+                <div className="producer-stories__item-actions">
+                  {story.status === 'published' && <Link className="text-link" to={`/historias/${story.id}`}>Ver publicada <ChevronRight size={15} aria-hidden="true" /></Link>}
+                  <button className="button button--outline button--small" type="button" onClick={() => { setNotice(''); setEditing(story) }}>Editar</button>
+                  <button className="text-link producer-stories__delete" type="button" onClick={() => { setDeleteError(''); setDeleteTarget(story) }}>Retirar</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {deleteTarget && (
+          <ConfirmActionDialog
+            title="¿Retirar esta historia?"
+            description={`"${deleteTarget.title}" dejará de mostrarse y se eliminará de tu cuenta.`}
+            confirmLabel="Sí, retirar"
+            busyLabel="Retirando…"
+            busy={deleting}
+            error={deleteError}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => void confirmDelete()}
+          />
+        )}
+      </div>
+    </ProducerShell>
+  )
+}
+
 function ProducerRoutes() {
   return (
     <Routes>
@@ -1342,6 +1918,7 @@ function ProducerRoutes() {
       <Route path="/mis-productos/nuevo" element={<ProducerProductForm />} />
       <Route path="/mis-productos/:id/editar" element={<ProducerProductForm editing />} />
       <Route path="/mi-perfil" element={<ProducerProfilePage />} />
+      <Route path="/mis-historias" element={<ProducerStoriesPage />} />
       <Route path="/verificar" element={<Navigate to="/mi-perfil" replace />} />
       <Route path="*" element={<InfoPage title="No encontramos esta página" description="Revisa la dirección o vuelve al catálogo para explorar las ofertas." />} />
     </Routes>
