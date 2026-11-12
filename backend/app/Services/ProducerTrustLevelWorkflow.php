@@ -37,8 +37,13 @@ class ProducerTrustLevelWorkflow
                 throw ValidationException::withMessages(['level' => ['La revisión de identidad requiere contacto confirmado.']]);
             }
 
-            if ($target === ProducerVerificationLevel::IdentityReviewed && $current === ProducerVerificationLevel::ContactConfirmed && (empty($locked->ruc) || ! $locked->hasLegalDocument())) {
-                throw ValidationException::withMessages(['level' => ['Para marcarlo como Verificado, el productor debe tener RUC y un documento legal cargado.']]);
+            if ($target === ProducerVerificationLevel::IdentityReviewed && $current === ProducerVerificationLevel::ContactConfirmed) {
+                if ($locked->vendor_type === 'cooperativa' && empty($locked->pacto_social_path)) {
+                    throw ValidationException::withMessages(['level' => ['Para marcarla como Verificado, la cooperativa debe tener su pacto social cargado.']]);
+                }
+                if ($locked->vendor_type !== 'cooperativa' && (empty($locked->ruc) || ! $locked->hasLegalDocument())) {
+                    throw ValidationException::withMessages(['level' => ['Para marcarlo como Verificado, el productor debe tener RUC y un documento legal cargado.']]);
+                }
             }
 
             if ($target === ProducerVerificationLevel::BiometricVerified && $current !== ProducerVerificationLevel::IdentityReviewed) {

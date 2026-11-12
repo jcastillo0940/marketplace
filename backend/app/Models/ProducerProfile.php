@@ -14,7 +14,7 @@ class ProducerProfile extends Model
 
     protected $hidden = ['user_id', 'registered_by', 'registration_method', 'phone_private', 'phone_verified_at', 'suspension_reason', 'cedula', 'ruc', 'ruc_dv', 'cedula_photo_path', 'pacto_social_path', 'aviso_operacion_path'];
 
-    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'vendor_type', 'payment_methods', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description', 'cedula', 'ruc', 'ruc_dv', 'cedula_photo_path', 'pacto_social_path', 'aviso_operacion_path'];
+    protected $fillable = ['user_id', 'registered_by', 'registration_method', 'location_id', 'slug', 'public_name', 'activity', 'activities', 'vendor_type', 'payment_methods', 'phone_private', 'phone_public', 'phone_verified_at', 'contact_level', 'verification_level', 'profile_status', 'suspension_reason', 'description', 'cedula', 'ruc', 'ruc_dv', 'cedula_photo_path', 'pacto_social_path', 'aviso_operacion_path'];
 
     public function registeredBy(): BelongsTo
     {
@@ -26,7 +26,14 @@ class ProducerProfile extends Model
         return [
             'phone_verified_at' => 'datetime',
             'payment_methods' => 'array',
+            'activities' => 'array',
         ];
+    }
+
+    /** @param array<int, string> $activities */
+    public static function activityLabel(array $activities): ?string
+    {
+        return implode(', ', array_unique($activities)) ?: null;
     }
 
     public function user(): BelongsTo
@@ -91,6 +98,27 @@ class ProducerProfile extends Model
     public function biometricChecks(): HasMany
     {
         return $this->hasMany(ProducerBiometricCheck::class);
+    }
+
+    /** Document each registrant type must upload before publishing products. */
+    public const PUBLISHING_DOCUMENTS = [
+        'productor' => ['cedula_photo' => 'la foto de tu cédula'],
+        'distribuidor' => ['aviso_operacion' => 'el aviso de operación'],
+        'cooperativa' => ['pacto_social' => 'el pacto social'],
+    ];
+
+    /** @return array<string, string> missing document type => label */
+    public function missingPublishingDocuments(): array
+    {
+        $required = self::PUBLISHING_DOCUMENTS[$this->vendor_type ?? 'productor'] ?? self::PUBLISHING_DOCUMENTS['productor'];
+
+        return array_filter($required, fn (string $label, string $type): bool => empty($this->{$type.'_path'}), ARRAY_FILTER_USE_BOTH);
+    }
+
+    public function ensureCanPublish(): void
+    {
+        $missing = $this->missingPublishingDocuments();
+        abort_if($missing !== [], 422, 'Para publicar productos primero sube '.implode(' y ', $missing).' en Mi perfil → Verificación.');
     }
 
     public function hasLegalDocument(): bool

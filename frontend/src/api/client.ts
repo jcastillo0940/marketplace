@@ -181,6 +181,20 @@ export async function csrfToken(): Promise<string> {
   return decodeURIComponent(document.cookie.split('; ').find((item) => item.startsWith('XSRF-TOKEN='))?.split('=').slice(1).join('=') ?? '')
 }
 
+export type RegistrationTaken = { cedula_taken: boolean; email_taken: boolean; ruc_taken: boolean; phone_taken: boolean }
+
+/** Asks whether a cédula, email, RUC or phone already belongs to an account, so the form can stop early. */
+export async function checkRegistrationAvailability(fields: { cedula?: string; email?: string; ruc?: string; phone?: string }): Promise<RegistrationTaken> {
+  const token = await csrfToken()
+  const response = await fetch(`${API_BASE}/auth/register/check`, {
+    method: 'POST', credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token },
+    body: JSON.stringify(fields),
+  })
+  if (!response.ok) throw new Error('No pudimos revisar tus datos.')
+  return (await response.json()).data as RegistrationTaken
+}
+
 export async function requestPasswordReset(email: string): Promise<void> {
   const token = await csrfToken()
   const response = await fetch(`${API_BASE}/auth/password/forgot`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify({ email }) })
@@ -261,7 +275,7 @@ export async function getAdminMe(): Promise<{ name: string; email: string } | nu
   return { name: result.data.name, email: result.data.email }
 }
 
-export async function registerProducer(payload: { ruc?: string; ruc_dv?: string; name: string; email?: string; password: string; public_name: string; activity?: string; vendor_type?: VendorType; payment_methods?: PaymentMethod[]; location_id: number; phone: string; terms_version: string; privacy_version: string; producer_authorized?: boolean; terms_confirmed?: boolean; privacy_confirmed?: boolean }, assisted = false): Promise<void> {
+export async function registerProducer(payload: { ruc?: string; ruc_dv?: string; name: string; email?: string; password: string; public_name: string; activities?: string[]; vendor_type?: VendorType; payment_methods?: PaymentMethod[]; location_id: number; phone: string; terms_version: string; privacy_version: string; producer_authorized?: boolean; terms_confirmed?: boolean; privacy_confirmed?: boolean }, assisted = false): Promise<void> {
   const token = await csrfToken()
   const endpoint = assisted ? '/admin/producers/assisted' : '/auth/register'
   const response = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify(payload) })
@@ -354,13 +368,13 @@ export type ProducerMetrics = {
   period_days: 30
 }
 
-export async function getProducerDashboard(): Promise<{ user: { name: string; email: string }; profile: { public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null; products: ProducerDashboardProduct[] }> {
+export async function getProducerDashboard(): Promise<{ user: { name: string; email: string }; profile: { public_name: string; slug: string; activity: string | null; activities: string[]; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; missing_documents?: ProducerDocumentType[]; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null; products: ProducerDashboardProduct[] }> {
   const [userResponse, productsResponse] = await Promise.all([
     fetch(`${API_BASE}/me`, { credentials: 'include', headers: { Accept: 'application/json' } }),
     fetch(`${API_BASE}/me/products`, { credentials: 'include', headers: { Accept: 'application/json' } }),
   ])
   if (!userResponse.ok || !productsResponse.ok) throw new Error('Inicia sesión para ver tu panel de productor.')
-  const user = await userResponse.json() as { data: { name: string; email: string; profile: { public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null } }
+  const user = await userResponse.json() as { data: { name: string; email: string; profile: { public_name: string; slug: string; activity: string | null; activities: string[]; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; location_id: number | null; phone_private: string; cedula: string | null; ruc: string | null; ruc_dv: string | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; contact_level: string; verification_level: ProducerVerificationLevel; profile_status: string; suspension_reason: string | null } | null } }
   const products = await productsResponse.json() as { data: ProducerDashboardProduct[] }
   return { user: user.data, profile: user.data.profile, products: products.data }
 }
@@ -404,6 +418,8 @@ export async function updateProducerProfile(form: FormData): Promise<void> {
   if (!body.location_id) body.location_id = ''
   body.payment_methods = form.getAll('payment_methods[]')
   delete body['payment_methods[]']
+  body.activities = form.getAll('activities[]')
+  delete body['activities[]']
   const response = await fetch(`${API_BASE}/me/profile`, { method: 'PUT', credentials: 'include', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token }, body: JSON.stringify(body) })
   if (!response.ok) {
     const result = await response.json().catch(() => ({})) as { message?: string; errors?: Record<string, string[]> }
@@ -560,11 +576,11 @@ export async function updateReportPriority(id: number, priority: ReportCase['pri
 }
 
 export type AdminProducer = { id: number; public_name: string; slug: string; activity: string | null; profile_status: string; contact_level: string; verification_level: ProducerVerificationLevel; products_count: number; account: { name: string; email: string } | null }
-export type AdminBiometricCheck = { id: number; status: 'pending' | 'approved' | 'rejected'; match_distance: number | null; liveness_challenges: string[]; selfie_url: string | null; cedula_url: string | null; review_reason: string | null; reviewed_at: string | null; created_at: string }
+export type AdminBiometricCheck = { id: number; status: 'pending' | 'approved' | 'rejected'; match_distance: number | null; server_similarity: number | null; server_result: 'strong' | 'possible' | 'no_match' | 'unavailable' | null; decision_source: 'automatic' | 'admin' | null; liveness_challenges: string[]; selfie_url: string | null; cedula_url: string | null; review_reason: string | null; reviewed_at: string | null; created_at: string }
 
 export type AdminProducerDetail = {
   biometric_check?: AdminBiometricCheck | null
-  producer: { id: number; public_name: string; slug: string; activity: string | null; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; profile_status: string; suspension_reason: string | null; contact_level: string; verification_level: ProducerVerificationLevel; phone_verified_at: string | null; phone_private: string | null; cedula: string | null; ruc: string | null; ruc_dv: string | null; registration_method: string; registered_by: string | null; location: { name: string; parent?: { name: string } | null } | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; cedula_photo_url: string | null; pacto_social_url: string | null; aviso_operacion_url: string | null }
+  producer: { id: number; public_name: string; slug: string; activity: string | null; activities?: string[]; vendor_type: VendorType; payment_methods: PaymentMethod[]; description: string | null; profile_status: string; suspension_reason: string | null; contact_level: string; verification_level: ProducerVerificationLevel; phone_verified_at: string | null; phone_private: string | null; cedula: string | null; ruc: string | null; ruc_dv: string | null; registration_method: string; registered_by: string | null; location: { name: string; parent?: { name: string } | null } | null; has_cedula_photo: boolean; has_pacto_social: boolean; has_aviso_operacion: boolean; cedula_photo_url: string | null; pacto_social_url: string | null; aviso_operacion_url: string | null }
   account: { name: string; email: string; created_at: string }
   consents: Array<{ id: number; consent_type: string; version: string; accepted_at: string }>
   verifications: Array<{ id: number; channel: string; status: string; verified_at: string | null; expires_at: string | null; attempts_count: number }>
@@ -780,6 +796,17 @@ export async function testAdminSmtpSettings(to: string): Promise<{ ok: boolean; 
 export type SessionUser = { name: string; email: string }
 
 let sessionCache: SessionUser | null | 'unknown' = 'unknown'
+
+export type ProducerDocumentType = 'cedula_photo' | 'pacto_social' | 'aviso_operacion'
+export const DOCUMENTS_UPDATED_EVENT = 'mercapro:documents-updated'
+
+/** Documents the producer still has to upload before publishing; empty when nothing is missing or there is no session. */
+export async function getMissingProducerDocuments(): Promise<ProducerDocumentType[]> {
+  const response = await fetch(`${API_BASE}/me`, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) return []
+  const result = await response.json() as { data?: { profile?: { missing_documents?: ProducerDocumentType[] } | null } }
+  return result.data?.profile?.missing_documents ?? []
+}
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   if (sessionCache !== 'unknown') return sessionCache

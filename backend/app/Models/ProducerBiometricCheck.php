@@ -11,13 +11,13 @@ class ProducerBiometricCheck extends Model
 
     public const CONSENT_VERSION = 'biometric-2026-11';
 
-    protected $fillable = ['producer_profile_id', 'status', 'selfie_path', 'cedula_path', 'match_distance', 'liveness_challenges', 'reviewed_by', 'review_reason', 'reviewed_at'];
+    protected $fillable = ['producer_profile_id', 'status', 'decision_source', 'selfie_path', 'cedula_path', 'match_distance', 'server_similarity', 'server_result', 'liveness_challenges', 'reviewed_by', 'review_reason', 'reviewed_at'];
 
     protected $hidden = ['selfie_path', 'cedula_path'];
 
     protected function casts(): array
     {
-        return ['liveness_challenges' => 'array', 'match_distance' => 'float', 'reviewed_at' => 'datetime'];
+        return ['liveness_challenges' => 'array', 'match_distance' => 'float', 'server_similarity' => 'float', 'reviewed_at' => 'datetime'];
     }
 
     public function producer(): BelongsTo

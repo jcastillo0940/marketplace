@@ -29,6 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/reports',
         ]);
         $middleware->alias(['admin.mfa' => RequireAdminTwoFactor::class]);
+        // The SPA owns the login screen; guests hitting the API get a 401, never a redirect.
+        $middleware->redirectGuestsTo(fn (Request $request): ?string => $request->is('api/*') ? null : '/ingresar');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // The API never redirects to a login page (there is no `login` route): answer JSON, e.g. 401, even to a plain browser tab.
+        $exceptions->shouldRenderJsonWhen(fn (Request $request): bool => $request->is('api/*') || $request->expectsJson());
     })->create();

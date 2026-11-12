@@ -1048,3 +1048,39 @@
 @media (min-width: 821px) {
   .producer-topbar { display: none; }
 }
+
+/* Registration: who is registering and which legal document applies */
+.reg-choice { display: grid; gap: .5rem; min-width: 0; margin: 0 0 1rem; padding: 0; border: 0; }
+.reg-choice legend { margin-bottom: .5rem; padding: 0; color: var(--color-ink); font-size: .9rem; font-weight: 650; }
+.reg-choice__options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.reg-choice--compact { margin: 0; }
+.reg-choice--compact .reg-choice__options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.reg-choice__option { position: relative; display: block; cursor: pointer; }
+.reg-choice__option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.reg-choice__card { display: grid; gap: .15rem; height: 100%; padding: .75rem .85rem; border: 1.5px solid var(--color-line, #d7dfea); border-radius: 12px; background: #fff; color: var(--color-ink); font-size: .9rem; }
+.reg-choice__card small { color: var(--color-muted); font-size: .78rem; font-weight: 400; line-height: 1.3; }
+.reg-choice__option input:checked + .reg-choice__card { border-color: #005EC4; background: #eef5fd; box-shadow: inset 0 0 0 1px #005EC4; }
+.reg-choice__option input:focus-visible + .reg-choice__card { outline: 2px solid #F15A24; outline-offset: 2px; }
+.reg-legal { grid-column: 1 / -1; display: grid; gap: 1rem; min-width: 0; }
+.reg-legal .reg-ruc-row { grid-template-columns: minmax(0, 1fr) 160px; column-gap: 1.5rem; }
+.reg-legal__file { display: grid; gap: .35rem; color: var(--color-ink); font-size: .9rem; font-weight: 650; }
+.reg-legal__file { cursor: pointer; }
+.reg-legal__picker { display: flex; align-items: center; justify-content: center; min-height: 3rem; padding: .6rem; border: 1.5px dashed #005EC4; border-radius: 12px; background: #fff; color: #005EC4; font-weight: 700; }
+.reg-legal__file input:focus-visible + .reg-legal__picker { outline: 2px solid #F15A24; outline-offset: 2px; }
+@media (max-width: 480px) {
+  .reg-choice__options { grid-template-columns: 1fr; }
+  .reg-legal .reg-ruc-row { grid-template-columns: 1fr; }
+}
+
+/* Multi-select of top-level activities */
+.activity-field { display: grid; gap: .35rem; min-width: 0; color: var(--color-ink); font-size: .9rem; font-weight: 650; }
+.activity-select { position: relative; min-width: 0; }
+.activity-select__trigger { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; min-height: 3rem; padding: .5rem .9rem; border: 1.5px solid var(--color-line, #d7dfea); border-radius: 12px; background: #fff; color: var(--color-ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.activity-select__trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-select__trigger svg { flex: none; }
+.activity-select__trigger[aria-expanded="true"] { border-color: #005EC4; }
+.activity-select__panel { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow-y: auto; padding: .35rem; border: 1px solid var(--color-line, #d7dfea); border-radius: 12px; background: #fff; box-shadow: 0 12px 28px rgba(15, 35, 70, .16); }
+.activity-select__panel[hidden] { display: none; }
+.activity-select .activity-select__option { display: flex; flex-direction: row; align-items: center; gap: .6rem; margin: 0; padding: .55rem .6rem; border-radius: 8px; font-weight: 500; cursor: pointer; }
+.activity-select__option:hover { background: #eef5fd; }
+.activity-select .activity-select__option input { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: #005EC4; }

@@ -1,11 +1,11 @@
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, BarChart2, BookOpen, ChevronRight, FileText, Flag, LayoutDashboard, LogOut, MessageSquare, Search, ShieldAlert, ShieldCheck, Tag, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, BarChart2, BookOpen, CheckCircle2, ChevronRight, Clock, FileText, Flag, History, LayoutDashboard, Lock, LogOut, MessageSquare, Package, Pencil, ScanFace, Search, Settings, ShieldAlert, ShieldCheck, Tag, UserPlus, Users } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import Field from '../components/Field'
 import SelectField from '../components/SelectField'
-import ActivitySelect from '../components/ActivitySelect'
+import ActivityMultiSelect from '../components/ActivityMultiSelect'
 import LocationPicker from '../components/LocationPicker'
 import TextAreaField from '../components/TextAreaField'
 import ValidatedForm from '../components/ValidatedForm'
@@ -433,7 +433,7 @@ function AdminProducersPage({ assistedOnly = false }: { assistedOnly?: boolean }
     const form = event.currentTarget
     const data = new FormData(form)
     try {
-      await registerProducer({ name: String(data.get('name')), email: String(data.get('email')), password: String(data.get('password')), public_name: String(data.get('public_name')), activity: String(data.get('activity') ?? ''), location_id: Number(data.get('location_id')), phone: String(data.get('phone')), terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10', producer_authorized: data.get('producer_authorized') === 'on', terms_confirmed: data.get('terms_confirmed') === 'on', privacy_confirmed: data.get('privacy_confirmed') === 'on' }, true)
+      await registerProducer({ name: String(data.get('name')), email: String(data.get('email')), password: String(data.get('password')), public_name: String(data.get('public_name')), activities: data.getAll('activities[]').map(String), location_id: Number(data.get('location_id')), phone: String(data.get('phone')), terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10', producer_authorized: data.get('producer_authorized') === 'on', terms_confirmed: data.get('terms_confirmed') === 'on', privacy_confirmed: data.get('privacy_confirmed') === 'on' }, true)
       setAssistedMessage('Cuenta creada con registro asistido y autorización registrada. El operador sigue en su sesión. El productor deberá iniciar su propia sesión y verificar el teléfono.')
       form.reset()
       setAssistedFormVersion((current) => current + 1)
@@ -477,12 +477,13 @@ function AdminProducersPage({ assistedOnly = false }: { assistedOnly?: boolean }
       <button className="button button--outline" type="submit">Aplicar filtros</button>
     </ValidatedForm>}
     {assistedOnly && !canAssist && <p role="alert">Tu cuenta no tiene permiso para registrar productores de forma asistida.</p>}
-    {canAssist && <details className="assisted-registration" open={assistedOnly}><summary>{assistedOnly ? 'Registro de productor con autorización' : 'Registrar un productor con su autorización'}</summary><p>Completa el formulario con el productor presente o con su autorización documentada. El perfil quedará atribuido a tu cuenta y sin teléfono público hasta que el productor verifique el número e inicie su propia sesión.</p>{assistedError && <p role="alert">{assistedError}</p>}{assistedMessage && <p role="status">{assistedMessage}</p>}<ValidatedForm key={assistedFormVersion} className="auth-form" aria-busy={assistedSubmitting} onSubmit={(event) => void submitAssistedProducer(event)}><label>Nombre del productor<input name="name" required maxLength={120} disabled={assistedSubmitting} /></label><label>Correo electrónico del productor<input name="email" type="email" required disabled={assistedSubmitting} /></label><label>Nombre público<input name="public_name" required maxLength={120} disabled={assistedSubmitting} /></label><label>Actividad principal<ActivitySelect disabled={assistedSubmitting} /></label><fieldset className="location-fieldset" disabled={assistedSubmitting}><legend>Ubicación de tu emprendimiento</legend><LocationPicker locations={assistedLocations} idPrefix="assisted-location" required disabled={assistedSubmitting || assistedLocationsLoading || assistedLocationsError || assistedLocations.length === 0} /></fieldset>{assistedLocationsError && <div role="alert"><span>No pudimos cargar las localidades. </span><button className="text-link" type="button" onClick={() => setAssistedLocationsRetry((attempt) => attempt + 1)}>Reintentar</button></div>}{!assistedLocationsLoading && !assistedLocationsError && assistedLocations.length === 0 && <p role="alert">No hay localidades disponibles para el registro asistido.</p>}<label>Teléfono privado<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" required maxLength={40} disabled={assistedSubmitting} /><small>Panamá: ocho dígitos; otros países deben incluir el prefijo internacional.</small></label><label>Clave temporal para entrega privada<input name="password" type="password" minLength={12} required autoComplete="new-password" disabled={assistedSubmitting} /></label><label className="auth-consent"><input name="producer_authorized" type="checkbox" required disabled={assistedSubmitting} />El productor autorizó este registro y la recopilación de sus datos.</label><label className="auth-consent"><input name="terms_confirmed" type="checkbox" required disabled={assistedSubmitting} />El productor confirmó los términos del servicio (terms-2026-10).</label><label className="auth-consent"><input name="privacy_confirmed" type="checkbox" required disabled={assistedSubmitting} />El productor confirmó haber leído el aviso de privacidad (privacy-2026-10).</label><button className="button button--primary" type="submit" disabled={assistedSubmitting || assistedLocationsLoading || assistedLocationsError || assistedLocations.length === 0}>{assistedSubmitting ? 'Registrando productor…' : 'Registrar productor'}</button></ValidatedForm></details>}
+    {canAssist && <details className="assisted-registration" open={assistedOnly}><summary>{assistedOnly ? 'Registro de productor con autorización' : 'Registrar un productor con su autorización'}</summary><p>Completa el formulario con el productor presente o con su autorización documentada. El perfil quedará atribuido a tu cuenta y sin teléfono público hasta que el productor verifique el número e inicie su propia sesión.</p>{assistedError && <p role="alert">{assistedError}</p>}{assistedMessage && <p role="status">{assistedMessage}</p>}<ValidatedForm key={assistedFormVersion} className="auth-form" aria-busy={assistedSubmitting} onSubmit={(event) => void submitAssistedProducer(event)}><label>Nombre del productor<input name="name" required maxLength={120} disabled={assistedSubmitting} /></label><label>Correo electrónico del productor<input name="email" type="email" required disabled={assistedSubmitting} /></label><label>Nombre público<input name="public_name" required maxLength={120} disabled={assistedSubmitting} /></label><div className="activity-field"><span>Actividades principales</span><ActivityMultiSelect disabled={assistedSubmitting} /></div><fieldset className="location-fieldset" disabled={assistedSubmitting}><legend>Ubicación de tu emprendimiento</legend><LocationPicker locations={assistedLocations} idPrefix="assisted-location" required disabled={assistedSubmitting || assistedLocationsLoading || assistedLocationsError || assistedLocations.length === 0} /></fieldset>{assistedLocationsError && <div role="alert"><span>No pudimos cargar las localidades. </span><button className="text-link" type="button" onClick={() => setAssistedLocationsRetry((attempt) => attempt + 1)}>Reintentar</button></div>}{!assistedLocationsLoading && !assistedLocationsError && assistedLocations.length === 0 && <p role="alert">No hay localidades disponibles para el registro asistido.</p>}<label>Teléfono privado<input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" required maxLength={40} disabled={assistedSubmitting} /><small>Panamá: ocho dígitos; otros países deben incluir el prefijo internacional.</small></label><label>Clave temporal para entrega privada<input name="password" type="password" minLength={12} required autoComplete="new-password" disabled={assistedSubmitting} /></label><label className="auth-consent"><input name="producer_authorized" type="checkbox" required disabled={assistedSubmitting} />El productor autorizó este registro y la recopilación de sus datos.</label><label className="auth-consent"><input name="terms_confirmed" type="checkbox" required disabled={assistedSubmitting} />El productor confirmó los términos del servicio (terms-2026-10).</label><label className="auth-consent"><input name="privacy_confirmed" type="checkbox" required disabled={assistedSubmitting} />El productor confirmó haber leído el aviso de privacidad (privacy-2026-10).</label><button className="button button--primary" type="submit" disabled={assistedSubmitting || assistedLocationsLoading || assistedLocationsError || assistedLocations.length === 0}>{assistedSubmitting ? 'Registrando productor…' : 'Registrar productor'}</button></ValidatedForm></details>}
     {!assistedOnly && <>{error && <p role="status">{error}</p>}{error && error.includes('cuenta creada') ? null : error ? <div className="empty-products" role="alert"><strong>{error}</strong><Link className="button button--primary" to="/adminsc1car">Ingresar</Link></div> : !results ? <p role="status">Cargando productores…</p> : <><p className="catalog-result-count">{results.total} {results.total === 1 ? 'productor' : 'productores'} encontrados</p>{results.data.length ? <div className="dashboard-list">{results.data.map((producer) => <article className="dashboard-row" key={producer.id}><div><h2>{producer.public_name}</h2><p>{producer.account && <>{producer.account.name} · {producer.account.email} · </>}{producer.products_count} ofertas</p><span className={`status-pill status-pill--${producer.profile_status}`}>{producer.profile_status}</span></div><div className="admin-producer-actions"><Link className="button button--quiet button--small" to={`/admin/productores/${producer.id}`}>Ver ficha</Link>{producer.profile_status === 'active' && canSuspend && <button ref={statusTriggerRef} className="button button--outline button--small" type="button" onClick={(event) => openStatusDialog(event, producer)}>Suspender</button>}{producer.profile_status !== 'active' && canAssist && <button ref={statusTriggerRef} className="button button--outline button--small" type="button" onClick={(event) => openStatusDialog(event, producer)}>{producer.profile_status === 'suspended' ? 'Reactivar' : 'Activar'}</button>}</div></article>)}</div> : <div className="empty-products"><strong>No encontramos productores con esos filtros</strong><span>Prueba con otro nombre o estado.</span></div>}{results.last_page > 1 && <nav className="catalog-pagination" aria-label="Paginación de productores"><button className="button button--outline button--small" disabled={page <= 1} onClick={() => goToPage(page - 1)}>Página anterior</button><span>Página {results.current_page} de {results.last_page}</span><button className="button button--outline button--small" disabled={page >= results.last_page} onClick={() => goToPage(page + 1)}>Página siguiente</button></nav>}</>}</>}</main>{statusTarget && <ConfirmActionDialog title={statusTarget.profile_status === 'active' ? 'Suspender perfil' : statusTarget.profile_status === 'suspended' ? 'Reactivar perfil' : 'Activar perfil'} accessibleName={`Cambiar estado de ${statusTarget.public_name}`} description={statusTarget.profile_status === 'active' ? `Al suspender a ${statusTarget.public_name}, sus ofertas dejarán de estar disponibles.` : statusTarget.profile_status === 'suspended' ? `Al reactivar a ${statusTarget.public_name}, sus ofertas publicadas volverán a revisión humana.` : `Al activar a ${statusTarget.public_name}, sus ofertas seguirán sujetas a revisión humana antes de aparecer en el catálogo.`} confirmLabel={statusTarget.profile_status === 'active' ? 'Suspender perfil' : statusTarget.profile_status === 'suspended' ? 'Reactivar perfil' : 'Activar perfil'} busyLabel={statusTarget.profile_status === 'active' ? 'Suspendiendo…' : statusTarget.profile_status === 'suspended' ? 'Reactivando…' : 'Activando…'} busy={statusBusy} error={statusError} confirmFormId="admin-producer-status-form" initialFocusId="admin-producer-status-reason" onCancel={closeStatusDialog}><ValidatedForm id="admin-producer-status-form" className="auth-form" onSubmit={(event) => void saveProducerStatus(event)}><TextAreaField id="admin-producer-status-reason" name="reason" label={statusTarget.profile_status === 'active' ? 'Motivo de suspensión' : statusTarget.profile_status === 'suspended' ? 'Motivo de reactivación' : 'Motivo de activación'} value={statusReason} onChange={setStatusReason} minLength={5} maxLength={1000} rows={3} required disabled={statusBusy} hint="El motivo se guardará en la bitácora del perfil." /></ValidatedForm></ConfirmActionDialog>}</AdminShell>
 }
 
 // Reference value for the 128-dimension face descriptor: lower means more alike.
 const FACE_MATCH_REFERENCE = 0.6
+const SERVER_MATCH_LABELS = { strong: 'coincidencia alta', possible: 'coincidencia posible', no_match: 'no coincide', unavailable: 'no disponible' } as const
 
 function AdminBiometricReview({ detail, check, onUpdated }: { detail: AdminProducerDetail; check: AdminBiometricCheck; onUpdated: (detail: AdminProducerDetail) => void }) {
   const [reason, setReason] = useState('')
@@ -505,10 +506,11 @@ function AdminBiometricReview({ detail, check, onUpdated }: { detail: AdminProdu
   }
 
   return (
-    <section className="dashboard-list admin-producer-history" aria-labelledby="biometric-review-title">
-      <h2 id="biometric-review-title">Verificación biométrica</h2>
-      <p><strong>{statusLabel}.</strong> Las pruebas se hacen en el navegador del productor: tómalas como orientación y compara tú las fotos.</p>
-      {check.match_distance !== null && <p>Parecido calculado: {check.match_distance.toFixed(3)} ({check.match_distance <= FACE_MATCH_REFERENCE ? 'dentro' : 'fuera'} del valor de referencia {FACE_MATCH_REFERENCE}).</p>}
+    <section className="ap-card ap-biometric" aria-labelledby="biometric-review-title">
+      <h2 id="biometric-review-title" className="ap-card__title"><ScanFace size={19} aria-hidden="true" />Verificación facial (Verificado Pro)</h2>
+      <p><strong>{statusLabel}{check.decision_source === 'automatic' ? ' automáticamente' : ''}.</strong> {check.status === 'pending' ? 'El sistema no pudo confirmar la coincidencia con certeza: compara tú las dos fotos y decide.' : ''}</p>
+      {check.server_result && <p>Comparación del servidor: <strong>{SERVER_MATCH_LABELS[check.server_result]}</strong>{check.server_similarity !== null && <> (similitud {check.server_similarity.toFixed(2)}; aprobación automática desde 0.55, posible desde 0.36)</>}.</p>}
+      {check.match_distance !== null && <p>Referencia del navegador: {check.match_distance.toFixed(3)} ({check.match_distance <= FACE_MATCH_REFERENCE ? 'dentro' : 'fuera'} del valor {FACE_MATCH_REFERENCE}). Menos fiable que la del servidor.</p>}
       {check.review_reason && <p>Motivo: {check.review_reason}</p>}
       {check.status === 'pending' && (
         <>
@@ -529,305 +531,449 @@ function AdminBiometricReview({ detail, check, onUpdated }: { detail: AdminProdu
   )
 }
 
-function AdminTrustReview({ detail, onUpdated }: { detail: AdminProducerDetail; onUpdated: (detail: AdminProducerDetail) => void }) {
-  const [permissions, setPermissions] = useState<string[]>([])
-  const [level, setLevel] = useState<Exclude<ProducerVerificationLevel, 'unverified'>>(detail.producer.verification_level === 'unverified' ? 'contact_confirmed' : detail.producer.verification_level)
+// ── Producer file (ficha) ─────────────────────────────────────────────────────
+
+type ProducerFileTab = 'resumen' | 'publicaciones' | 'verificacion' | 'actividad'
+
+const PROFILE_STATUS_LABELS: Record<string, string> = { active: 'Perfil activo', pending: 'Perfil pendiente', suspended: 'Perfil suspendido' }
+const PRODUCT_STATUS_LABELS: Record<string, string> = { pending: 'En revisión', published: 'Publicado', changes_requested: 'Cambios solicitados', rejected: 'Rechazado', draft: 'Borrador', expired: 'Vencido', paused: 'Pausado', unavailable: 'No disponible', archived: 'Archivado' }
+const VENDOR_TYPE_LABELS: Record<string, string> = { productor: 'Productor individual', cooperativa: 'Cooperativa', distribuidor: 'PYME / Empresa' }
+const PAYMENT_LABELS: Record<string, string> = { efectivo: 'Efectivo', yappy: 'Yappy', transferencia: 'Transferencia bancaria', tarjeta: 'Tarjeta de crédito/débito', cheque: 'Cheque', credito: 'Crédito / Cuenta abierta' }
+const CONSENT_LABELS: Record<string, string> = { privacy: 'Política de privacidad', terms: 'Términos de uso', biometric: 'Tratamiento biométrico', assisted_registration_authorization: 'Autorización de registro asistido' }
+const LEVEL_LABELS: Record<string, string> = { unverified: 'Contacto sin confirmar', contact_confirmed: 'Teléfono confirmado', identity_reviewed: 'Verificado', biometric_verified: 'Verificado Pro', producer_validated: 'Productor Super Carnes' }
+const AUDIT_LABELS: Record<string, string> = {
+  'producer.status_changed': 'Estado del perfil cambiado',
+  'producer.trust_level_changed': 'Nivel de verificación cambiado',
+  'producer.contact_confirmed_manually': 'Teléfono confirmado por llamada',
+  'producer.phone_verified': 'Teléfono verificado',
+  'producer.phone_changed': 'Teléfono cambiado',
+  'producer.profile_updated': 'Perfil actualizado',
+  'producer.document_viewed': 'Documento consultado',
+  'producer.biometric_submitted': 'Verificación facial enviada',
+  'producer.biometric_auto_approved': 'Verificación facial aprobada automáticamente',
+  'producer.biometric_reviewed': 'Verificación facial revisada',
+  'producer.biometric_viewed': 'Fotos biométricas consultadas',
+  'producer.assisted_registration_created': 'Registro asistido',
+  'producer.appeal_submitted': 'Apelación enviada',
+  'producer.appeal_decided': 'Apelación resuelta',
+  'producer.product_images_removed': 'Imágenes de producto retiradas',
+}
+
+const shortDate = (value: string) => new Date(value).toLocaleDateString('es-PA', { day: 'numeric', month: 'short', year: 'numeric' })
+const longDateTime = (value: string) => new Date(value).toLocaleString('es-PA', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+type ActivityEntry = { key: string; title: string; detail: string | null; actor: string | null; at: string; tone: 'ok' | 'info' | 'warn' }
+
+function producerActivity(detail: AdminProducerDetail): ActivityEntry[] {
+  const audit = detail.audit.map((entry, index): ActivityEntry => ({
+    key: `a-${index}`, title: AUDIT_LABELS[entry.action] ?? entry.action, detail: entry.reason, actor: entry.actor, at: entry.created_at,
+    tone: /approved|confirmed|verified/.test(entry.action) ? 'ok' : /status_changed|removed/.test(entry.action) ? 'warn' : 'info',
+  }))
+  const products = detail.product_history.map((entry, index): ActivityEntry => ({
+    key: `p-${index}`, title: `${entry.product_title}: ${PRODUCT_STATUS_LABELS[entry.to_status] ?? entry.to_status}`, detail: entry.reason, actor: entry.actor, at: entry.created_at,
+    tone: entry.to_status === 'published' ? 'ok' : entry.to_status === 'rejected' ? 'warn' : 'info',
+  }))
+  return [...audit, ...products].sort((a, b) => b.at.localeCompare(a.at))
+}
+
+function DataItem({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+  return <div className={`ap-data__item${wide ? ' ap-data__item--wide' : ''}`}><dt>{label}</dt><dd>{children || '—'}</dd></div>
+}
+
+function CardHead({ Icon, title, aside }: { Icon: typeof Users; title: string; aside?: ReactNode }) {
+  return <div className="ap-card__head"><h2><Icon size={19} aria-hidden="true" />{title}</h2>{aside}</div>
+}
+
+/** Guided verification: shows what is missing and offers only the next valid step. */
+function AdminVerificationCard({ detail, canVerify, onUpdated, onConfirmContact, contactBusy, contactError }: { detail: AdminProducerDetail; canVerify: boolean; onUpdated: (detail: AdminProducerDetail) => void; onConfirmContact: () => void; contactBusy: boolean; contactError: string }) {
+  const p = detail.producer
+  const level = p.verification_level
+  const phoneOk = p.contact_level === 'contact_confirmed'
+  const coop = p.vendor_type === 'cooperativa'
+  const hasDoc = p.has_cedula_photo || p.has_aviso_operacion || p.has_pacto_social
+  const docsOk = coop ? p.has_pacto_social : Boolean(p.ruc) && hasDoc
   const [reason, setReason] = useState('')
-  const [fieldError, setFieldError] = useState('')
+  const [target, setTarget] = useState<Exclude<ProducerVerificationLevel, 'unverified'> | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { void getAdminPermissions().then(setPermissions).catch(() => setPermissions([])) }, [])
-  const canReview = permissions.includes('producers.verify')
-  const verified = { value: 'identity_reviewed', label: 'Verificado (RUC y documento revisados)' }
-  const superCarnes = { value: 'producer_validated', label: 'Productor Super Carnes' }
-  const removeReview = { value: 'contact_confirmed', label: 'Retirar verificación' }
-  const options = {
-    unverified: [],
-    contact_confirmed: [verified],
-    identity_reviewed: [superCarnes, removeReview],
-    biometric_verified: [superCarnes, verified, removeReview],
-    producer_validated: [verified, removeReview],
-  }[detail.producer.verification_level]
+
+  const docs: Array<{ label: string; ok: boolean; url: string | null; show: boolean }> = [
+    { label: 'Foto de cédula', ok: p.has_cedula_photo, url: p.cedula_photo_url, show: p.vendor_type === 'productor' || p.has_cedula_photo },
+    { label: 'Aviso de operación', ok: p.has_aviso_operacion, url: p.aviso_operacion_url, show: !coop || p.has_aviso_operacion },
+    { label: 'Pacto social', ok: p.has_pacto_social, url: p.pacto_social_url, show: p.vendor_type !== 'productor' || p.has_pacto_social },
+  ]
+
+  function begin(next: Exclude<ProducerVerificationLevel, 'unverified'>) {
+    setTarget(next); setError(''); setMessage('')
+    setReason(next === 'identity_reviewed'
+      ? (coop ? 'Pacto social revisado; los datos coinciden con el registro.' : `RUC ${p.ruc ?? ''} revisado; el nombre coincide con ${detail.account.name} y con el documento.`)
+      : next === 'producer_validated' ? 'Proveedor confirmado de Super Carnes.' : '')
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (reason.trim().length < 5) { setFieldError('Explica la decisión con al menos cinco caracteres.'); return }
-    setBusy(true); setError(''); setMessage('')
+    if (!target) return
+    if (reason.trim().length < 5) { setError('Explica la decisión con al menos cinco caracteres.'); return }
+    setBusy(true); setError('')
     try {
-      const updated = await setAdminProducerTrustLevel(detail.producer.id, level, reason.trim())
-      setMessage(updated.auto_activated ? 'Nivel actualizado. El perfil se activó automáticamente — sus ofertas aprobadas ya son visibles en el catálogo.' : 'Nivel actualizado y cambio guardado en la auditoría.')
-      setReason(''); setFieldError('')
-      const updatedProducer = { ...detail.producer, verification_level: updated.verification_level, ...(updated.profile_status ? { profile_status: updated.profile_status, suspension_reason: null } : {}) }
-      onUpdated({ ...detail, producer: updatedProducer, trust_reviews: [{ from_level: detail.producer.verification_level, to_level: updated.verification_level, reason: reason.trim(), actor: 'Tú', created_at: new Date().toISOString() }, ...detail.trust_reviews] })
+      const updated = await setAdminProducerTrustLevel(p.id, target, reason.trim())
+      setMessage(`Nivel actualizado a ${LEVEL_LABELS[updated.verification_level]}.${updated.auto_activated ? ' El perfil se activó automáticamente.' : ''}`)
+      onUpdated({ ...detail, producer: { ...p, verification_level: updated.verification_level, ...(updated.profile_status ? { profile_status: updated.profile_status, suspension_reason: null } : {}) }, trust_reviews: [{ from_level: level, to_level: updated.verification_level, reason: reason.trim(), actor: 'Tú', created_at: new Date().toISOString() }, ...detail.trust_reviews] })
+      setTarget(null); setReason('')
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo actualizar el nivel.') }
     finally { setBusy(false) }
   }
-  return <section className="dashboard-list admin-producer-history" aria-labelledby="trust-review-title"><h2 id="trust-review-title">Nivel de revisión</h2><p>Los niveles describen las comprobaciones realizadas; no garantizan calidad, pago ni entrega.</p><VerificationBadge level={detail.producer.verification_level} internal /><p>El nivel público efectivo baja a “Contacto sin confirmar” si el teléfono deja de estar verificado.</p>{canReview && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><SelectField id="trust-review-level" name="level" label="Nuevo nivel" value={level} disabled={busy || options.length === 0} onChange={(event) => setLevel(event.currentTarget.value as typeof level)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SelectField><TextAreaField id="trust-review-reason" name="reason" label="Motivo de revisión" value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="No adjuntes documentos ni datos sensibles; registra solo la decisión y su fundamento." /><button className="button button--primary" disabled={busy || options.length === 0} aria-busy={busy}>{busy ? 'Guardando…' : 'Guardar nivel'}</button></ValidatedForm>}{!canReview && <p>Tu cuenta puede consultar el historial, pero no cambiar el nivel de revisión.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}<h3>Historial de cambios</h3>{(detail.trust_reviews ?? []).length ? detail.trust_reviews.map((review, index) => <article className="dashboard-row" key={`${review.created_at}-${index}`}><div><strong>{review.from_level.replaceAll('_', ' ')} → {review.to_level.replaceAll('_', ' ')}</strong><p>{review.reason}</p><small>{review.actor ?? 'Sistema'} · {new Date(review.created_at).toLocaleString('es-PA')}</small></div></article>) : <p>No hay revisiones de identidad registradas.</p>}</section>
 
-}
+  const pill = level === 'unverified' ? <span className="ap-pill ap-pill--warn">Teléfono pendiente</span>
+    : level === 'contact_confirmed' ? <span className={`ap-pill ${docsOk ? 'ap-pill--info' : 'ap-pill--warn'}`}>{docsOk ? 'Lista para revisar' : 'Faltan documentos'}</span>
+      : <span className="ap-pill ap-pill--ok">{LEVEL_LABELS[level]}</span>
 
-function AdminProducerStatusControl({ detail, onUpdated }: { detail: AdminProducerDetail; onUpdated: (detail: AdminProducerDetail) => void }) {
-  const [permissions, setPermissions] = useState<string[]>([])
-  const [reason, setReason] = useState('')
-  const [fieldError, setFieldError] = useState('')
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState(false)
-  useEffect(() => { void getAdminPermissions().then(setPermissions).catch(() => setPermissions([])) }, [])
-  const suspended = detail.producer.profile_status === 'suspended'
-  const pending = detail.producer.profile_status === 'pending'
-  const canChange = permissions.includes(suspended || pending ? 'producers.assist' : 'producers.suspend')
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (reason.trim().length < 5) { setFieldError('Explica la decisión con al menos cinco caracteres.'); return }
-    setBusy(true); setError(''); setMessage('')
-    try {
-      const nextStatus = detail.producer.profile_status === 'active' ? 'suspended' : 'active'
-      const result = await setAdminProducerStatus(detail.producer.id, nextStatus, reason.trim())
-      const queued = result.products_queued_for_review
-      setMessage(nextStatus === 'suspended' ? 'Perfil suspendido; las publicaciones dejaron de estar disponibles.' : suspended ? `Perfil reactivado.${queued ? ` ${queued} publicaciones quedaron pendientes de revisión humana.` : ''}` : 'Perfil activado.')
-      onUpdated({ ...detail, producer: { ...detail.producer, profile_status: result.profile_status, suspension_reason: result.profile_status === 'suspended' ? reason.trim() : null }, audit: [{ action: 'producer.status_changed', before_values: { profile_status: detail.producer.profile_status }, after_values: { profile_status: result.profile_status }, reason: reason.trim(), actor: 'Tú', created_at: new Date().toISOString() }, ...detail.audit] })
-      setReason(''); setFieldError('')
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo actualizar el estado del productor.') }
-    finally { setBusy(false) }
+  const checklist: Array<{ ok: boolean; label: string; extra?: ReactNode }> = [
+    { ok: phoneOk, label: phoneOk ? 'Teléfono confirmado' : 'Teléfono sin confirmar' },
+    ...(!coop ? [{ ok: Boolean(p.ruc), label: p.ruc ? `RUC registrado: ${p.ruc}${p.ruc_dv ? ` DV ${p.ruc_dv}` : ''}` : p.vendor_type === 'distribuidor' ? 'RUC no registrado' : 'RUC no registrado (necesario para Verificado)' }] : []),
+    ...docs.filter((doc) => doc.show).map((doc) => ({ ok: doc.ok, label: doc.ok ? `${doc.label} cargada` : `${doc.label} no adjuntada`, extra: doc.ok && doc.url ? <a href={doc.url} target="_blank" rel="noopener noreferrer">Ver <ArrowUpRight size={13} aria-hidden="true" /></a> : null })),
+  ]
+
+  let next: ReactNode
+  if (!phoneOk) {
+    next = <div className="ap-next"><div><strong>Siguiente paso: confirmar el teléfono</strong><p>Llama al {p.phone_private ?? 'número registrado'} y confirma que habla {detail.account.name}. Al confirmarlo, el número se vuelve visible en el catálogo.</p></div><button className="button button--primary" type="button" disabled={contactBusy} aria-busy={contactBusy} onClick={onConfirmContact}><CheckCircle2 size={16} aria-hidden="true" />{contactBusy ? 'Confirmando…' : 'Ya lo llamé: confirmar'}</button>{contactError && <p role="alert">{contactError}</p>}</div>
+  } else if (level === 'contact_confirmed') {
+    next = docsOk
+      ? <div className="ap-next ap-next--ready"><div><strong>Siguiente paso: otorgar Verificado</strong><p>Abre {coop ? 'el pacto social' : 'el documento'} y comprueba que {coop ? 'los datos coinciden con el registro' : `el RUC y el nombre coinciden con ${detail.account.name}`}.</p></div>{canVerify && target === null && <button className="button button--primary" type="button" onClick={() => begin('identity_reviewed')}><ShieldCheck size={16} aria-hidden="true" />Revisar y otorgar</button>}</div>
+      : <div className="ap-next ap-next--blocked"><div><strong>Esperando al productor</strong><p>Para otorgar Verificado necesita {coop ? 'subir su pacto social' : `${p.ruc ? '' : 'registrar su RUC'}${!p.ruc && !hasDoc ? ' y ' : ''}${hasDoc ? '' : 'subir un documento (cédula o aviso de operación)'}`} desde Mi perfil → Verificación.</p></div></div>
+  } else if (level === 'identity_reviewed') {
+    next = <div className="ap-next"><div><strong>Verificado otorgado</strong><p>El siguiente nivel, Verificado Pro, lo inicia el productor con su verificación facial. Si coincide con claridad se aprueba solo; si no, aparecerá aquí para que lo revises.</p></div></div>
+  } else {
+    next = <div className="ap-next ap-next--ready"><div><strong>{LEVEL_LABELS[level]}</strong><p>No hay pasos pendientes de verificación.</p></div></div>
   }
-  return <section className="dashboard-list admin-producer-history" aria-labelledby="producer-status-title"><h2 id="producer-status-title">Estado del perfil</h2><p>Suspender oculta las publicaciones disponibles. Reactivar devuelve las ofertas publicadas a revisión humana. Activar un perfil pendiente hace visibles sus ofertas ya aprobadas.</p>{detail.producer.suspension_reason && <p><strong>Motivo registrado:</strong> {detail.producer.suspension_reason}</p>}{canChange && <ValidatedForm className="auth-form trust-review-form" onSubmit={(event) => { void save(event) }}><TextAreaField id="producer-status-reason" name="reason" label={suspended ? 'Motivo de reactivación' : pending ? 'Motivo de activación' : 'Motivo de suspensión'} value={reason} onChange={(value) => { setReason(value); setFieldError('') }} error={fieldError} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="El motivo se guarda en la bitácora del perfil." /><button className={suspended || pending ? 'button button--primary' : 'button button--outline'} disabled={busy} aria-busy={busy}>{busy ? suspended ? 'Reactivando…' : pending ? 'Activando…' : 'Suspendiendo…' : suspended ? 'Reactivar perfil' : pending ? 'Activar perfil' : 'Suspender perfil'}</button></ValidatedForm>}{!canChange && <p>Tu cuenta puede consultar el estado, pero no cambiarlo.</p>}{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}</section>
+
+  const secondary = canVerify ? ({
+    unverified: [],
+    contact_confirmed: [],
+    identity_reviewed: [{ value: 'producer_validated' as const, label: 'Marcar como Productor Super Carnes' }, { value: 'contact_confirmed' as const, label: 'Retirar Verificado' }],
+    biometric_verified: [{ value: 'producer_validated' as const, label: 'Marcar como Productor Super Carnes' }, { value: 'identity_reviewed' as const, label: 'Bajar a Verificado' }, { value: 'contact_confirmed' as const, label: 'Retirar verificación' }],
+    producer_validated: [{ value: 'identity_reviewed' as const, label: 'Bajar a Verificado' }, { value: 'contact_confirmed' as const, label: 'Retirar verificación' }],
+  }[level]) : []
+
+  return (
+    <section className="ap-card" aria-labelledby="ap-verification-title">
+      <div className="ap-card__head"><h2 id="ap-verification-title"><ShieldCheck size={19} aria-hidden="true" />Verificación de identidad</h2>{pill}</div>
+      <div className="ap-verify">
+        <div>
+          <ul className="ap-checklist">
+            {checklist.map((item) => <li key={item.label} className={item.ok ? 'is-ok' : 'is-missing'}>{item.ok ? <CheckCircle2 size={17} aria-hidden="true" /> : <Clock size={17} aria-hidden="true" />}<span>{item.label}</span>{item.extra}</li>)}
+          </ul>
+          <ol className="ap-ladder" aria-label="Niveles">
+            {(['contact_confirmed', 'identity_reviewed', 'biometric_verified'] as const).map((step) => {
+              const rank = { unverified: 0, contact_confirmed: 1, identity_reviewed: 2, biometric_verified: 3, producer_validated: 3 }
+              return <li key={step} className={rank[level] >= rank[step] ? 'is-done' : ''}>{LEVEL_LABELS[step]}</li>
+            })}
+          </ol>
+        </div>
+        <div className="ap-verify__action">
+          {next}
+          {target && (
+            <ValidatedForm className="ap-decision" onSubmit={(event) => void save(event)}>
+              <TextAreaField id="ap-trust-reason" name="reason" label={`Fundamento para ${target === 'contact_confirmed' ? 'retirar la verificación' : `“${LEVEL_LABELS[target]}”`}`} value={reason} onChange={(value) => { setReason(value); setError('') }} minLength={5} maxLength={1000} rows={3} required disabled={busy} hint="Queda en la bitácora. No pegues números de documentos completos." />
+              <div className="ap-actions">
+                <button className={`button ${target === 'contact_confirmed' || (target === 'identity_reviewed' && level !== 'contact_confirmed') ? 'button--danger' : 'button--primary'}`} type="submit" disabled={busy} aria-busy={busy}>{busy ? 'Guardando…' : target === 'contact_confirmed' ? 'Retirar' : `Confirmar ${LEVEL_LABELS[target]}`}</button>
+                <button className="button button--outline" type="button" disabled={busy} onClick={() => setTarget(null)}>Cancelar</button>
+              </div>
+            </ValidatedForm>
+          )}
+          {error && <p role="alert" className="ap-alert ap-alert--error">{error}</p>}
+          {message && <p role="status" className="ap-alert ap-alert--ok">{message}</p>}
+          {secondary.length > 0 && target === null && (
+            <div className="ap-more"><span>Otras acciones</span>{secondary.map((option) => <button key={option.value} type="button" className="ap-link-button" onClick={() => begin(option.value)}>{option.label}</button>)}</div>
+          )}
+          {!canVerify && <p className="ap-muted">Tu cuenta puede consultar la verificación, pero no cambiarla.</p>}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function AdminProducerDetailPage() {
   const { id = '' } = useParams()
   const [detail, setDetail] = useState<AdminProducerDetail | null>(null)
   const [error, setError] = useState('')
+  const [permissions, setPermissions] = useState<string[]>([])
+  const [tab, setTab] = useState<ProducerFileTab>('resumen')
   const [contactBusy, setContactBusy] = useState(false)
-  const [contactMessage, setContactMessage] = useState('')
   const [contactError, setContactError] = useState('')
+  const [notice, setNotice] = useState('')
   const [moderateTarget, setModerateTarget] = useState<{ id: number; title: string; decision: 'approve' | 'reject' | 'request_changes' } | null>(null)
   const [moderateReason, setModerateReason] = useState('')
   const [moderateReasonError, setModerateReasonError] = useState('')
   const [moderateBusy, setModerateBusy] = useState(false)
   const [moderateError, setModerateError] = useState('')
   const [moderateSuccess, setModerateSuccess] = useState('')
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [statusReason, setStatusReason] = useState('')
+  const [statusBusy, setStatusBusy] = useState(false)
+  const [statusError, setStatusError] = useState('')
 
   useEffect(() => { void getAdminProducerDetail(id).then(setDetail).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'No pudimos cargar la ficha.')) }, [id])
+  useEffect(() => { void getAdminPermissions().then(setPermissions).catch(() => setPermissions([])) }, [])
 
   async function handleModerateProduct(event: React.FormEvent) {
     event.preventDefault()
     if (!moderateTarget) return
     const reason = moderateReason.trim()
     if (reason.length < 5) { setModerateReasonError('Escribe el motivo con al menos cinco caracteres.'); return }
-    setModerateBusy(true)
-    setModerateError('')
+    setModerateBusy(true); setModerateError('')
     try {
       await decideModeration(moderateTarget.id, moderateTarget.decision, reason)
       const newStatus = moderateTarget.decision === 'approve' ? 'published' : moderateTarget.decision === 'reject' ? 'rejected' : 'changes_requested'
-      setDetail((prev) => prev ? { ...prev, products: prev.products.map((p) => p.id === moderateTarget.id ? { ...p, status: newStatus } : p) } : prev)
-      setModerateSuccess(`"${moderateTarget.title}" ${moderateTarget.decision === 'approve' ? 'aprobado y publicado' : moderateTarget.decision === 'reject' ? 'rechazado' : 'devuelto con cambios solicitados'}.`)
-      setModerateTarget(null)
-      setModerateReason('')
-    } catch (err) {
-      setModerateError(err instanceof Error ? err.message : 'No se pudo guardar la decisión.')
-    } finally {
-      setModerateBusy(false)
-    }
+      setDetail((prev) => prev ? { ...prev, products: prev.products.map((p) => p.id === moderateTarget.id ? { ...p, status: newStatus } : p), product_history: [{ product_title: moderateTarget.title, from_status: 'pending', to_status: newStatus, reason, actor: 'Tú', created_at: new Date().toISOString() }, ...prev.product_history] } : prev)
+      setModerateSuccess(`“${moderateTarget.title}” ${moderateTarget.decision === 'approve' ? 'aprobado y publicado' : moderateTarget.decision === 'reject' ? 'rechazado' : 'devuelto con cambios solicitados'}.`)
+      setModerateTarget(null); setModerateReason('')
+    } catch (err) { setModerateError(err instanceof Error ? err.message : 'No se pudo guardar la decisión.') }
+    finally { setModerateBusy(false) }
   }
 
   function openModerate(product: { id: number; title: string }, decision: 'approve' | 'reject' | 'request_changes') {
     setModerateTarget({ id: product.id, title: product.title, decision })
-    setModerateReason('')
-    setModerateReasonError('')
-    setModerateSuccess('')
-    setModerateError('')
+    // Approving rarely needs prose; a ready note keeps it to one click while still leaving a trace.
+    setModerateReason(decision === 'approve' ? 'Publicación revisada: fotos, precio y categoría correctos.' : '')
+    setModerateReasonError(''); setModerateSuccess(''); setModerateError('')
   }
 
   async function handleConfirmContact() {
     if (!detail || contactBusy) return
-    setContactBusy(true)
-    setContactError('')
-    setContactMessage('')
+    setContactBusy(true); setContactError('')
     try {
       const result = await confirmAdminProducerContact(detail.producer.id)
-      setDetail((prev) => prev ? { ...prev, producer: { ...prev.producer, contact_level: result.contact_level, phone_verified_at: result.phone_verified_at } } : prev)
-      setContactMessage('Contacto confirmado. El teléfono del productor ya es visible en el catálogo.')
-    } catch (reason) {
-      setContactError(reason instanceof Error ? reason.message : 'No se pudo confirmar el contacto.')
-    } finally {
-      setContactBusy(false)
-    }
+      setDetail((prev) => prev ? { ...prev, producer: { ...prev.producer, contact_level: result.contact_level, phone_verified_at: result.phone_verified_at, verification_level: prev.producer.verification_level === 'unverified' ? 'contact_confirmed' : prev.producer.verification_level }, audit: [{ action: 'producer.contact_confirmed_manually', before_values: null, after_values: null, reason: 'Confirmación telefónica', actor: 'Tú', created_at: new Date().toISOString() }, ...prev.audit] } : prev)
+      setNotice('Teléfono confirmado. El número del productor ya es visible en el catálogo.')
+    } catch (reason) { setContactError(reason instanceof Error ? reason.message : 'No se pudo confirmar el contacto.') }
+    finally { setContactBusy(false) }
   }
 
-  return <AdminShell><main className="admin-content admin-producer-detail">
-    <Link className="back-link" to="/admin/productores">← Volver al directorio</Link>
-    <p className="eyebrow eyebrow--quiet">ADMINISTRACIÓN · FICHA DE PRODUCTOR</p>
+  async function saveStatus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!detail) return
+    const reason = statusReason.trim()
+    if (reason.length < 5) { setStatusError('Explica la decisión con al menos cinco caracteres.'); return }
+    const current = detail.producer.profile_status
+    const nextStatus = current === 'active' ? 'suspended' : 'active'
+    setStatusBusy(true); setStatusError('')
+    try {
+      const result = await setAdminProducerStatus(detail.producer.id, nextStatus, reason)
+      setDetail({ ...detail, producer: { ...detail.producer, profile_status: result.profile_status, suspension_reason: result.profile_status === 'suspended' ? reason : null }, audit: [{ action: 'producer.status_changed', before_values: { profile_status: current }, after_values: { profile_status: result.profile_status }, reason, actor: 'Tú', created_at: new Date().toISOString() }, ...detail.audit] })
+      setNotice(nextStatus === 'suspended' ? 'Perfil suspendido. Sus publicaciones dejaron de estar disponibles.' : current === 'suspended' ? `Perfil reactivado.${result.products_queued_for_review ? ` ${result.products_queued_for_review} publicaciones volvieron a revisión.` : ''}` : 'Perfil activado. Sus publicaciones aprobadas ya son visibles.')
+      setStatusOpen(false); setStatusReason('')
+    } catch (failure) { setStatusError(failure instanceof Error ? failure.message : 'No se pudo actualizar el estado del perfil.') }
+    finally { setStatusBusy(false) }
+  }
 
-    {error
-      ? <div role="alert" className="empty-products"><strong>{error}</strong><Link className="button button--primary" to="/admin/productores">Volver al directorio</Link></div>
-      : !detail
-        ? <p role="status">Cargando ficha e historial…</p>
-        : <>
-          {/* ── Header ── */}
-          <div className="producer-detail-header">
-            <div className="producer-detail-header__identity">
-              <span className="producer-avatar producer-avatar--large producer-detail-header__avatar" aria-hidden="true">
-                {detail.producer.public_name.split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA')}
-              </span>
-              <div>
-                <h1>{detail.producer.public_name}</h1>
-                <p className="producer-detail-header__meta">
-                  {detail.producer.activity ?? 'Sin actividad'} · {[detail.producer.location?.name, detail.producer.location?.parent?.name].filter(Boolean).join(', ') || 'Sin ubicación'}
-                </p>
-                <div className="producer-detail-header__pills">
-                  <span className={`status-pill status-pill--${detail.producer.profile_status}`}>{detail.producer.profile_status}</span>
-                  {detail.producer.contact_level === 'unverified'
-                    ? <span className="status-pill status-pill--pending">Sin Verified PRO</span>
-                    : <VerificationBadge level={detail.producer.verification_level} internal />}
-                  <span className="status-pill status-pill--pending">{detail.producer.registration_method === 'assisted' ? 'Registro asistido' : 'Registro directo'}</span>
-                </div>
-              </div>
-            </div>
+  if (error || !detail) {
+    return <AdminShell><main className="admin-content ap-file">
+      <Link className="ap-back" to="/admin/productores"><ArrowLeft size={15} aria-hidden="true" />Volver al directorio</Link>
+      {error ? <div role="alert" className="empty-products"><strong>{error}</strong><Link className="button button--primary" to="/admin/productores">Volver al directorio</Link></div> : <p role="status">Cargando ficha e historial…</p>}
+    </main></AdminShell>
+  }
+
+  const p = detail.producer
+  const activities = p.activities?.length ? p.activities : p.activity ? [p.activity] : []
+  const place = [p.location?.name, p.location?.parent?.name].filter(Boolean).join(', ')
+  const pending = detail.products.filter((product) => product.status === 'pending')
+  const pendingTotal = detail.product_status_counts.pending ?? pending.length
+  const productTotal = Object.values(detail.product_status_counts).reduce((sum, value) => sum + value, 0)
+  const publishedTotal = detail.product_status_counts.published ?? 0
+  const phoneOk = p.contact_level === 'contact_confirmed'
+  const status = p.profile_status
+  const canVerify = permissions.includes('producers.verify')
+  const canChangeStatus = permissions.includes(status === 'active' ? 'producers.suspend' : 'producers.assist')
+  const activity = producerActivity(detail)
+  const bioPending = detail.biometric_check?.status === 'pending'
+  const initials = p.public_name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toLocaleUpperCase('es-PA')
+
+  const productList = (items: typeof detail.products) => items.length ? (
+    <ul className="ap-products">
+      {items.map((product) => (
+        <li key={product.id} className="ap-product">
+          <span className="ap-product__icon"><Package size={20} aria-hidden="true" /></span>
+          <div className="ap-product__body">
+            <strong>{product.title}</strong>
+            <small>Actualizado {shortDate(product.updated_at)}</small>
+            <span className={`ap-pill ap-pill--${product.status === 'published' ? 'ok' : product.status === 'pending' ? 'warn' : product.status === 'rejected' ? 'danger' : 'info'}`}>{PRODUCT_STATUS_LABELS[product.status] ?? product.status}</span>
           </div>
-
-          {/* ── Registration data card ── */}
-          <section className="producer-detail-regcard">
-            <h2 className="producer-detail-regcard__title">Datos de registro</h2>
-            <div className="producer-detail-regcard__grid">
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Nombre completo</span><span className="producer-detail-regfield__value">{detail.account.name}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Nombre público</span><span className="producer-detail-regfield__value">{detail.producer.public_name}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Correo electrónico</span><span className="producer-detail-regfield__value">{detail.account.email}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Teléfono</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.phone_private ?? '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Cédula</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.cedula ?? '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">RUC</span><span className="producer-detail-regfield__value producer-detail-regfield__value--mono">{detail.producer.ruc ? `${detail.producer.ruc} DV ${detail.producer.ruc_dv ?? '—'}` : '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Actividad</span><span className="producer-detail-regfield__value">{detail.producer.activity ?? '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Tipo de negocio</span><span className="producer-detail-regfield__value">{detail.producer.vendor_type ?? 'productor'}</span></div>
-              {(detail.producer.payment_methods ?? []).length > 0 && <div className="producer-detail-regfield" style={{ gridColumn: '1/-1' }}><span className="producer-detail-regfield__label">Métodos de pago</span><span className="producer-detail-regfield__value">{(detail.producer.payment_methods ?? []).map((m: string) => m === 'efectivo' ? 'Efectivo' : m === 'yappy' ? 'Yappy' : m === 'transferencia' ? 'Transferencia bancaria' : m === 'tarjeta' ? 'Tarjeta de crédito/débito' : m === 'cheque' ? 'Cheque' : m === 'credito' ? 'Crédito / Cuenta abierta' : m).join(', ')}</span></div>}
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Ubicación</span><span className="producer-detail-regfield__value">{[detail.producer.location?.name, detail.producer.location?.parent?.name].filter(Boolean).join(', ') || '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Registrado</span><span className="producer-detail-regfield__value">{new Date(detail.account.created_at).toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
-              {detail.producer.registered_by && <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Registrado por</span><span className="producer-detail-regfield__value">{detail.producer.registered_by}</span></div>}
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Foto de cédula</span><span className="producer-detail-regfield__value">{detail.producer.has_cedula_photo ? (detail.producer.cedula_photo_url ? <a href={detail.producer.cedula_photo_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subida') : '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Pacto social</span><span className="producer-detail-regfield__value">{detail.producer.has_pacto_social ? (detail.producer.pacto_social_url ? <a href={detail.producer.pacto_social_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subido') : '—'}</span></div>
-              <div className="producer-detail-regfield"><span className="producer-detail-regfield__label">Aviso de operación</span><span className="producer-detail-regfield__value">{detail.producer.has_aviso_operacion ? (detail.producer.aviso_operacion_url ? <a href={detail.producer.aviso_operacion_url} target="_blank" rel="noopener noreferrer">Ver documento</a> : '✓ Subido') : '—'}</span></div>
+          {product.status === 'pending' && moderateTarget?.id !== product.id && (
+            <div className="ap-actions ap-product__actions">
+              <button className="button button--primary button--small" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'approve')}><CheckCircle2 size={15} aria-hidden="true" />Aprobar</button>
+              <button className="button button--outline button--small" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'request_changes')}><Pencil size={14} aria-hidden="true" />Solicitar cambios</button>
+              <button className="button button--danger-soft button--small" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'reject')}>Rechazar</button>
             </div>
-            {detail.producer.description && (
-              <div className="producer-detail-regcard__description">
-                <span className="producer-detail-regfield__label">Descripción del negocio</span>
-                <p>{detail.producer.description}</p>
-              </div>
-            )}
-          </section>
-
-          {/* ── Verified PRO action ── */}
-          {detail.producer.contact_level === 'unverified' ? (
-            <div className="producer-detail-alert">
-              <div className="producer-detail-alert__body">
-                <strong>Pendiente: Verified PRO</strong>
-                <span>Llama al productor al número registrado, confirma su identidad y otorga el distintivo.</span>
-              </div>
-              <button className="button button--primary" type="button" disabled={contactBusy} aria-busy={contactBusy} onClick={() => void handleConfirmContact()}>
-                {contactBusy ? 'Otorgando…' : 'Otorgar Verified PRO'}
-              </button>
-              {contactError && <p role="alert">{contactError}</p>}
-            </div>
-          ) : (
-            contactMessage ? <div className="producer-detail-success">{contactMessage}</div> : null
           )}
+          {moderateTarget?.id === product.id && (
+            <ValidatedForm className="ap-decision" onSubmit={(event) => void handleModerateProduct(event)}>
+              <TextAreaField id={`detail-mod-reason-${product.id}`} name="reason" label={moderateTarget.decision === 'approve' ? 'Nota de aprobación' : moderateTarget.decision === 'reject' ? 'Motivo del rechazo (lo verá el productor)' : '¿Qué debe cambiar? (lo verá el productor)'} value={moderateReason} onChange={(value) => { setModerateReason(value); setModerateReasonError('') }} error={moderateReasonError} minLength={5} maxLength={1000} rows={3} required disabled={moderateBusy} />
+              <div className="ap-actions">
+                <button className={`button ${moderateTarget.decision === 'reject' ? 'button--danger' : 'button--primary'}`} type="submit" disabled={moderateBusy} aria-busy={moderateBusy}>{moderateBusy ? 'Guardando…' : moderateTarget.decision === 'approve' ? 'Aprobar y publicar' : moderateTarget.decision === 'reject' ? 'Rechazar publicación' : 'Enviar cambios'}</button>
+                <button className="button button--outline" type="button" disabled={moderateBusy} onClick={() => setModerateTarget(null)}>Cancelar</button>
+              </div>
+              {moderateError && <p role="alert" className="ap-alert ap-alert--error">{moderateError}</p>}
+            </ValidatedForm>
+          )}
+        </li>
+      ))}
+    </ul>
+  ) : null
 
-          {/* ── Two-column body ── */}
-          <div className="producer-detail-body">
+  const activityList = (items: ActivityEntry[]) => items.length ? (
+    <ol className="ap-timeline">
+      {items.map((entry) => (
+        <li key={entry.key} className={`ap-timeline__item ap-timeline__item--${entry.tone}`}>
+          <span className="ap-timeline__dot" aria-hidden="true">{entry.tone === 'ok' ? <CheckCircle2 size={15} /> : entry.tone === 'warn' ? <AlertTriangle size={15} /> : <History size={15} />}</span>
+          <div><strong>{entry.title}</strong><small>{longDateTime(entry.at)} · {entry.actor ?? 'Sistema'}</small>{entry.detail && <p>{entry.detail}</p>}</div>
+        </li>
+      ))}
+    </ol>
+  ) : <p className="ap-muted">Sin actividad registrada.</p>
 
-            {/* Left col: actions */}
-            <div className="producer-detail-actions">
-              <AdminProducerStatusControl detail={detail} onUpdated={setDetail} />
-              <AdminTrustReview detail={detail} onUpdated={setDetail} />
-              {detail.biometric_check && <AdminBiometricReview detail={detail} check={detail.biometric_check} onUpdated={setDetail} />}
+  return <AdminShell><main className="admin-content ap-file">
+    <div className="ap-top">
+      <div>
+        <Link className="ap-back" to="/admin/productores"><ArrowLeft size={15} aria-hidden="true" />Volver al directorio <span aria-hidden="true">·</span> Gestión de productores</Link>
+        <h1>Ficha del productor</h1>
+      </div>
+      <div className="ap-actions">
+        <button className="button button--outline" type="button" onClick={() => setTab('actividad')}><History size={16} aria-hidden="true" />Ver historial completo</button>
+        {p.slug && <a className="button button--outline" href={`/productores/${p.slug}`} target="_blank" rel="noopener noreferrer"><ArrowUpRight size={16} aria-hidden="true" />Ver perfil público</a>}
+      </div>
+    </div>
 
-              {/* Consents */}
-              <section className="dashboard-list admin-producer-history">
-                <h2>Consentimientos</h2>
-                {detail.consents.length
-                  ? detail.consents.map((consent) => (
-                    <article className="dashboard-row" key={consent.id}>
-                      <div><strong>{consent.consent_type}</strong><small>{consent.version} · {new Date(consent.accepted_at).toLocaleDateString('es-PA')}</small></div>
-                    </article>
-                  ))
-                  : <p>No hay consentimientos registrados.</p>}
-              </section>
-            </div>
+    <section className="ap-card ap-hero">
+      <span className="ap-hero__avatar" aria-hidden="true">{initials}</span>
+      <div className="ap-hero__body">
+        <h2>{p.public_name}</h2>
+        <p>{activities.length ? activities.join(' · ') : 'Sin actividades'}{place && <> <span aria-hidden="true">|</span> {place}</>}</p>
+        <div className="ap-hero__pills">
+          <span className={`ap-pill ap-pill--${status === 'active' ? 'ok' : status === 'suspended' ? 'danger' : 'warn'}`}>{PROFILE_STATUS_LABELS[status] ?? status}</span>
+          <span className={`ap-pill ap-pill--${phoneOk ? 'ok' : 'warn'}`}>{phoneOk ? 'Teléfono confirmado' : 'Teléfono sin confirmar'}</span>
+          <span className="ap-pill ap-pill--info">{p.registration_method === 'assisted' ? 'Registro asistido' : 'Registro directo'}</span>
+          {['identity_reviewed', 'biometric_verified', 'producer_validated'].includes(p.verification_level) ? <VerificationBadge level={p.verification_level} /> : <span className="ap-pill ap-pill--warn">Identidad pendiente</span>}
+        </div>
+      </div>
+    </section>
 
-            {/* Right col: history */}
-            <div className="producer-detail-history">
-              {/* Publications */}
-              <section className="dashboard-list admin-producer-history">
-                <h2>Publicaciones ({detail.products.length})</h2>
-                {detail.producer.profile_status !== 'active' && detail.products.some((p) => p.status === 'published') && (
-                  <p role="alert" style={{ background: 'var(--color-warning-bg, #fff8e1)', border: '1px solid var(--color-warning, #f59e0b)', borderRadius: '6px', padding: '0.6rem 0.8rem', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
-                    Hay ofertas aprobadas pero el perfil está <strong>{detail.producer.profile_status}</strong>. Activa el perfil para que sean visibles en el catálogo público.
-                  </p>
-                )}
-                {moderateSuccess && <p role="status" className="form-help" style={{ marginBottom: '0.5rem' }}>{moderateSuccess}</p>}
-                {moderateError && <p role="alert" style={{ marginBottom: '0.5rem' }}>{moderateError}</p>}
-                {detail.products.length
-                  ? detail.products.map((product) => (
-                    <article className="dashboard-row" key={product.id} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', justifyContent: 'space-between' }}>
-                        <strong>{product.title}</strong>
-                        <span className={`status-pill status-pill--${product.status}`}>{product.status.replaceAll('_', ' ')}</span>
-                      </div>
-                      {product.status === 'pending' && moderateTarget?.id !== product.id && (
-                        <div className="admin-producer-actions">
-                          <button className="button button--primary button--small" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'approve')}>Aprobar</button>
-                          <button className="button button--outline button--small" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'request_changes')}>Solicitar cambios</button>
-                          <button className="text-link" type="button" disabled={moderateBusy} onClick={() => openModerate(product, 'reject')}>Rechazar</button>
-                        </div>
-                      )}
-                      {moderateTarget?.id === product.id && (
-                        <ValidatedForm className="moderation-decision-form" style={{ width: '100%' }} noValidate onSubmit={(event) => void handleModerateProduct(event)}>
-                          <TextAreaField id={`detail-mod-reason-${product.id}`} name="reason" label={moderateTarget.decision === 'approve' ? 'Nota de revisión' : 'Motivo de la decisión'} value={moderateReason} onChange={(value) => { setModerateReason(value); setModerateReasonError('') }} error={moderateReasonError} minLength={5} maxLength={1000} rows={3} required hint="El motivo quedará en el historial del productor." />
-                          {moderateError && <p role="alert" style={{ color: 'var(--color-danger, #c0392b)', margin: '0.5rem 0' }}>{moderateError}</p>}
-                          <div className="moderation-decision-form__actions">
-                            <button className="button button--primary" type="submit" disabled={moderateBusy} aria-busy={moderateBusy}>Guardar decisión</button>
-                            <button className="button button--outline" type="button" onClick={() => setModerateTarget(null)}>Cancelar</button>
-                          </div>
-                        </ValidatedForm>
-                      )}
-                    </article>
-                  ))
-                  : <p>Sin publicaciones.</p>}
-              </section>
+    {notice && <p role="status" className="ap-alert ap-alert--ok">{notice}</p>}
+    {bioPending && <button type="button" className="ap-alert ap-alert--warn ap-alert--action" onClick={() => setTab('verificacion')}><ScanFace size={18} aria-hidden="true" />Tiene una verificación facial pendiente de tu revisión. <strong>Revisar ahora</strong></button>}
 
-              {/* Publication status history */}
-              <section className="dashboard-list admin-producer-history">
-                <h2>Historial de publicaciones</h2>
-                {detail.product_history.length
-                  ? detail.product_history.map((entry, index) => (
-                    <article className="dashboard-row" key={`${entry.product_title}-${entry.created_at}-${index}`}>
-                      <div>
-                        <strong>{entry.product_title}</strong>
-                        <p>{entry.from_status ? entry.from_status.replaceAll('_', ' ') : 'inicio'} → {entry.to_status.replaceAll('_', ' ')}</p>
-                        <p>{entry.reason}</p>
-                        <small>{entry.actor ?? 'Sistema'} · {new Date(entry.created_at).toLocaleString('es-PA')}</small>
-                      </div>
-                    </article>
-                  ))
-                  : <p>Sin historial de cambios.</p>}
-              </section>
+    <div className="ap-stats">
+      <div className="ap-card ap-stat"><span className="ap-stat__icon ap-stat__icon--blue"><Package size={20} aria-hidden="true" /></span><div><small>Publicaciones totales</small><strong>{productTotal}</strong></div></div>
+      <div className="ap-card ap-stat"><span className="ap-stat__icon ap-stat__icon--amber"><Clock size={20} aria-hidden="true" /></span><div><small>Pendientes de revisión</small><strong>{pendingTotal}</strong></div></div>
+      <div className="ap-card ap-stat"><span className={`ap-stat__icon ${phoneOk ? 'ap-stat__icon--green' : 'ap-stat__icon--amber'}`}><ShieldCheck size={20} aria-hidden="true" /></span><div><small>Estado de contacto</small><strong>{phoneOk ? 'Confirmado' : 'Sin confirmar'}</strong></div></div>
+      <div className="ap-card ap-stat"><span className="ap-stat__icon ap-stat__icon--violet"><History size={20} aria-hidden="true" /></span><div><small>Fecha de registro</small><strong>{shortDate(detail.account.created_at)}</strong></div></div>
+    </div>
 
-              {/* Audit log */}
-              <section className="dashboard-list admin-producer-history">
-                <h2>Bitácora del perfil</h2>
-                {detail.audit.length
-                  ? detail.audit.map((entry, index) => (
-                    <article className="dashboard-row" key={`${entry.action}-${entry.created_at}-${index}`}>
-                      <div>
-                        <strong>{entry.action}</strong>
-                        {entry.reason && <p>{entry.reason}</p>}
-                        <small>{entry.actor ?? 'Sistema'} · {new Date(entry.created_at).toLocaleString('es-PA')}</small>
-                      </div>
-                    </article>
-                  ))
-                  : <p>Sin eventos administrativos.</p>}
-              </section>
-            </div>
-          </div>
+    <div className="ap-tabs" role="tablist" aria-label="Secciones de la ficha">
+      {([['resumen', 'Resumen', LayoutDashboard], ['publicaciones', 'Publicaciones', Package], ['verificacion', 'Verificación y documentos', ShieldCheck], ['actividad', 'Actividad y auditoría', History]] as const).map(([value, label, Icon]) => (
+        <button key={value} type="button" role="tab" aria-selected={tab === value} className={tab === value ? 'is-active' : ''} onClick={() => setTab(value)}>
+          <Icon size={17} aria-hidden="true" />{label}{value === 'publicaciones' && <span className="ap-count">{productTotal}</span>}{value === 'verificacion' && bioPending && <span className="ap-count ap-count--warn">1</span>}
+        </button>
+      ))}
+    </div>
+
+    <div className="ap-layout">
+      <div className="ap-main">
+        {tab === 'resumen' && <>
+          <section className="ap-card">
+            <CardHead Icon={Users} title="Datos del productor" />
+            <dl className="ap-data">
+              <DataItem label="Nombre completo">{detail.account.name}</DataItem>
+              <DataItem label="Nombre comercial">{p.public_name}</DataItem>
+              <DataItem label="Tipo de negocio">{VENDOR_TYPE_LABELS[p.vendor_type ?? 'productor'] ?? p.vendor_type}</DataItem>
+              <DataItem label="Correo electrónico">{detail.account.email}</DataItem>
+              <DataItem label="Teléfono">{p.phone_private}</DataItem>
+              <DataItem label="Ubicación">{place}</DataItem>
+              <DataItem label="Cédula de identidad">{p.cedula}</DataItem>
+              <DataItem label="RUC / DV">{p.ruc ? `${p.ruc}${p.ruc_dv ? ` / ${p.ruc_dv}` : ''}` : null}</DataItem>
+              <DataItem label="Métodos de pago">{(p.payment_methods ?? []).map((method) => PAYMENT_LABELS[method] ?? method).join(' · ')}</DataItem>
+              <DataItem label="Actividades principales" wide>{activities.join(', ')}</DataItem>
+              {p.registered_by && <DataItem label="Registrado por">{p.registered_by}</DataItem>}
+              {p.description && <DataItem label="Historia del negocio" wide>{p.description}</DataItem>}
+            </dl>
+            <p className={`ap-alert ${phoneOk ? 'ap-alert--ok' : 'ap-alert--warn'}`}>{phoneOk ? <CheckCircle2 size={17} aria-hidden="true" /> : <AlertTriangle size={17} aria-hidden="true" />}{phoneOk ? 'El número de contacto está confirmado y es visible en el catálogo. Los datos de identidad y documentos son de uso administrativo.' : 'El número aún no está confirmado: los compradores no pueden ver el contacto.'}</p>
+          </section>
+          <AdminVerificationCard detail={detail} canVerify={canVerify} onUpdated={setDetail} onConfirmContact={() => void handleConfirmContact()} contactBusy={contactBusy} contactError={contactError} />
+          <section className="ap-card">
+            <CardHead Icon={FileText} title="Consentimientos registrados" aside={<span className="ap-muted">{detail.consents.length} {detail.consents.length === 1 ? 'registro' : 'registros'}</span>} />
+            {detail.consents.length ? <ul className="ap-rows">{detail.consents.map((consent) => <li key={consent.id}><span><strong>{CONSENT_LABELS[consent.consent_type] ?? consent.consent_type}</strong><small>Versión {consent.version} · {shortDate(consent.accepted_at)}</small></span><span className="ap-pill ap-pill--ok">Aceptado</span></li>)}</ul> : <p className="ap-muted">No hay consentimientos registrados.</p>}
+          </section>
         </>}
+
+        {tab === 'publicaciones' && (
+          <section className="ap-card">
+            <CardHead Icon={Package} title={`Publicaciones (${productTotal})`} aside={productTotal > detail.products.length ? <span className="ap-muted">Mostrando las {detail.products.length} más recientes</span> : undefined} />
+            {status !== 'active' && publishedTotal > 0 && <p className="ap-alert ap-alert--warn"><AlertTriangle size={17} aria-hidden="true" />Hay publicaciones aprobadas, pero el perfil está {PROFILE_STATUS_LABELS[status]?.toLowerCase() ?? status}: no se ven en el catálogo hasta activarlo.</p>}
+            {moderateSuccess && <p role="status" className="ap-alert ap-alert--ok">{moderateSuccess}</p>}
+            {productList(detail.products) ?? <p className="ap-muted">Sin publicaciones.</p>}
+          </section>
+        )}
+
+        {tab === 'verificacion' && <>
+          {detail.biometric_check && <AdminBiometricReview detail={detail} check={detail.biometric_check} onUpdated={setDetail} />}
+          <AdminVerificationCard detail={detail} canVerify={canVerify} onUpdated={setDetail} onConfirmContact={() => void handleConfirmContact()} contactBusy={contactBusy} contactError={contactError} />
+          <section className="ap-card">
+            <CardHead Icon={History} title="Historial de verificación" />
+            {detail.trust_reviews.length ? <ol className="ap-timeline">{detail.trust_reviews.map((review, index) => <li key={`${review.created_at}-${index}`} className="ap-timeline__item ap-timeline__item--info"><span className="ap-timeline__dot" aria-hidden="true"><ShieldCheck size={15} /></span><div><strong>{LEVEL_LABELS[review.from_level] ?? review.from_level} → {LEVEL_LABELS[review.to_level] ?? review.to_level}</strong><small>{longDateTime(review.created_at)} · {review.actor ?? 'Sistema'}</small><p>{review.reason}</p></div></li>)}</ol> : <p className="ap-muted">Todavía no hay cambios de nivel.</p>}
+          </section>
+        </>}
+
+        {tab === 'actividad' && (
+          <section className="ap-card">
+            <CardHead Icon={History} title="Actividad y auditoría" />
+            {activityList(activity)}
+          </section>
+        )}
+      </div>
+
+      <aside className="ap-side">
+        <section className="ap-card">
+          <CardHead Icon={FileText} title="Moderación de publicaciones" aside={pendingTotal > 0 ? <span className="ap-pill ap-pill--warn">{pendingTotal} {pendingTotal === 1 ? 'pendiente' : 'pendientes'}</span> : <span className="ap-pill ap-pill--ok">Al día</span>} />
+          {moderateSuccess && tab !== 'publicaciones' && <p role="status" className="ap-alert ap-alert--ok">{moderateSuccess}</p>}
+          {pending.length > 0 ? <>
+            <p className="ap-alert ap-alert--warn"><AlertTriangle size={17} aria-hidden="true" />{pending.length === 1 ? 'Este productor tiene una publicación por revisar.' : `Este productor tiene ${pending.length} publicaciones por revisar.`}</p>
+            {tab !== 'publicaciones' && productList(pending)}
+            <p className="ap-muted ap-small">Revisa la información antes de aprobar. Las decisiones quedan registradas en la bitácora.</p>
+          </> : <p className="ap-muted">No hay publicaciones esperando revisión.</p>}
+        </section>
+
+        <section className="ap-card">
+          <CardHead Icon={Settings} title="Estado y acciones de cuenta" aside={<span className={`ap-pill ap-pill--${status === 'active' ? 'ok' : status === 'suspended' ? 'danger' : 'warn'}`}>{status === 'active' ? 'Activo' : status === 'suspended' ? 'Suspendido' : 'Pendiente'}</span>} />
+          <ul className="ap-rows">
+            <li><span><strong>Visibilidad en catálogo</strong><small>{status === 'active' ? 'El perfil puede recibir contactos' : 'Sus publicaciones no se muestran'}</small></span><span className={`ap-pill ap-pill--${status === 'active' ? 'ok' : 'warn'}`}>{status === 'active' ? 'Visible' : 'Oculto'}</span></li>
+            <li><span><strong>Publicaciones aprobadas</strong><small>Visibles mientras el perfil esté activo</small></span><span className="ap-pill ap-pill--info">{publishedTotal}</span></li>
+          </ul>
+          {p.suspension_reason && <p className="ap-alert ap-alert--warn"><strong>Motivo registrado:</strong> {p.suspension_reason}</p>}
+          {canChangeStatus && !statusOpen && (
+            <div className="ap-status-action">
+              {status === 'active'
+                ? <><span className="ap-muted ap-small">Acciones sensibles con confirmación</span><button type="button" className="ap-link-button ap-link-button--danger" onClick={() => { setStatusOpen(true); setStatusError('') }}><Lock size={15} aria-hidden="true" />Suspender perfil</button></>
+                : <button type="button" className="button button--primary" onClick={() => { setStatusOpen(true); setStatusError('') }}>{status === 'suspended' ? 'Reactivar perfil' : 'Activar perfil'}</button>}
+            </div>
+          )}
+          {statusOpen && (
+            <ValidatedForm className="ap-decision" onSubmit={(event) => void saveStatus(event)}>
+              <TextAreaField id="ap-status-reason" name="reason" label={status === 'active' ? 'Motivo de la suspensión' : status === 'suspended' ? 'Motivo de la reactivación' : 'Motivo de la activación'} value={statusReason} onChange={(value) => { setStatusReason(value); setStatusError('') }} minLength={5} maxLength={1000} rows={3} required disabled={statusBusy} hint={status === 'active' ? 'Sus publicaciones dejarán de estar disponibles.' : status === 'suspended' ? 'Sus ofertas publicadas volverán a revisión humana.' : 'Sus publicaciones aprobadas se harán visibles.'} />
+              <div className="ap-actions">
+                <button className={`button ${status === 'active' ? 'button--danger' : 'button--primary'}`} type="submit" disabled={statusBusy} aria-busy={statusBusy}>{statusBusy ? 'Guardando…' : status === 'active' ? 'Suspender' : status === 'suspended' ? 'Reactivar' : 'Activar'}</button>
+                <button className="button button--outline" type="button" disabled={statusBusy} onClick={() => setStatusOpen(false)}>Cancelar</button>
+              </div>
+              {statusError && <p role="alert" className="ap-alert ap-alert--error">{statusError}</p>}
+            </ValidatedForm>
+          )}
+        </section>
+
+        <section className="ap-card">
+          <CardHead Icon={History} title="Actividad reciente" aside={activity.length > 4 ? <button type="button" className="ap-link-button" onClick={() => setTab('actividad')}>Ver toda <ArrowRight size={14} aria-hidden="true" /></button> : undefined} />
+          {activityList(activity.slice(0, 4))}
+        </section>
+      </aside>
+    </div>
   </main></AdminShell>
 }
 

@@ -1,9 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, BookOpen, Camera, CheckCircle2, ChevronRight, LayoutDashboard, LogOut, Menu, Package, Plus, User, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, Banknote, BookOpen, Camera, Check, CheckCircle2, ChevronRight, Clock, CreditCard, ExternalLink, Eye, FileText, Handshake, Info, Landmark, LayoutDashboard, Lock, LogOut, MapPin, Menu, Package, Plus, Receipt, ScanFace, Settings, ShieldCheck, Smartphone, Store, Upload, User, X } from 'lucide-react'
+import profileCover from '../assets/mercapro/hero/campo-mercapro-960.webp'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
-import ActivitySelect from '../components/ActivitySelect'
+import ActivityMultiSelect from '../components/ActivityMultiSelect'
 import LocationPicker from '../components/LocationPicker'
 import TextAreaField from '../components/TextAreaField'
 import ValidatedForm from '../components/ValidatedForm'
@@ -15,7 +16,7 @@ import {
   getBiometricStatus, getProducerProduct, getSessionUser, listCategories, listLocations, listUnits, logoutUser,
   renewProducerProduct, saveProductDraft, getMyStories, saveMyStory, deleteMyStory, submitProducerAppeal,
   transitionProducerProduct, updateProduct, updateProducerProfile,
-  uploadProducerDocument, getProducerDocuments,
+  uploadProducerDocument, getProducerDocuments, getMissingProducerDocuments, DOCUMENTS_UPDATED_EVENT, type ProducerDocumentType,
   type OwnedProducerStory, type ProducerAppealState, type ProducerDashboardProduct, type ProducerMetrics, type PublicLocation,
 } from '../api/client'
 import VerificationBadge from '../components/VerificationBadge'
@@ -25,6 +26,8 @@ import type { BiometricStatus } from '../api/client'
 const BiometricCapture = lazy(() => import('../components/BiometricCapture'))
 
 import { InfoPage } from './shared/InfoPage'
+
+const MISSING_DOC_LABELS: Record<ProducerDocumentType, string> = { cedula_photo: 'la foto de tu cédula', aviso_operacion: 'el aviso de operación', pacto_social: 'el pacto social' }
 
 // ── Sidebar shell shared by all producer pages ────────────────────────────────
 
@@ -36,6 +39,14 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void getSessionUser().then((u) => { if (u) setUserName(u.name) })
+  }, [])
+
+  const [missingDocs, setMissingDocs] = useState<ProducerDocumentType[]>([])
+  useEffect(() => {
+    const load = () => { getMissingProducerDocuments().then(setMissingDocs).catch(() => setMissingDocs([])) }
+    load()
+    window.addEventListener(DOCUMENTS_UPDATED_EVENT, load)
+    return () => window.removeEventListener(DOCUMENTS_UPDATED_EVENT, load)
   }, [])
 
   async function handleLogout() {
@@ -127,6 +138,13 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
             <span>Publicar</span>
           </Link>
         </header>
+        {missingDocs.length > 0 && (
+          <div className="producer-doc-alert" role="alert">
+            <AlertCircle size={20} aria-hidden="true" />
+            <p><strong>Para publicar productos debes subir {missingDocs.map((type) => MISSING_DOC_LABELS[type]).join(' y ')}.</strong> <span>Puedes preparar tu perfil mientras tanto, pero tus productos no se publicarán hasta completarlo.</span></p>
+            <Link className="producer-doc-alert__cta" to="/mi-perfil#verificar">Subir ahora <ChevronRight size={16} aria-hidden="true" /></Link>
+          </div>
+        )}
         <main className="producer-content">
           {children}
         </main>
@@ -137,7 +155,48 @@ function ProducerShell({ children }: { children: React.ReactNode }) {
 
 // ── Profile / settings page ───────────────────────────────────────────────────
 
-function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: boolean }) {
+type ProfileTab = 'negocio' | 'ubicacion' | 'verificacion' | 'cuenta'
+
+const PROFILE_TABS: Array<{ id: ProfileTab; label: string; Icon: typeof Store }> = [
+  { id: 'negocio', label: 'Mi negocio', Icon: Store },
+  { id: 'ubicacion', label: 'Ubicación y contacto', Icon: MapPin },
+  { id: 'verificacion', label: 'Verificación', Icon: ShieldCheck },
+  { id: 'cuenta', label: 'Cuenta', Icon: Settings },
+]
+
+const PAYMENT_OPTIONS = [
+  { value: 'efectivo', label: 'Efectivo', Icon: Banknote },
+  { value: 'yappy', label: 'Yappy', Icon: Smartphone },
+  { value: 'transferencia', label: 'Transferencia bancaria', Icon: Landmark },
+  { value: 'tarjeta', label: 'Tarjeta de crédito/débito', Icon: CreditCard },
+  { value: 'cheque', label: 'Cheque', Icon: Receipt },
+  { value: 'credito', label: 'Crédito / Cuenta abierta', Icon: Handshake },
+] as const
+
+const LEVEL_RANK: Record<string, number> = { unverified: 0, contact_confirmed: 1, identity_reviewed: 2, biometric_verified: 3, producer_validated: 3 }
+
+function tabFromHash(hash: string): ProfileTab {
+  if (hash === '#verificar' || hash === '#verificacion') return 'verificacion'
+  if (hash === '#ubicacion') return 'ubicacion'
+  if (hash === '#cuenta') return 'cuenta'
+  return 'negocio'
+}
+
+function locationLabel(locations: PublicLocation[], id: number | null): string {
+  const parts: string[] = []
+  let current = locations.find((location) => location.id === id)
+  while (current && parts.length < 4) {
+    parts.push(current.name)
+    const parentId: number | null = current.parent_id
+    current = locations.find((location) => location.id === parentId)
+  }
+  return parts.join(', ')
+}
+
+type ProfilePreview = { name: string; activities: string[]; payments: string[]; description: string; locationId: number | null }
+
+function ProducerProfilePage() {
+  const location = useLocation()
   const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof getProducerDashboard>> | null>(null)
   const [locations, setLocations] = useState<PublicLocation[]>([])
   const [locationsLoading, setLocationsLoading] = useState(true)
@@ -145,11 +204,31 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
   const [locationsRetry, setLocationsRetry] = useState(0)
   const [message, setMessage] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<ProfileTab>(() => tabFromHash(location.hash))
+  const [preview, setPreview] = useState<ProfilePreview | null>(null)
+  const focusInvalid = useRef(false)
+
+  const loadDashboard = useCallback(async () => {
+    const data = await getProducerDashboard()
+    setDashboard(data)
+    if (data.profile) setPreview({ name: data.profile.public_name, activities: data.profile.activities ?? [], payments: data.profile.payment_methods ?? [], description: data.profile.description ?? '', locationId: data.profile.location_id })
+  }, [])
 
   useEffect(() => {
-    void getProducerDashboard().then(setDashboard)
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Inicia sesión para editar tu perfil.'))
-  }, [])
+    loadDashboard().catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Inicia sesión para editar tu perfil.'))
+  }, [loadDashboard])
+
+  useEffect(() => { setTab(tabFromHash(location.hash)) }, [location.hash])
+
+  useEffect(() => {
+    // Leaflet measures its container; it needs a resize once the location tab becomes visible.
+    if (tab === 'ubicacion') window.dispatchEvent(new Event('resize'))
+    if (focusInvalid.current) {
+      focusInvalid.current = false
+      document.getElementById('producer-profile-form')?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    }
+  }, [tab])
 
   useEffect(() => {
     let active = true
@@ -164,274 +243,327 @@ function ProducerProfilePage({ verificationOnly = false }: { verificationOnly?: 
 
   const profile = dashboard?.profile
 
-  const completionChecks = profile ? [
-    { done: Boolean(profile.description?.trim()), label: 'Descripción del negocio' },
-    { done: Boolean(profile.activity), label: 'Tipo de actividad' },
-    { done: Boolean(profile.location_id), label: 'Ubicación aproximada' },
-    { done: profile.contact_level === 'contact_confirmed', label: 'Teléfono confirmado' },
+  function chooseTab(next: ProfileTab) {
+    setTab(next)
+    window.history.replaceState(null, '', next === 'negocio' ? location.pathname : `${location.pathname}#${next === 'verificacion' ? 'verificar' : next}`)
+  }
+
+  function readPreview() {
+    const form = document.getElementById('producer-profile-form')
+    if (!(form instanceof HTMLFormElement)) return
+    const data = new FormData(form)
+    setPreview((current) => ({
+      name: String(data.get('public_name') ?? ''),
+      activities: data.getAll('activities[]').map(String),
+      payments: data.getAll('payment_methods[]').map(String),
+      description: String(data.get('description') ?? ''),
+      locationId: current?.locationId ?? null,
+    }))
+  }
+
+  const phoneConfirmed = profile?.contact_level === 'contact_confirmed'
+  const level = profile?.verification_level ?? 'unverified'
+  const rank = LEVEL_RANK[level] ?? 0
+  const completionChecks: Array<{ done: boolean; label: string; tab: ProfileTab }> = profile ? [
+    { done: Boolean(profile.description?.trim()), label: 'Agregar descripción', tab: 'negocio' },
+    { done: (profile.activities ?? []).length > 0, label: 'Elegir actividades', tab: 'negocio' },
+    { done: Boolean(profile.location_id), label: 'Completar ubicación', tab: 'ubicacion' },
+    { done: phoneConfirmed, label: 'Confirmar teléfono', tab: 'verificacion' },
   ] : []
-  const doneCnt = completionChecks.filter((c) => c.done).length
-  const pct = completionChecks.length ? Math.round(doneCnt / completionChecks.length * 100) : 0
-  const allDone = pct === 100
+  const doneCount = completionChecks.filter((check) => check.done).length
+  const pct = completionChecks.length ? Math.round(doneCount / completionChecks.length * 100) : 0
+  const rucEditable = level === 'unverified' || level === 'contact_confirmed'
 
   return (
     <ProducerShell>
-      <div className="producer-settings">
-        <div className="producer-settings__header">
-          <p className="eyebrow eyebrow--quiet">CONFIGURACIÓN</p>
+      <div className="mp-profile">
+        <header className="mp-profile__header">
           <h1>Mi perfil</h1>
-        </div>
-
-        {/* ── Completion strip ── */}
-        {profile && (
-          <div className={`producer-completion-strip${allDone ? ' producer-completion-strip--complete' : ''}`}>
-            <div className="producer-completion-strip__progress">
-              <div className="producer-completion-strip__bar-wrap">
-                <div className="producer-completion-strip__bar" style={{ width: `${pct}%` }} />
-              </div>
-              <span className="producer-completion-strip__pct">{pct}%</span>
-            </div>
-            <div className="producer-completion-strip__items">
-              {completionChecks.map(({ done, label }) => (
-                <span key={label} className={`producer-completion-item${done ? ' producer-completion-item--done' : ''}`}>
-                  {done
-                    ? <CheckCircle2 size={13} aria-label="Completado" />
-                    : <span className="producer-completion-dot" aria-label="Pendiente" />}
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          <p>Configura cómo te verán los compradores</p>
+        </header>
 
         {!dashboard ? (
           <p role="status">{message || 'Cargando tus datos…'}</p>
-        ) : !profile ? (
+        ) : !profile || !preview ? (
           <p role="alert">No encontramos un perfil de productor asociado a esta cuenta.</p>
         ) : (
-          <>
-            {/* ── Section 1: Public info ── */}
-            {!verificationOnly && (
-              <section className="producer-settings__section">
-                <div className="producer-settings__section-head">
-                  <User size={18} aria-hidden="true" />
-                  <h2>Información pública</h2>
+          <div className="mp-profile__layout">
+            <div className="mp-profile__main">
+              {/* ── Completion ── */}
+              <section className="mp-card mp-completion" aria-label="Avance del perfil">
+                <div className="mp-completion__ring" style={{ '--pct': `${pct}%` } as React.CSSProperties} role="img" aria-label={`Perfil ${pct}% completado`}>
+                  <span><strong>{pct}%</strong><small>Completado</small></span>
                 </div>
-                <p className="producer-settings__section-help">
-                  Tu nombre, actividad, descripción y ubicación se muestran en tu perfil del catálogo.
-                  No incluyas una dirección exacta.
-                </p>
-                <ValidatedForm
-                  className="auth-form producer-product-form"
-                  onSubmit={async (event) => {
-                    event.preventDefault()
-                    setSaveSuccess(false)
-                    setMessage('')
-                    try {
-                      await updateProducerProfile(new FormData(event.currentTarget))
-                      setSaveSuccess(true)
-                      const data = await getProducerDashboard()
-                      setDashboard(data)
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : 'No se pudo guardar el perfil.')
-                    }
-                  }}
-                >
-                  <label>Nombre público
-                    <input name="public_name" defaultValue={profile.public_name} required maxLength={120} />
-                  </label>
+                <div className="mp-completion__body">
+                  <h2>{pct === 100 ? '¡Tu perfil está completo!' : 'Completa tu perfil para ganar más visibilidad'}</h2>
+                  <p>Aumenta la confianza de los compradores y recibe más oportunidades de venta.</p>
+                  <ul className="mp-completion__steps">
+                    {completionChecks.map((check) => (
+                      <li key={check.label}>
+                        <button type="button" className={check.done ? 'is-done' : ''} onClick={() => chooseTab(check.tab)}>
+                          <span className="mp-completion__check" aria-hidden="true">{check.done && <Check size={14} strokeWidth={3} />}</span>
+                          {check.label}
+                          <span className="sr-only">{check.done ? ' (listo)' : ' (pendiente)'}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
 
-                  <label>Actividad
-                    <ActivitySelect defaultValue={profile.activity} />
-                  </label>
+              {/* ── Tabs ── */}
+              <div className="mp-card mp-tabs" role="tablist" aria-label="Secciones del perfil">
+                {PROFILE_TABS.map(({ id, label, Icon }) => (
+                  <button key={id} id={`profile-tab-${id}`} type="button" role="tab" aria-selected={tab === id} aria-controls={`profile-panel-${id}`} className={tab === id ? 'is-active' : ''} onClick={() => chooseTab(id)}>
+                    <Icon size={18} aria-hidden="true" /><span>{label}</span>
+                  </button>
+                ))}
+              </div>
 
-                  <label>Tipo de emprendimiento
-                    <select name="vendor_type" defaultValue={profile.vendor_type ?? 'productor'}>
-                      <option value="productor">Personal / Productor individual</option>
-                      <option value="cooperativa">Cooperativa</option>
-                      <option value="distribuidor">PYME / Empresa</option>
-                    </select>
-                    <small>¿Cómo describirías tu operación?</small>
-                  </label>
+              {/* One form spans the business, location and RUC fields; the RUC inputs join it through the form attribute. */}
+              <ValidatedForm
+                id="producer-profile-form"
+                className="mp-profile-form"
+                onChange={readPreview}
+                onInvalidCapture={(event) => {
+                  const panel = (event.target as HTMLElement).closest<HTMLElement>('[data-profile-tab]')
+                  const owner = panel?.dataset.profileTab as ProfileTab | undefined
+                  if (owner && owner !== tab) { focusInvalid.current = true; setTab(owner) }
+                }}
+                onSubmit={async (event) => {
+                  event.preventDefault()
+                  setSaveSuccess(false)
+                  setMessage('')
+                  setSaving(true)
+                  try {
+                    await updateProducerProfile(new FormData(event.currentTarget))
+                    await loadDashboard()
+                    setSaveSuccess(true)
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : 'No se pudo guardar el perfil.')
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
+              >
+                <section className="mp-card mp-panel" id="profile-panel-negocio" role="tabpanel" aria-labelledby="profile-tab-negocio" data-profile-tab="negocio" hidden={tab !== 'negocio'}>
+                  <PanelHead Icon={Store} title="Información del negocio" text="Cuéntales a los compradores quién eres, qué produces y cómo trabajas." />
 
-                  <fieldset style={{ border: 'none', padding: 0 }}>
-                    <legend style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 10 }}>Métodos de pago que aceptas</legend>
-                    <ul className="payment-toggles">
-                      {([
-                        ['efectivo', 'Efectivo'],
-                        ['yappy', 'Yappy'],
-                        ['transferencia', 'Transferencia bancaria'],
-                        ['tarjeta', 'Tarjeta de crédito/débito'],
-                        ['cheque', 'Cheque'],
-                        ['credito', 'Crédito / Cuenta abierta'],
-                      ] as const).map(([value, label]) => {
-                        const checked = (profile.payment_methods ?? []).includes(value)
-                        return (
-                          <li key={value} className="payment-toggle">
-                            <input id={`prof-pm-${value}`} type="checkbox" name="payment_methods[]" value={value} defaultChecked={checked} />
-                            <label htmlFor={`prof-pm-${value}`} className="payment-toggle__label">{label}</label>
-                          </li>
-                        )
-                      })}
+                  <div className="mp-field">
+                    <div className="mp-field__label"><label htmlFor="profile-public-name">Nombre público <em aria-hidden="true">*</em></label><p>Así aparecerá tu emprendimiento en el catálogo de Mercapro.</p></div>
+                    <div className="mp-field__control"><input id="profile-public-name" name="public_name" defaultValue={profile.public_name} required maxLength={120} /></div>
+                  </div>
+
+                  <div className="mp-field">
+                    <div className="mp-field__label"><span className="mp-field__title">Actividades principales <em aria-hidden="true">*</em></span><p>Selecciona las actividades que mejor describen tu producción.</p></div>
+                    <div className="mp-field__control"><ActivityMultiSelect defaultValue={profile.activities} onChange={(activities) => setPreview((current) => current && { ...current, activities })} /></div>
+                  </div>
+
+                  <div className="mp-field">
+                    <div className="mp-field__label"><label htmlFor="profile-vendor-type">Tipo de emprendimiento <em aria-hidden="true">*</em></label><p>Indica si eres un productor individual, una cooperativa o una empresa.</p></div>
+                    <div className="mp-field__control">
+                      <select id="profile-vendor-type" name="vendor_type" defaultValue={profile.vendor_type ?? 'productor'}>
+                        <option value="productor">Personal / Productor individual</option>
+                        <option value="cooperativa">Cooperativa</option>
+                        <option value="distribuidor">PYME / Empresa</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <fieldset className="mp-field">
+                    <div className="mp-field__label"><legend className="mp-field__title">Métodos de pago que aceptas</legend><p>Selecciona los medios por los que puedes recibir pagos.</p></div>
+                    <ul className="mp-field__control mp-payments">
+                      {PAYMENT_OPTIONS.map(({ value, label, Icon }) => (
+                        <li key={value}>
+                          <input id={`prof-pm-${value}`} type="checkbox" name="payment_methods[]" value={value} defaultChecked={(profile.payment_methods ?? []).includes(value)} />
+                          <label htmlFor={`prof-pm-${value}`}><Icon size={18} aria-hidden="true" /><span>{label}</span><span className="mp-payments__tick" aria-hidden="true"><Check size={12} strokeWidth={3} /></span></label>
+                        </li>
+                      ))}
                     </ul>
                   </fieldset>
 
-                  <label>Teléfono de contacto
-                    <input
-                      name="phone_private"
-                      type="tel"
-                      defaultValue={profile.phone_private}
-                      required
-                      maxLength={40}
-                      placeholder="+507 6000-0000"
-                    />
-                    <small>Solo lo usamos para verificar tu cuenta. Si lo cambias, tu distintivo Verified PRO se resetea.</small>
-                  </label>
-
-                  <label>Historia de tu negocio
-                    <textarea
-                      name="description"
-                      defaultValue={profile.description ?? ''}
-                      rows={5}
-                      maxLength={2000}
-                      className="resize-none"
-                      style={{ resize: 'none' }}
-                      placeholder="Cuéntales a los compradores quién eres, qué produces y cómo trabajas…"
-                    />
-                    <small>Esta descripción aparece en tu perfil público. Máximo 2 000 caracteres.</small>
-                  </label>
-
-                  <fieldset className="location-fieldset">
-                    <legend>Ubicación aproximada</legend>
-                    <LocationPicker
-                      locations={locations}
-                      value={profile.location_id}
-                      idPrefix="profile-location"
-                      disabled={locationsLoading || locationsError || locations.length === 0}
-                    />
-                    <small>Elige provincia, distrito o corregimiento.</small>
-                  </fieldset>
-
-                  {locationsLoading && <p role="status">Cargando localidades…</p>}
-                  {locationsError && (
-                    <p role="alert">
-                      No pudimos cargar las localidades.{' '}
-                      <button className="text-link" type="button" onClick={() => setLocationsRetry((n) => n + 1)}>
-                        Reintentar
-                      </button>
-                    </p>
-                  )}
-
-                  <fieldset className="location-fieldset">
-                    <legend>RUC (opcional)</legend>
-                    <label>Número de RUC
-                      <input name="ruc" defaultValue={profile.ruc ?? ''} maxLength={30} autoComplete="off" placeholder="8-123-4567" readOnly={profile.verification_level !== 'contact_confirmed' && profile.verification_level !== 'unverified'} />
-                    </label>
-                    <label>Dígito verificador
-                      <input name="ruc_dv" defaultValue={profile.ruc_dv ?? ''} maxLength={2} inputMode="numeric" autoComplete="off" pattern="[0-9]{1,2}" readOnly={profile.verification_level !== 'contact_confirmed' && profile.verification_level !== 'unverified'} />
-                    </label>
-                    <small>Solo el equipo de Mercapro lo ve. Es necesario para obtener la etiqueta Verificado.</small>
-                  </fieldset>
-
-                  {saveSuccess && <p role="status" className="form-help" style={{ color: '#1a7f37' }}>✓ Perfil guardado correctamente.</p>}
-                  {message && <p role="alert" className="producer-product-form__error">{message}</p>}
-
-                  <div className="producer-settings__actions">
-                    <button className="button button--primary" type="submit">Guardar perfil</button>
-                    {profile.slug && (
-                      <Link className="text-link" to={`/productores/${profile.slug}`} target="_blank" rel="noopener noreferrer">
-                        Ver mi perfil público →
-                      </Link>
-                    )}
-                  </div>
-                </ValidatedForm>
-              </section>
-            )}
-
-            {/* ── Section 2: Verified PRO status ── */}
-            <section className="producer-settings__section" id="verificar">
-              <div className="producer-settings__section-head">
-                <CheckCircle2 size={18} aria-hidden="true" />
-                <h2>Verificación</h2>
-              </div>
-
-              {profile.contact_level === 'contact_confirmed' ? (
-                <div className="producer-settings__verified">
-                  <div className="verified-pro-badge-display">
-                    <VerificationBadge level={profile.verification_level} internal />
-                  </div>
-                  <p style={{ marginTop: '.75rem', color: 'var(--color-muted)', fontSize: '.9rem' }}>
-                    {profile.verification_level === 'contact_confirmed'
-                      ? 'Tu teléfono está confirmado. Para obtener la etiqueta Verificado, agrega tu RUC y sube tu documento legal. Un administrador los revisará.'
-                      : 'Tu etiqueta aparece en tu perfil y en todos tus anuncios.'}
-                  </p>
-                  {profile.verification_level === 'identity_reviewed' && <ProducerBiometricSection />}
-                </div>
-              ) : (
-                <div className="producer-settings__pending-verification">
-                  <p className="producer-settings__section-help">
-                    Un operador de MercaPro se comunicará contigo al número registrado para confirmar tu cuenta.
-                    Una vez confirmado, los compradores podrán ver tu número y contactarte.
-                  </p>
-                  {!verificationOnly && (
-                    <p className="producer-settings__section-help" style={{ marginTop: '.75rem' }}>
-                      Para cambiar el número ve a la sección de datos del perfil arriba y guarda con el nuevo teléfono antes de la llamada.
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {/* ── Section 3: Account data (read-only) ── */}
-            {!verificationOnly && (
-              <section className="producer-settings__section">
-                <div className="producer-settings__section-head">
-                  <User size={18} aria-hidden="true" />
-                  <h2>Datos de cuenta</h2>
-                </div>
-                <p className="producer-settings__section-help">
-                  Estos datos se registraron al crear tu cuenta y no se pueden cambiar desde aquí.
-                </p>
-                <div className="producer-readonly-grid">
-                  <div className="producer-readonly-field">
-                    <span className="producer-readonly-field__label">Nombre completo</span>
-                    <span className="producer-readonly-field__value">{dashboard.user.name}</span>
-                  </div>
-                  <div className="producer-readonly-field">
-                    <span className="producer-readonly-field__label">Correo electrónico</span>
-                    <span className="producer-readonly-field__value">{dashboard.user.email}</span>
-                  </div>
-                  <div className="producer-readonly-field">
-                    <span className="producer-readonly-field__label">Teléfono</span>
-                    <span className="producer-readonly-field__value" style={{ fontFamily: 'monospace' }}>{profile.phone_private}</span>
-                  </div>
-                  {profile.cedula && (
-                    <div className="producer-readonly-field">
-                      <span className="producer-readonly-field__label">Cédula</span>
-                      <span className="producer-readonly-field__value" style={{ fontFamily: 'monospace' }}>{profile.cedula}</span>
+                  <div className="mp-field">
+                    <div className="mp-field__label"><label htmlFor="profile-description">Historia del negocio</label><p>Cuéntales a los compradores quién eres, qué produces y cómo trabajas.</p></div>
+                    <div className="mp-field__control">
+                      <textarea id="profile-description" name="description" defaultValue={profile.description ?? ''} rows={5} maxLength={2000} style={{ resize: 'none' }} placeholder="Ej. Somos un emprendimiento familiar dedicado a la producción artesanal…" />
+                      <small className="mp-field__counter">{preview.description.length.toLocaleString('es-PA')} / 2 000</small>
                     </div>
-                  )}
+                  </div>
+                </section>
+
+                <section className="mp-card mp-panel" id="profile-panel-ubicacion" role="tabpanel" aria-labelledby="profile-tab-ubicacion" data-profile-tab="ubicacion" hidden={tab !== 'ubicacion'}>
+                  <PanelHead Icon={MapPin} title="Ubicación y contacto" text="Tu zona aproximada aparece en tu perfil. Nunca mostramos tu dirección exacta." />
+
+                  <fieldset className="mp-field mp-field--stack">
+                    <div className="mp-field__label"><legend className="mp-field__title">Ubicación aproximada</legend><p>Elige provincia, distrito o corregimiento, o márcalo en el mapa.</p></div>
+                    <div className="mp-field__control">
+                      <LocationPicker locations={locations} value={profile.location_id} idPrefix="profile-location" disabled={locationsLoading || locationsError || locations.length === 0} onChange={(locationId) => setPreview((current) => current && { ...current, locationId })} />
+                      {locationsLoading && <p role="status">Cargando localidades…</p>}
+                      {locationsError && <p role="alert">No pudimos cargar las localidades. <button className="text-link" type="button" onClick={() => setLocationsRetry((n) => n + 1)}>Reintentar</button></p>}
+                    </div>
+                  </fieldset>
+
+                  <div className="mp-field">
+                    <div className="mp-field__label"><label htmlFor="profile-phone">Teléfono de contacto <em aria-hidden="true">*</em></label><p>Lo usamos para confirmar tu cuenta. Si lo cambias, tendremos que confirmarlo de nuevo.</p></div>
+                    <div className="mp-field__control"><input id="profile-phone" name="phone_private" type="tel" defaultValue={profile.phone_private} required maxLength={40} placeholder="+507 6000-0000" /></div>
+                  </div>
+                </section>
+
+                {(saveSuccess || message) && tab !== 'verificacion' && tab !== 'cuenta' && (
+                  <p role={message ? 'alert' : 'status'} className={`mp-notice ${message ? 'mp-notice--error' : 'mp-notice--ok'}`}>{message || 'Perfil guardado correctamente.'}</p>
+                )}
+
+                <div className="mp-profile__actions" hidden={tab === 'verificacion' || tab === 'cuenta'}>
+                  <button className="button button--primary" type="submit" disabled={saving} aria-busy={saving}><Check size={17} aria-hidden="true" />{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+                  {profile.slug && <Link className="button button--outline" to={`/productores/${profile.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} aria-hidden="true" />Vista pública</Link>}
+                </div>
+              </ValidatedForm>
+
+              <section className="mp-card mp-panel" id="profile-panel-verificacion" role="tabpanel" aria-labelledby="profile-tab-verificacion" data-profile-tab="verificacion" hidden={tab !== 'verificacion'}>
+                <span id="verificar" />
+                <PanelHead Icon={ShieldCheck} title="Verificación" text="Cada paso suma confianza. Los compradores ven tu etiqueta en tu perfil y en todos tus anuncios." />
+
+                <ol className="mp-steps">
+                  <li className={`mp-step ${phoneConfirmed ? 'is-done' : 'is-current'}`}>
+                    <StepMarker done={phoneConfirmed} n={1} />
+                    <div className="mp-step__body">
+                      <h3>Confirmar teléfono {phoneConfirmed ? <span className="mp-pill mp-pill--ok">Listo</span> : <span className="mp-pill mp-pill--wait">Pendiente</span>}</h3>
+                      <p>{phoneConfirmed
+                        ? `Tu teléfono ${profile.phone_private} está confirmado. Los compradores ya pueden contactarte.`
+                        : `Un operador de Mercapro te llamará al ${profile.phone_private} para confirmar tu cuenta. Si el número no es correcto, cámbialo en la pestaña Ubicación y contacto.`}</p>
+                    </div>
+                  </li>
+
+                  <li className={`mp-step ${rank >= 2 ? 'is-done' : phoneConfirmed ? 'is-current' : 'is-next'}`}>
+                    <StepMarker done={rank >= 2} n={2} />
+                    <div className="mp-step__body">
+                      <h3>Etiqueta Verificado {rank >= 2 ? <span className="mp-pill mp-pill--ok">Listo</span> : <span className="mp-pill">{profile.vendor_type === 'cooperativa' ? 'Pacto social' : 'RUC + documento'}</span>}</h3>
+                      <p>{rank >= 2
+                        ? 'Un administrador revisó tus documentos. Ya puedes publicar sin esperar revisión.'
+                        : profile.vendor_type === 'cooperativa'
+                          ? 'Sube el pacto social de tu cooperativa. Un administrador lo revisará cuando tu teléfono esté confirmado.'
+                          : 'Agrega tu RUC y sube un documento que lo respalde. Un administrador los revisará cuando tu teléfono esté confirmado. Solo el equipo de Mercapro los ve.'}</p>
+
+                      {profile.vendor_type !== 'cooperativa' && (
+                        <div className="mp-ruc">
+                          <label>{profile.vendor_type === 'distribuidor' ? 'RUC de la empresa' : 'Número de RUC'}
+                            <input form="producer-profile-form" name="ruc" onInvalid={() => setTab('verificacion')} required={profile.vendor_type === 'distribuidor'} defaultValue={profile.ruc ?? ''} maxLength={30} autoComplete="off" placeholder="8-123-4567" readOnly={!rucEditable} />
+                          </label>
+                          <label>DV
+                            <input form="producer-profile-form" name="ruc_dv" defaultValue={profile.ruc_dv ?? ''} maxLength={2} inputMode="numeric" autoComplete="off" pattern="[0-9]{1,2}" readOnly={!rucEditable} />
+                          </label>
+                          {rucEditable && <button className="button button--outline" type="submit" form="producer-profile-form" disabled={saving}>{saving ? 'Guardando…' : 'Guardar RUC'}</button>}
+                        </div>
+                      )}
+                      {(saveSuccess || message) && tab === 'verificacion' && <p role={message ? 'alert' : 'status'} className={`mp-notice ${message ? 'mp-notice--error' : 'mp-notice--ok'}`}>{message || 'Datos guardados.'}</p>}
+
+                      <ProducerDocumentsSection
+                        hasCedulaPhoto={profile.has_cedula_photo}
+                        hasPactoSocial={profile.has_pacto_social}
+                        hasAvisoOperacion={profile.has_aviso_operacion}
+                        vendorType={profile.vendor_type ?? 'productor'}
+                      />
+                    </div>
+                  </li>
+
+                  <li className={`mp-step ${level === 'biometric_verified' || level === 'producer_validated' ? 'is-done' : rank === 2 ? 'is-current' : 'is-next'}`}>
+                    <StepMarker done={level === 'biometric_verified' || level === 'producer_validated'} n={3} />
+                    <div className="mp-step__body">
+                      <h3>Verificado Pro <span className="mp-pill"><ScanFace size={13} aria-hidden="true" /> Facial + cédula</span></h3>
+                      {rank === 2 ? (
+                        <ProducerBiometricSection />
+                      ) : rank >= 3 ? (
+                        <p>¡Listo! Tu identidad está confirmada y tienes la etiqueta Verificado Pro.</p>
+                      ) : (
+                        <p className="mp-step__locked"><Lock size={14} aria-hidden="true" /> Se activa cuando tengas la etiqueta Verificado. Tomarás una foto de tu cédula y una foto en vivo desde tu celular; es gratis y toma un par de minutos.</p>
+                      )}
+                    </div>
+                  </li>
+                </ol>
+              </section>
+
+              <section className="mp-card mp-panel" id="profile-panel-cuenta" role="tabpanel" aria-labelledby="profile-tab-cuenta" data-profile-tab="cuenta" hidden={tab !== 'cuenta'}>
+                <PanelHead Icon={Settings} title="Datos de la cuenta" text="Se registraron al crear tu cuenta. Si necesitas cambiarlos, escríbenos." />
+                <dl className="mp-account">
+                  <div><dt>Nombre completo</dt><dd>{dashboard.user.name}</dd></div>
+                  <div><dt>Correo electrónico</dt><dd>{dashboard.user.email}</dd></div>
+                  <div><dt>Teléfono</dt><dd>{profile.phone_private}</dd></div>
+                  {profile.cedula && <div><dt>Cédula</dt><dd>{profile.cedula}</dd></div>}
+                  <div><dt>Nivel actual</dt><dd><VerificationBadge level={level} internal /></dd></div>
+                </dl>
+              </section>
+            </div>
+
+            <aside className="mp-profile__side">
+              <section className="mp-card mp-preview" aria-labelledby="profile-preview-title">
+                <div className="mp-side-head">
+                  <span className="mp-side-head__icon"><Eye size={20} aria-hidden="true" /></span>
+                  <div><h2 id="profile-preview-title">Vista previa del perfil público</h2><p>Así verán tu perfil los compradores en Mercapro.</p></div>
+                </div>
+                <div className="mp-preview__card">
+                  <div className="mp-preview__cover"><img src={profileCover} alt="" loading="lazy" decoding="async" /></div>
+                  <span className="mp-preview__avatar" aria-hidden="true">{(preview.name.trim() || profile.public_name).charAt(0).toUpperCase()}</span>
+                  <div className="mp-preview__body">
+                    <h3>{preview.name.trim() || 'Tu emprendimiento'}</h3>
+                    {preview.activities.length > 0 && <ul className="mp-preview__tags">{preview.activities.map((activity) => <li key={activity}>{activity}</li>)}</ul>}
+                    {preview.locationId && locationLabel(locations, preview.locationId) && <p className="mp-preview__place"><MapPin size={15} aria-hidden="true" />{locationLabel(locations, preview.locationId)}</p>}
+                    {preview.payments.length > 0 && (
+                      <ul className="mp-preview__pay">
+                        {PAYMENT_OPTIONS.filter((option) => preview.payments.includes(option.value)).map(({ value, label, Icon }) => <li key={value}><Icon size={15} aria-hidden="true" />{label}</li>)}
+                      </ul>
+                    )}
+                    <p className="mp-preview__text">{preview.description.trim() || 'Aquí aparecerá la historia de tu negocio.'}</p>
+                  </div>
                 </div>
               </section>
-            )}
 
-            {/* ── Section 4: Documents ── */}
-            {!verificationOnly && (
-              <ProducerDocumentsSection
-                hasCedulaPhoto={profile.has_cedula_photo}
-                hasPactoSocial={profile.has_pacto_social}
-                hasAvisoOperacion={profile.has_aviso_operacion}
-                vendorType={profile.vendor_type ?? 'productor'}
-              />
-            )}
-          </>
+              <section className="mp-card mp-status" aria-labelledby="profile-status-title">
+                <div className="mp-side-head">
+                  <span className="mp-side-head__icon"><ShieldCheck size={20} aria-hidden="true" /></span>
+                  <div><h2 id="profile-status-title">Estado de verificación</h2><p>Revisa el estado de tu información y verificación.</p></div>
+                </div>
+                <ul className="mp-status__list">
+                  <StatusRow tone={phoneConfirmed ? 'ok' : 'wait'} title={phoneConfirmed ? 'Teléfono confirmado' : 'Teléfono por confirmar'} detail={profile.phone_private} onClick={() => chooseTab('verificacion')} />
+                  <StatusRow tone={rank >= 2 ? 'ok' : phoneConfirmed ? 'wait' : 'off'} title={rank >= 2 ? 'Verificado' : 'Verificación pendiente'} detail={rank >= 2 ? 'Documentos revisados.' : 'Confirma tu cuenta para mayor confianza.'} onClick={() => chooseTab('verificacion')} />
+                  <StatusRow tone={rank >= 3 ? 'ok' : rank === 2 ? 'wait' : 'off'} title="Verificado Pro" detail={rank >= 3 ? 'Identidad confirmada.' : rank === 2 ? 'Disponible: verifica tu rostro y cédula.' : 'Requiere la etiqueta Verificado.'} onClick={() => chooseTab('verificacion')} />
+                  {profile.vendor_type !== 'cooperativa' && <StatusRow tone="info" title={profile.vendor_type === 'distribuidor' ? 'RUC' : 'RUC (opcional)'} detail={profile.ruc ? `${profile.ruc}${profile.ruc_dv ? ` DV ${profile.ruc_dv}` : ''}` : 'Sin registrar'} onClick={() => chooseTab('verificacion')} />}
+                </ul>
+              </section>
+            </aside>
+          </div>
         )}
       </div>
     </ProducerShell>
   )
 }
 
-// ── Documents section ─────────────────────────────────────────────────────────
+function PanelHead({ Icon, title, text }: { Icon: typeof Store; title: string; text: string }) {
+  return (
+    <div className="mp-panel__head">
+      <span className="mp-panel__icon"><Icon size={20} aria-hidden="true" /></span>
+      <div><h2>{title}</h2><p>{text}</p></div>
+    </div>
+  )
+}
+
+function StepMarker({ done, n }: { done: boolean; n: number }) {
+  return <span className="mp-step__marker" aria-hidden="true">{done ? <Check size={16} strokeWidth={3} /> : n}</span>
+}
+
+function StatusRow({ tone, title, detail, onClick }: { tone: 'ok' | 'wait' | 'off' | 'info'; title: string; detail: string; onClick: () => void }) {
+  const Icon = tone === 'ok' ? CheckCircle2 : tone === 'wait' ? Clock : tone === 'off' ? Lock : Info
+  return (
+    <li>
+      <button type="button" className={`mp-status__row mp-status__row--${tone}`} onClick={onClick}>
+        <span className="mp-status__icon"><Icon size={20} aria-hidden="true" /></span>
+        <span className="mp-status__text"><strong>{title}</strong><small>{detail}</small></span>
+        <ChevronRight size={18} aria-hidden="true" />
+      </button>
+    </li>
+  )
+}
+
+// ── Verificado Pro (face + cédula) ────────────────────────────────────────────
 
 function ProducerBiometricSection() {
   const [status, setStatus] = useState<BiometricStatus | null>(null)
@@ -444,12 +576,12 @@ function ProducerBiometricSection() {
   useEffect(refresh, [refresh])
 
   if (loadError) return <p role="alert">{loadError}</p>
-  if (!status?.eligible) return null
-  if (status.latest?.status === 'pending') return <p role="status" className="producer-settings__section-help">Tu verificación Pro está en revisión. Te avisaremos cuando el equipo termine.</p>
+  if (!status) return <p role="status">Consultando tu verificación…</p>
+  if (!status.eligible) return status.latest?.status === 'approved' ? <p role="status">¡Listo! Tu identidad está confirmada y ya tienes la etiqueta Verificado Pro.</p> : <p>Se activa cuando tengas la etiqueta Verificado.</p>
+  if (status.latest?.status === 'pending') return <p role="status">Tu verificación Pro está en revisión. Te avisaremos cuando el equipo termine.</p>
 
   return (
     <div className="producer-biometric">
-      <h3>Obtén Verificado Pro</h3>
       {status.latest?.status === 'rejected' && <p role="alert">No pudimos aprobar tu verificación: {status.latest.review_reason}</p>}
       {capturing ? (
         <Suspense fallback={<p role="status">Cargando…</p>}>
@@ -457,24 +589,25 @@ function ProducerBiometricSection() {
         </Suspense>
       ) : (
         <>
-          <p className="producer-settings__section-help">Confirma tu identidad con una foto de tu cédula y una foto en vivo. Es opcional y gratis.</p>
-          <button className="button button--primary" type="button" onClick={() => setCapturing(true)}>Empezar verificación</button>
+          <p>Confirma tu identidad con una foto de tu cédula y una foto en vivo. Es opcional y gratis.</p>
+          <button className="button button--primary" type="button" onClick={() => setCapturing(true)}><ScanFace size={17} aria-hidden="true" /> Empezar verificación facial</button>
         </>
       )}
     </div>
   )
 }
 
-type ProducerDocumentType = 'cedula_photo' | 'pacto_social' | 'aviso_operacion'
+// ── Documents ─────────────────────────────────────────────────────────────────
+
 
 function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOperacion, vendorType }: { hasCedulaPhoto: boolean; hasPactoSocial: boolean; hasAvisoOperacion: boolean; vendorType: string }) {
   const [uploaded, setUploaded] = useState<Record<ProducerDocumentType, boolean>>({ cedula_photo: hasCedulaPhoto, pacto_social: hasPactoSocial, aviso_operacion: hasAvisoOperacion })
   const [status, setStatus] = useState<Partial<Record<ProducerDocumentType, string>>>({})
 
-  const documents: Array<{ type: ProducerDocumentType; title: string; action: string }> = [
-    ...(vendorType === 'productor' ? [{ type: 'cedula_photo' as const, title: 'Foto de cédula', action: 'Subir foto de cédula' }] : []),
-    ...(vendorType !== 'cooperativa' ? [{ type: 'aviso_operacion' as const, title: 'Aviso de operación', action: 'Subir aviso de operación' }] : []),
-    ...(vendorType !== 'productor' ? [{ type: 'pacto_social' as const, title: 'Pacto social / personería', action: 'Subir pacto social' }] : []),
+  const documents: Array<{ type: ProducerDocumentType; title: string; hint: string }> = [
+    ...(vendorType === 'productor' ? [{ type: 'cedula_photo' as const, title: 'Foto de cédula', hint: 'Obligatoria para publicar · frente legible' }] : []),
+    ...(vendorType !== 'cooperativa' ? [{ type: 'aviso_operacion' as const, title: 'Aviso de operación', hint: vendorType === 'distribuidor' ? 'Obligatorio para publicar' : 'Opcional · respalda tu RUC' }] : []),
+    ...(vendorType !== 'productor' ? [{ type: 'pacto_social' as const, title: 'Pacto social / personería', hint: vendorType === 'cooperativa' ? 'Obligatorio para publicar' : 'Documento de constitución' }] : []),
   ]
 
   async function upload(type: ProducerDocumentType, file: File) {
@@ -485,41 +618,34 @@ function ProducerDocumentsSection({ hasCedulaPhoto, hasPactoSocial, hasAvisoOper
       await uploadProducerDocument(type, optimized)
       const docs = await getProducerDocuments()
       setUploaded({ cedula_photo: docs.has_cedula_photo, pacto_social: docs.has_pacto_social, aviso_operacion: docs.has_aviso_operacion })
-      setStatus((current) => ({ ...current, [type]: '✓ Subido correctamente.' }))
+      setStatus((current) => ({ ...current, [type]: 'Subido correctamente.' }))
+      window.dispatchEvent(new Event(DOCUMENTS_UPDATED_EVENT))
     } catch (error) {
       setStatus((current) => ({ ...current, [type]: error instanceof Error ? error.message : 'No se pudo subir el archivo.' }))
     }
   }
 
   return (
-    <section className="producer-settings__section">
-      <div className="producer-settings__section-head">
-        <Package size={18} aria-hidden="true" />
-        <h2>Documentos de verificación</h2>
-      </div>
-      <p className="producer-settings__section-help">
-        Sube el documento que respalda tu RUC. Solo el equipo de Mercapro puede verlo.
-        {' '}Formatos aceptados: JPG, PNG y PDF. Las fotos las optimizamos por ti, pesen lo que pesen; los PDF deben pesar 2 MB o menos.
-      </p>
-      <div className="producer-readonly-grid">
+    <div className="mp-docs">
+      <p className="mp-docs__help">Sube al menos uno. JPG, PNG o PDF: las fotos las optimizamos por ti; los PDF deben pesar 2 MB o menos.</p>
+      <ul className="mp-docs__list">
         {documents.map((document) => (
-          <div key={document.type}>
-            <p style={{ marginBottom: 6, fontWeight: 600, fontSize: '0.85rem' }}>
-              {document.title} {uploaded[document.type] ? '✓' : '—'}
-            </p>
-            <label className="button button--outline button--small" style={{ cursor: 'pointer', display: 'inline-block' }}>
-              {uploaded[document.type] ? 'Reemplazar' : document.action}
-              <input type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.currentTarget.files?.[0]
+          <li key={document.type} className={uploaded[document.type] ? 'is-done' : ''}>
+            <span className="mp-docs__icon">{uploaded[document.type] ? <CheckCircle2 size={20} aria-hidden="true" /> : <FileText size={20} aria-hidden="true" />}</span>
+            <span className="mp-docs__text"><strong>{document.title}</strong><small>{status[document.type] ?? (uploaded[document.type] ? 'Recibido' : document.hint)}</small></span>
+            <label className="button button--outline button--small mp-docs__upload">
+              <Upload size={15} aria-hidden="true" />{uploaded[document.type] ? 'Reemplazar' : 'Subir'}
+              <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="sr-only" aria-label={`Subir ${document.title}`}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0]
                   if (file) void upload(document.type, file)
+                  event.currentTarget.value = ''
                 }} />
             </label>
-            {status[document.type] && <p style={{ marginTop: 6, fontSize: '0.8rem' }}>{status[document.type]}</p>}
-          </div>
+          </li>
         ))}
-      </div>
-    </section>
+      </ul>
+    </div>
   )
 }
 

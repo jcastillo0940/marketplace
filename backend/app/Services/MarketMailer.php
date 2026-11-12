@@ -36,6 +36,14 @@ class MarketMailer
 
     public static function send(\Illuminate\Mail\Mailable $mailable): void
     {
+        // Every mailable carries the producer as $user; it never set a recipient, so nothing was delivered.
+        $email = property_exists($mailable, 'user') ? $mailable->user?->email : null;
+        if (empty($mailable->to) && (! $email || str_ends_with($email, '@mercapro.internal'))) {
+            return; // Phone-only accounts have no real inbox.
+        }
+        if (empty($mailable->to)) {
+            $mailable->to($email);
+        }
         try {
             static::mailer()->send($mailable);
         } catch (\Throwable $e) {

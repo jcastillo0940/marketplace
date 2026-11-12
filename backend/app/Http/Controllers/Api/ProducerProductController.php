@@ -98,6 +98,7 @@ class ProducerProductController extends Controller
         ]);
         $profile = ProducerProfile::where('user_id', $request->user()->id)->firstOrFail();
         abort_if($profile->profile_status === 'suspended', 403, 'Tu perfil está suspendido. No puedes publicar ofertas.');
+        $profile->ensureCanPublish();
         $mediaDisk = config('filesystems.media');
         $slug = Str::slug($data['title']).'-'.Str::lower(Str::random(7));
         $priceType = $data['price_type'];
@@ -247,6 +248,7 @@ class ProducerProductController extends Controller
     {
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:1000']]);
         $product = Product::query()->whereHas('producer', fn ($query) => $query->where('user_id', $request->user()->id))->findOrFail($id);
+        $product->producer->ensureCanPublish();
         $product = $workflow->transition($product, 'pending', $request->user()->id, $data['reason']);
         $product = $workflow->publishIfTrusted($product, $request->user()->id);
 

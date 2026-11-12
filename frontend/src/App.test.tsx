@@ -19,7 +19,7 @@ describe('route group contract', () => {
   it('renders the public home route', async () => {
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: /plataforma para conectar gratis a productores y artesanos con compradores/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /compra y vende de forma directa, fácil y segura/i })).toBeInTheDocument()
   })
 
   it('renders the public not-found page for unknown paths', async () => {
@@ -910,7 +910,7 @@ describe('marketplace home', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: /plataforma para conectar gratis a productores y artesanos con compradores/i }),
+      screen.getByRole('heading', { name: /compra y vende de forma directa, fácil y segura/i }),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /ver todos los productos/i })).toHaveAttribute(
       'href',
@@ -1778,7 +1778,7 @@ describe('marketplace home', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByLabelText(/correo electrónico/i)).toHaveAttribute('autocomplete', 'email')
+    expect(screen.getByLabelText(/correo electrónico/i)).toHaveAttribute('autocomplete', 'username')
     expect(screen.getByLabelText(/contraseña/i)).toHaveAttribute('autocomplete', 'current-password')
     expect(screen.getByRole('heading', { name: /ingresa a tu cuenta/i })).toBeInTheDocument()
   })
@@ -1797,7 +1797,7 @@ describe('marketplace home', () => {
     expect(email).toHaveAttribute('aria-invalid', 'true')
     const describedBy = email.getAttribute('aria-describedby')
     expect(describedBy).toBeTruthy()
-    expect(document.getElementById(describedBy as string)).toHaveTextContent(/escribe tu correo electrónico/i)
+    expect(document.getElementById(describedBy as string)).toHaveTextContent(/completa este campo/i)
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/auth/login'), expect.anything())
     fireEvent.change(email, { target: { value: 'productora@example.test' } })
     expect(email).not.toHaveAttribute('aria-invalid')

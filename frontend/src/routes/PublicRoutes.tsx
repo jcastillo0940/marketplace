@@ -1,24 +1,39 @@
+import { appendRegistrantDocuments, REGISTRANT_LABELS, REQUIRED_DOCUMENT, RegistrantLegalFields, RegistrantTypeSelector, type HasRuc, type RegistrantDocuments, type RegistrantType } from '../components/RegistrantFields';
 import { compressDocumentFile, MAX_UPLOAD_BYTES, MAX_UPLOAD_MESSAGE } from '../api/photo-optimizer'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Gift, Flag, Heart, HeartHandshake, Leaf, Lock, Mail, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, User, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Gift, Flag, HeartHandshake, Leaf, Lock, MapPin, MessageCircle, Package, Phone, Search, Share2, ShieldCheck, Sprout, Store, Tag, Truck, User, UserPlus, Users, X } from 'lucide-react';
 
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import heroPhoto from '../assets/azuero-harvest.webp';
-import heroProducer640 from '../assets/mercapro/hero/productor-mercapro-640.webp';
-import heroProducer960 from '../assets/mercapro/hero/productor-mercapro-960.webp';
-import heroProducer1440 from '../assets/mercapro/hero/productor-mercapro-1440.webp';
+import registerProducer480 from '../assets/mercapro/hero/registro-productor-480.webp';
+import registerProducer800 from '../assets/mercapro/hero/registro-productor-800.webp';
+import registerProducer1100 from '../assets/mercapro/hero/registro-productor-1100.webp';
 import leafBlue from '../assets/mercapro/decor/hoja-azul.svg';
 import leafSky from '../assets/mercapro/decor/hoja-celeste.svg';
 import leafOrange from '../assets/mercapro/decor/hoja-naranja.svg';
 import heroWaves from '../assets/mercapro/decor/ondas-hero.svg';
+import heroField960 from '../assets/mercapro/hero/campo-mercapro-960.webp';
+import heroField1600 from '../assets/mercapro/hero/campo-mercapro-1600.webp';
+import heroField2400 from '../assets/mercapro/hero/campo-mercapro-2400.webp';
+import heroPerson480 from '../assets/mercapro/hero/productor-campo-480.webp';
+import heroPerson800 from '../assets/mercapro/hero/productor-campo-800.webp';
+import heroPerson1200 from '../assets/mercapro/hero/productor-campo-1200.webp';
+import iconProducer from '../assets/mercapro/icons/productor.svg';
+import iconBuyer from '../assets/mercapro/icons/comprador.svg';
+import publishBg960 from '../assets/mercapro/publish/fondo-publica-960.webp';
+import publishBg1600 from '../assets/mercapro/publish/fondo-publica-1600.webp';
+import publishBg2000 from '../assets/mercapro/publish/fondo-publica-2000.webp';
+import storyPhoto720 from '../assets/mercapro/story/productores-720.webp';
+import storyPhoto1100 from '../assets/mercapro/story/productores-1100.webp';
+import storyPhoto1600 from '../assets/mercapro/story/productores-1600.webp';
 
 import yucaImage from '../assets/yuca.svg';
 import termsText from '../legal-terms.md?raw';
 import privacyText from '../legal-privacy.md?raw';
 
 import ActivitySelect from '../components/ActivitySelect';
+import ActivityMultiSelect from '../components/ActivityMultiSelect';
 import LocationPicker from '../components/LocationPicker';
 import ProducerZoneMap from '../components/ProducerZoneMap';
 
@@ -28,7 +43,7 @@ import VerificationBadge from '../components/VerificationBadge';
 import { isPublicVerifiedLevel, VERIFIED_DOCUMENT_LABELS } from '../components/verificationLevels';
 import { categoryTreeOptions } from '../components/categoryTree';
 
-import { completeAdminMfaChallenge, csrfToken, getContactMessageTemplates, DEFAULT_CONTACT_MESSAGE_TEMPLATES, getPublicProducer, getPublicProducers, getProduct, listCategories, listLocations, listProducts, recordContact, recordNoResultSearch, requestAdminMfaRecovery, requestPasswordReset, resetPassword, submitReport, type ApiProduct, type ProducerPublicProfile, type PublicLocation, type PublicProducerSummary, type ProducerVerificationLevel } from '../api/client';
+import { checkRegistrationAvailability, completeAdminMfaChallenge, csrfToken, getContactMessageTemplates, DEFAULT_CONTACT_MESSAGE_TEMPLATES, getPublicProducer, getPublicProducers, getProduct, listCategories, listLocations, listProducts, recordContact, recordNoResultSearch, requestAdminMfaRecovery, requestPasswordReset, resetPassword, submitReport, type ApiProduct, type ProducerPublicProfile, type PublicLocation, type PublicProducerSummary, type ProducerVerificationLevel } from '../api/client';
 
 import { TESTIMONIALS, TESTIMONIAL_DESIGN_SAMPLE, type Testimonial } from '../content/testimonials';
 
@@ -571,21 +586,28 @@ export function HomePage() {
       <main className="home">
         <section className="home-hero" aria-labelledby="hero-title">
           <div className="home-hero__photo" aria-hidden="true">
-            <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w, ${heroProducer1440} 1440w`} sizes="(max-width: 760px) 100vw, 60vw" alt="" fetchPriority="high" decoding="async" />
+            <img className="home-hero__field" src={heroField1600} srcSet={`${heroField960} 960w, ${heroField1600} 1600w, ${heroField2400} 2400w`} sizes="100vw" alt="" fetchPriority="high" decoding="async" />
+            <img className="home-hero__person" src={heroPerson800} srcSet={`${heroPerson480} 480w, ${heroPerson800} 800w, ${heroPerson1200} 1200w`} sizes="(max-width: 760px) 70vw, 42vw" alt="" fetchPriority="high" decoding="async" />
           </div>
           <div className="home-hero__inner page-shell">
             <div className="home-hero__copy">
-              <p className="home-eyebrow" data-reveal="slide-left">Productos locales, personas reales</p>
-              <h1 id="hero-title" data-reveal="blur-in" style={{ animationDelay: '80ms' }}>Plataforma <span>para conectar <em className="home-hero__accent">GRATIS</em></span> <span>a <em className="home-hero__accent home-hero__accent--warm">productores y artesanos</em></span> <span>con compradores</span></h1>
-              <p className="home-hero__lead" data-reveal="fade-up" style={{ animationDelay: '200ms' }}>Creando oportunidades e impulsando a las zonas vulnerables tras el terremoto.</p>
-              <ul className="home-hero__benefits" aria-label="Por qué Mercapro" data-reveal="fade-up" style={{ animationDelay: '320ms' }}>
-                <li><span className="home-hero__benefit-icon"><Leaf size={20} /></span>Productos<br />locales</li>
-                <li><span className="home-hero__benefit-icon home-hero__benefit-icon--blue"><Users size={20} /></span>Trato directo<br />con productores</li>
-                <li><span className="home-hero__benefit-icon home-hero__benefit-icon--warm"><Heart size={20} /></span>Apoya<br />nuestra economía</li>
-              </ul>
+              <h1 id="hero-title" data-reveal="blur-in">Compra y vende de forma <span className="home-hero__highlight">directa, fácil y segura.</span></h1>
+              <p className="home-hero__lead" data-reveal="fade-up" style={{ animationDelay: '120ms' }}>Creando oportunidades e impulsando a las zonas vulnerables tras el sismo.</p>
+              <nav className="home-hero__paths" aria-label="¿Qué quieres hacer?" data-reveal="fade-up" style={{ animationDelay: '240ms' }}>
+                <Link className="home-hero__path" to="/registro">
+                  <span className="home-hero__path-icon"><img src={iconProducer} alt="" /></span>
+                  <strong>Soy productor</strong>
+                  <span className="home-hero__path-cta">Quiero vender <ArrowRight size={13} strokeWidth={3} aria-hidden="true" /></span>
+                </Link>
+                <Link className="home-hero__path" to="/productos">
+                  <span className="home-hero__path-icon"><img src={iconBuyer} alt="" /></span>
+                  <strong>Soy comprador</strong>
+                  <span className="home-hero__path-cta">Quiero comprar <ArrowRight size={13} strokeWidth={3} aria-hidden="true" /></span>
+                </Link>
+              </nav>
             </div>
           </div>
-          <span className="sr-only">Fotografía: productor sonriente con una caja de verduras frescas de su cosecha. Apoyar lo local también nos alimenta.</span>
+          <span className="sr-only">Fotografía: productor de Distribuidora Tata en su campo de cultivo.</span>
         </section>
 
         <section className="home-search page-shell" aria-label="Busca productos y emprendedores">
@@ -689,39 +711,31 @@ export function HomePage() {
 
         <section className="home-story" id="como-funciona" aria-labelledby="how-title">
           <div className="home-story__people" id="historias" data-reveal="slide-left">
-            <img src={heroPhoto} alt="Productor de Azuero junto a su cosecha de yuca, plátano y tomate" loading="lazy" decoding="async" />
-            <img className="home-story__leaf" src={leafBlue} alt="" aria-hidden="true" />
-            <div className="home-story__people-copy">
-              <h2 className="home-story__script">Personas reales.<br />Nuestros productores.<br />Nuestro futuro<br />más fuerte.</h2>
-              <Link className="button button--ghost-light" to="/historias">Conoce<br />sus historias <ArrowRight size={16} /></Link>
-            </div>
+            <img src={storyPhoto1100} srcSet={`${storyPhoto720} 720w, ${storyPhoto1100} 1100w, ${storyPhoto1600} 1600w`} sizes="(max-width: 960px) 100vw, 58vw" alt="Artesanos trabajando el barro y una productora revisando su cultivo de kale" loading="lazy" decoding="async" />
           </div>
           <div className="home-story__how" data-reveal="fade-up">
-            <img className="home-story__how-leaf home-story__how-leaf--top" src={leafSky} alt="" aria-hidden="true" />
-            <img className="home-story__how-leaf home-story__how-leaf--bottom" src={leafSky} alt="" aria-hidden="true" />
-            <p className="home-eyebrow">Sin intermediarios</p>
-            <h2 id="how-title">¿Cómo funciona?</h2>
+            <h2 id="how-title"><span className="home-story__q">¿</span>Cómo <br />funciona<span className="home-story__q">?</span></h2>
             <p className="home-story__sub">Fácil para compradores y productores.</p>
             <div className="how-cols">
               <div className="how-col">
-                <p className="how-col__header"><Search size={15} aria-hidden="true" /> Para compradores</p>
-                <ol className="how-steps">
-                  <li><span className="how-steps__number">1</span><div><strong>Busca por categoría</strong><p>o filtra por provincia.</p></div></li>
-                  <li><span className="how-steps__number">2</span><div><strong>Revisa precio y unidad</strong><p>y los métodos de pago del productor.</p></div></li>
-                  <li><span className="how-steps__number">3</span><div><strong>Contacta directo</strong><p>por WhatsApp o llamada.</p></div></li>
-                  <li><span className="how-steps__number">4</span><div><strong>Acuerda pago y entrega</strong><p>directamente con el productor.</p></div></li>
-                </ol>
-                <Link className="button button--outline how-col__cta" to="/productos">Explorar productos <ArrowRight size={15} /></Link>
-              </div>
-              <div className="how-col">
-                <p className="how-col__header"><Sprout size={15} aria-hidden="true" /> Para productores</p>
+                <p className="how-col__header">Para productores</p>
                 <ol className="how-steps">
                   <li><span className="how-steps__number">1</span><div><strong>Regístrate gratis</strong><p>con tu cédula y teléfono.</p></div></li>
                   <li><span className="how-steps__number">2</span><div><strong>Publica tus productos</strong><p>con foto, precio y unidad.</p></div></li>
                   <li><span className="how-steps__number">3</span><div><strong>Recibe consultas</strong><p>por WhatsApp o teléfono.</p></div></li>
                   <li><span className="how-steps__number">4</span><div><strong>Acuerda pago y entrega</strong><p>directamente con el comprador.</p></div></li>
                 </ol>
-                <Link className="button button--outline how-col__cta" to="/registro">Publicar gratis <ArrowRight size={15} /></Link>
+                <Link className="how-col__cta" to="/registro">Publicar gratis <ArrowRight size={15} strokeWidth={3} aria-hidden="true" /></Link>
+              </div>
+              <div className="how-col">
+                <p className="how-col__header">Para compradores</p>
+                <ol className="how-steps">
+                  <li><span className="how-steps__number">1</span><div><strong>Busca por categoría</strong><p>o filtra por provincia.</p></div></li>
+                  <li><span className="how-steps__number">2</span><div><strong>Revisa precio y unidad</strong><p>y los métodos de pago del productor.</p></div></li>
+                  <li><span className="how-steps__number">3</span><div><strong>Contacta directo</strong><p>por WhatsApp o llamada.</p></div></li>
+                  <li><span className="how-steps__number">4</span><div><strong>Acuerda pago y entrega</strong><p>directamente con el productor.</p></div></li>
+                </ol>
+                <Link className="how-col__cta" to="/productos">Explorar productos <ArrowRight size={15} strokeWidth={3} aria-hidden="true" /></Link>
               </div>
             </div>
             <p className="how-disclaimer"><Lock size={14} aria-hidden="true" /> Mercapro no procesa pagos ni cobra comisiones. Pagas directamente al productor por el medio que acuerden.</p>
@@ -1132,20 +1146,17 @@ function useRelatedProducts(excludeSlug: string) {
 function PublishBand() {
   useReveal()
   return (
-    <section className="home-publish page-shell" aria-labelledby="publish-title">
-      <div className="home-publish__band">
-        <div className="home-publish__copy" data-reveal="slide-left">
-          <p className="home-eyebrow home-eyebrow--dark">¿Eres productor o emprendedor?</p>
-          <h2 id="publish-title">Publica tu producto gratis.</h2>
-          <p>Llega a más personas y haz crecer tu negocio.</p>
-          <Link className="button button--primary" to="/registro">Publicar ahora <ArrowRight size={16} /></Link>
-        </div>
-        <p className="home-publish__note" aria-hidden="true" data-reveal="fade-in" style={{ animationDelay: '200ms' }}>Tu talento<br />también<br />impulsa<br />comunidades</p>
-        <div className="home-publish__photo" aria-hidden="true" data-reveal="scale-in" style={{ animationDelay: '150ms' }}>
-          <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w`} sizes="(max-width: 760px) 100vw, 40vw" alt="" loading="lazy" decoding="async" />
-        </div>
+    <section className="publish-band" aria-labelledby="publish-title">
+      <div className="publish-band__bg" aria-hidden="true">
+        <img src={publishBg1600} srcSet={`${publishBg960} 960w, ${publishBg1600} 1600w, ${publishBg2000} 2000w`} sizes="100vw" alt="" loading="lazy" decoding="async" />
       </div>
-      <p className="home-publish__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
+      <div className="publish-band__inner page-shell" data-reveal="slide-left">
+        <p className="publish-band__eyebrow">¿Eres productor o emprendedor?</p>
+        <h2 id="publish-title">Publica tu <br />producto <span className="publish-band__highlight">gratis</span></h2>
+        <p className="publish-band__lead">Llega a más personas y haz crecer tu negocio.</p>
+        <Link className="publish-band__cta" to="/registro">Publicar gratis <ArrowRight size={20} strokeWidth={3} aria-hidden="true" /></Link>
+        <p className="publish-band__help">¿Necesitas una mano para publicar? <Link to="/ayuda-productor">Mira la guía paso a paso</Link></p>
+      </div>
     </section>
   )
 }
@@ -1576,7 +1587,7 @@ export function AccessPage({ title, description }: { title: string; description:
             </ValidatedForm> : <ValidatedForm key="mfa-challenge" className="auth-form" onSubmit={async (event) => { event.preventDefault(); const code = String(new FormData(event.currentTarget).get('code')); try { await completeAdminMfaChallenge(code); window.location.assign('/admin') } catch (error) { if (error instanceof Error && 'status' in error && (error.status === 401 || error.status === 429)) setMfaChallenge(false); setFormMessage(error instanceof Error ? error.message : 'No se pudo completar el segundo paso.') } }}>
               <h2>Verificación en dos pasos</h2><label>Código de autenticación<input name="code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete="one-time-code" required /></label>{formMessage && <p role="status">{formMessage}</p>}<button className="button button--primary" type="submit">Verificar e ingresar</button><button className="button button--quiet" type="button" onClick={() => { setMfaRecoveryOpen(true); setFormMessage('') }}>Perdí mi autenticador</button>
             </ValidatedForm> : <ValidatedForm key="sign-in" className="auth-form" onSubmit={submitLogin}>
-              <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
+              <label>Cédula o correo electrónico<input name="email" type="text" autoComplete="username" placeholder="8-123-4567" required /></label>
               <label>Contraseña<input name="password" type="password" autoComplete="current-password" required /></label>
               {formMessage && <p role="alert">{formMessage}</p>}
               <button className="button button--primary" type="submit">Ingresar <ArrowRight size={16} /></button>
@@ -1835,12 +1846,14 @@ function RegistroPage() {
   const [regCedula, setRegCedula] = useState('')
   const [regRuc, setRegRuc] = useState('')
   const [regRucDv, setRegRucDv] = useState('')
+  const [regHasRuc, setRegHasRuc] = useState<HasRuc>('')
+  const [regDocuments, setRegDocuments] = useState<RegistrantDocuments>({})
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regPhone, setRegPhone] = useState('')
   const [regPublicName, setRegPublicName] = useState('')
-  const [regActivity, setRegActivity] = useState('')
-  const [regVendorType, setRegVendorType] = useState<'productor' | 'cooperativa' | 'distribuidor'>('productor')
+  const [regActivities, setRegActivities] = useState<string[]>([])
+  const [regVendorType, setRegVendorType] = useState<RegistrantType>('')
   const [regPaymentMethods, setRegPaymentMethods] = useState<string[]>([])
   const [regLocationId, setRegLocationId] = useState<number | null>(null)
   const [regTerms, setRegTerms] = useState(false)
@@ -1849,6 +1862,35 @@ function RegistroPage() {
   const [regSubmitting, setRegSubmitting] = useState(false)
   const [regStep1Error, setRegStep1Error] = useState('')
   const [regPaymentError, setRegPaymentError] = useState('')
+  const [regTaken, setRegTaken] = useState<{ cedula?: boolean; email?: boolean; ruc?: boolean; phone?: boolean }>({})
+  const [regChecking, setRegChecking] = useState(false)
+  const [loginPrefill, setLoginPrefill] = useState('')
+
+  const CEDULA_FORMAT = /^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i
+  const regRucValue = regVendorType === 'distribuidor' || (regVendorType !== 'cooperativa' && regHasRuc === 'si') ? regRuc.trim() : ''
+
+  /** Checks one field as soon as the person leaves it. A failed lookup is ignored: the final submit still validates. */
+  async function checkRegField(field: 'cedula' | 'email' | 'phone', value: string) {
+    const trimmed = value.trim()
+    if (!trimmed || (field === 'cedula' && !CEDULA_FORMAT.test(trimmed))) { setRegTaken((taken) => ({ ...taken, [field]: false })); return }
+    if (field === 'phone' && regEmail.trim()) { setRegTaken((taken) => ({ ...taken, phone: false })); return }
+    try {
+      const result = await checkRegistrationAvailability({ [field]: trimmed })
+      setRegTaken((taken) => ({ ...taken, [field]: result[`${field}_taken`] }))
+    } catch { /* the submit check covers it */ }
+  }
+
+  function goToLogin(identifier: string) {
+    setLoginPrefill(identifier)
+    setShowRegForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const takenNotice = (message: string, identifier: string) => (
+    <span className="reg-taken" role="alert">
+      {message} <button type="button" className="reg-taken__login" onClick={() => goToLogin(identifier)}>Inicia sesión aquí <ArrowRight size={14} aria-hidden="true" /></button>
+    </span>
+  )
 
   useEffect(() => {
     let active = true
@@ -1888,19 +1930,21 @@ function RegistroPage() {
     setRegMessage('')
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
     try {
+      const body = new FormData()
+      Object.entries({
+        name: `${regFirstName.trim()} ${regLastName.trim()}`, password: regPassword, cedula: regCedula.toUpperCase(),
+        public_name: regPublicName, vendor_type: regVendorType, phone: regPhone, location_id: String(regLocationId ?? ''),
+        terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10', terms_confirmed: '1', privacy_confirmed: '1',
+        ...(regEmail ? { email: regEmail } : {}),
+      }).forEach(([key, value]) => body.append(key, value))
+      regActivities.forEach((activity) => body.append('activities[]', activity))
+      regPaymentMethods.forEach((method) => body.append('payment_methods[]', method))
+      appendRegistrantDocuments(body, { type: regVendorType, hasRuc: regHasRuc, ruc: regRuc, rucDv: regRucDv, documents: regDocuments })
       const xsrf = await csrfToken()
       const response = await fetch(`${apiBase}/auth/register`, {
         method: 'POST', credentials: 'include',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
-        body: JSON.stringify({
-          name: `${regFirstName.trim()} ${regLastName.trim()}`,
-          ...(regEmail ? { email: regEmail } : {}), password: regPassword,
-          cedula: regCedula.toUpperCase(), ...(regRuc.trim() ? { ruc: regRuc.trim().toUpperCase(), ruc_dv: regRucDv.trim() } : {}), public_name: regPublicName, activity: regActivity || null,
-          vendor_type: regVendorType, payment_methods: regPaymentMethods,
-          phone: regPhone, location_id: regLocationId,
-          terms_version: 'terms-2026-10', privacy_version: 'privacy-2026-10',
-          terms_confirmed: '1', privacy_confirmed: '1',
-        }),
+        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf },
+        body,
       })
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
@@ -1919,7 +1963,7 @@ function RegistroPage() {
       <main className="auth-gateway">
         <div className="auth-gateway__scene" aria-hidden="true">
           <div className="auth-gateway__farmer">
-            <img src={heroProducer960} srcSet={`${heroProducer640} 640w, ${heroProducer960} 960w, ${heroProducer1440} 1440w`} sizes="34vw" alt="" decoding="async" />
+            <img src={registerProducer800} srcSet={`${registerProducer480} 480w, ${registerProducer800} 800w, ${registerProducer1100} 1100w`} sizes="(max-width: 960px) 24vw, 27vw" alt="" decoding="async" />
           </div>
           <p className="auth-gateway__note">Apoyar<br />lo local<br />también<br />nos alimenta</p>
           <img className="auth-gateway__waves" src={heroWaves} alt="" />
@@ -1946,8 +1990,8 @@ function RegistroPage() {
                 </div>
               </div>
               <ValidatedForm className="auth-form auth-gateway__login-form" onSubmit={submitLogin}>
-                <label>Correo electrónico
-                  <span className="auth-input"><Mail size={19} aria-hidden="true" /><input name="email" type="email" autoComplete="email" required /></span>
+                <label>Cédula o correo electrónico
+                  <span className="auth-input"><User size={19} aria-hidden="true" /><input key={loginPrefill} name="email" type="text" autoComplete="username" placeholder="8-123-4567" required defaultValue={loginPrefill} /></span>
                 </label>
                 <label>Contraseña
                   <span className="auth-input"><Lock size={19} aria-hidden="true" /><input name="password" type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required />
@@ -2002,19 +2046,30 @@ function RegistroPage() {
                   const hasSpecial = /[^a-zA-Z0-9]/.test(regPassword)
                   if (!hasLetter || !hasNumber || !hasSpecial) { setRegStep1Error('La contraseña debe incluir al menos una letra, un número y un carácter especial.'); return }
                   setRegStep1Error('')
-                  setRegStep(2)
+                  setRegChecking(true)
+                  checkRegistrationAvailability({ cedula: regCedula.trim(), email: regEmail.trim(), ruc: regRucValue, phone: regPhone.trim() })
+                    .then((result) => {
+                      const taken = { cedula: result.cedula_taken, email: result.email_taken, ruc: result.ruc_taken, phone: result.phone_taken }
+                      setRegTaken(taken)
+                      if (taken.cedula || taken.email || taken.phone) { setRegStep1Error('Ya tienes una cuenta en Mercapro. Inicia sesión en lugar de crear una nueva.'); return }
+                      if (taken.ruc) { setRegStep1Error('Ya existe una cuenta registrada con ese RUC. Si es tuya, inicia sesión.'); return }
+                      setRegStep(2)
+                    })
+                    .catch(() => setRegStep(2))
+                    .finally(() => setRegChecking(false))
                 }}>
-                  <div className="reg-form-grid">
-                    <label className="form-field"><span className="form-field__label">Nombre</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
-                    <label className="form-field"><span className="form-field__label">Apellido</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
-                    <label className="form-field"><span className="form-field__label">Cédula de identidad</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => setRegCedula(e.target.value)} /><span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span></label>
-                    <div className="reg-ruc-row"><label className="form-field"><span className="form-field__label">RUC (opcional)</span><input name="ruc" type="text" autoComplete="off" maxLength={30} placeholder="8-123-4567" value={regRuc} onChange={e => setRegRuc(e.target.value)} /><span className="form-field__hint">Con tu RUC puedes obtener la etiqueta Verificado.</span></label><label className="form-field"><span className="form-field__label">Dígito verificador</span><input name="ruc_dv" type="text" inputMode="numeric" autoComplete="off" maxLength={2} pattern="[0-9]{1,2}" required={regRuc.trim() !== ''} value={regRucDv} onChange={e => setRegRucDv(e.target.value)} /></label></div>
-                    <label className="form-field"><span className="form-field__label">Correo electrónico <span style={{fontWeight:'normal',opacity:.7}}>(opcional)</span></span><input name="email" type="email" autoComplete="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} /><span className="form-field__hint">Para recuperar tu contraseña si lo olvidas.</span></label>
+                  <RegistrantTypeSelector value={regVendorType} onChange={setRegVendorType} />
+                  {regVendorType && <div className="reg-form-grid">
+                    <label className="form-field"><span className="form-field__label">{regVendorType === 'productor' ? 'Nombre' : 'Nombre del representante'}</span><input name="first_name" type="text" autoComplete="given-name" required value={regFirstName} onChange={e => setRegFirstName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">{regVendorType === 'productor' ? 'Apellido' : 'Apellido del representante'}</span><input name="last_name" type="text" autoComplete="family-name" required value={regLastName} onChange={e => setRegLastName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
+                    <label className="form-field"><span className="form-field__label">{regVendorType === 'productor' ? 'Cédula de identidad' : 'Cédula del representante'}</span><input name="cedula" type="text" autoComplete="off" placeholder="8-123-4567" pattern="[0-9A-Za-z]{1,3}-[0-9]{1,4}-[0-9]{1,6}" required value={regCedula} onChange={e => { setRegCedula(e.target.value); setRegTaken((taken) => ({ ...taken, cedula: false })) }} onBlur={e => void checkRegField('cedula', e.target.value)} aria-invalid={regTaken.cedula || undefined} />{regTaken.cedula ? takenNotice('Esta cédula ya tiene una cuenta en Mercapro.', regCedula.trim().toUpperCase()) : <span className="form-field__hint">Ej: 8-123-4567 · Extranjero: E-8-12345</span>}</label>
+                    <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => { setRegPhone(e.target.value); setRegTaken((taken) => ({ ...taken, phone: false })) }} onBlur={e => void checkRegField('phone', e.target.value)} aria-invalid={regTaken.phone || undefined} />{regTaken.phone ? takenNotice('Este teléfono ya tiene una cuenta. Inicia sesión o agrega un correo.', regCedula.trim().toUpperCase()) : <span className="form-field__hint">Ej: 6000-1234</span>}</label>
+                    <RegistrantLegalFields type={regVendorType} hasRuc={regHasRuc} onHasRucChange={setRegHasRuc} ruc={regRuc} onRucChange={setRegRuc} rucDv={regRucDv} onRucDvChange={setRegRucDv} documents={regDocuments} onDocumentChange={(type, file) => setRegDocuments((current) => { const next = { ...current }; if (file) next[type] = file; else delete next[type]; return next })} />
+                    <label className="form-field"><span className="form-field__label">Correo electrónico <span style={{fontWeight:'normal',opacity:.7}}>(opcional)</span></span><input name="email" type="email" autoComplete="email" value={regEmail} onChange={e => { setRegEmail(e.target.value); setRegTaken((taken) => ({ ...taken, email: false, phone: false })) }} onBlur={e => void checkRegField('email', e.target.value)} aria-invalid={regTaken.email || undefined} />{regTaken.email ? takenNotice('Este correo ya tiene una cuenta en Mercapro.', regEmail.trim()) : <span className="form-field__hint">Para recuperar tu contraseña si lo olvidas.</span>}</label>
                     <label className="form-field"><span className="form-field__label">Contraseña</span><input name="password" type="password" autoComplete="new-password" minLength={6} required value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegStep1Error('') }} /><span className="form-field__hint">{regPassword ? (() => { const c = { len: regPassword.length >= 6, let: /[a-zA-Z]/.test(regPassword), num: /[0-9]/.test(regPassword), sym: /[^a-zA-Z0-9]/.test(regPassword) }; return (c.len && c.let && c.num && c.sym) ? <span className="pwd-ok">✓ Contraseña válida</span> : <span className="pwd-strength">{([{l:'6 car.',ok:c.len},{l:'letra',ok:c.let},{l:'número',ok:c.num},{l:'símbolo',ok:c.sym}] as {l:string,ok:boolean}[]).map(({l,ok}) => <span key={l} className={ok ? 'pwd-req pwd-req--ok' : 'pwd-req pwd-req--no'}>{ok ? '✓' : '✗'} {l}</span>)}</span> })() : 'Mín. 6 car. · letra · número · símbolo'}</span></label>
-                    <label className="form-field"><span className="form-field__label">Teléfono de contacto</span><input name="phone" type="tel" autoComplete="tel" placeholder="6000-1234" maxLength={40} required value={regPhone} onChange={e => setRegPhone(e.target.value)} /><span className="form-field__hint">Ej: 6000-1234</span></label>
-                  </div>
-                  {regStep1Error && <p className="form-field__error" role="alert">{regStep1Error}</p>}
-                  <button className="button button--primary" type="submit">Continuar <ArrowRight size={16} /></button>
+                  </div>}
+                  {regStep1Error && <p className="form-field__error" role="alert">{regStep1Error}{(regTaken.cedula || regTaken.email || regTaken.phone || regTaken.ruc) && <> <button type="button" className="reg-taken__login" onClick={() => goToLogin(regTaken.email ? regEmail.trim() : regCedula.trim().toUpperCase())}>Iniciar sesión <ArrowRight size={14} aria-hidden="true" /></button></>}</p>}
+                  <button className="button button--primary" type="submit" disabled={regChecking}>{regChecking ? 'Revisando…' : <>Continuar <ArrowRight size={16} /></>}</button>
                 </ValidatedForm>
               )}
 
@@ -2022,14 +2077,7 @@ function RegistroPage() {
                 <ValidatedForm className="auth-form reg-step-form" onSubmit={(e) => { e.preventDefault(); if (regPaymentMethods.length === 0) { setRegPaymentError('Selecciona al menos un método de pago que aceptes.'); return } setRegPaymentError(''); setRegStep(3) }}>
                   <div className="reg-form-grid">
                     <label className="form-field"><span className="form-field__label">Nombre público del emprendimiento</span><input name="public_name" type="text" autoComplete="organization" required value={regPublicName} onChange={e => setRegPublicName(e.target.value)} /><span className="form-field__hint" aria-hidden="true" /></label>
-                    <label className="form-field"><span className="form-field__label">Actividad principal</span><ActivitySelect defaultValue={regActivity} onChange={(v) => setRegActivity(v)} /><span className="form-field__hint" aria-hidden="true" /></label>
-                    <label className="form-field"><span className="form-field__label">Tipo de emprendimiento</span>
-                      <select value={regVendorType} onChange={e => setRegVendorType(e.target.value as 'productor' | 'cooperativa' | 'distribuidor')}>
-                        <option value="productor">Personal / Productor individual</option>
-                        <option value="cooperativa">Cooperativa</option>
-                        <option value="distribuidor">PYME / Empresa</option>
-                      </select>
-                    <span className="form-field__hint" aria-hidden="true" /></label>
+                    <div className="form-field activity-field"><span className="form-field__label">Actividades principales</span><ActivityMultiSelect defaultValue={regActivities} onChange={setRegActivities} /><span className="form-field__hint">Puedes elegir más de una.</span></div>
                   </div>
                   <fieldset style={{ border: 'none', padding: 0 }}>
                     <legend style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>¿Cómo recibes pagos de tus clientes?</legend>
@@ -2077,13 +2125,15 @@ function RegistroPage() {
               {regStep === 4 && (
                 <div className="auth-form reg-step-form">
                   <div className="reg-review">
-                    <div className="reg-review__row"><span>Nombre</span><strong>{regFirstName} {regLastName}</strong></div>
+                    {regVendorType && <div className="reg-review__row"><span>Registro</span><strong>{REGISTRANT_LABELS[regVendorType]}</strong></div>}
+                    <div className="reg-review__row"><span>{regVendorType === 'productor' ? 'Nombre' : 'Representante'}</span><strong>{regFirstName} {regLastName}</strong></div>
                     <div className="reg-review__row"><span>Cédula</span><strong>{regCedula.toUpperCase()}</strong></div>
-                    {regRuc.trim() && <div className="reg-review__row"><span>RUC</span><strong>{regRuc.trim().toUpperCase()} DV {regRucDv.trim()}</strong></div>}
+                    {(regVendorType === 'distribuidor' || (regVendorType === 'productor' && regHasRuc === 'si')) && <div className="reg-review__row"><span>RUC</span><strong>{regRuc.trim().toUpperCase()} DV {regRucDv.trim()}</strong></div>}
+                    {regVendorType && <div className="reg-review__row"><span>{REQUIRED_DOCUMENT[regVendorType].label}</span><strong className={regDocuments[REQUIRED_DOCUMENT[regVendorType].type] ? '' : 'reg-review__missing'}>{regDocuments[REQUIRED_DOCUMENT[regVendorType].type]?.name ?? 'Pendiente: súbelo desde tu panel para poder publicar'}</strong></div>}
                     <div className="reg-review__row"><span>Correo</span><strong>{regEmail}</strong></div>
                     <div className="reg-review__row"><span>Teléfono</span><strong>{regPhone}</strong></div>
                     <div className="reg-review__row"><span>Emprendimiento</span><strong>{regPublicName}</strong></div>
-                    {regActivity && <div className="reg-review__row"><span>Actividad</span><strong>{regActivity}</strong></div>}
+                    {regActivities.length > 0 && <div className="reg-review__row"><span>Actividades</span><strong>{regActivities.join(', ')}</strong></div>}
                   </div>
                   <label className="auth-consent"><input type="checkbox" checked={regTerms} onChange={e => setRegTerms(e.target.checked)} required />Acepto los <Link to="/terminos">términos y condiciones</Link>.</label>
                   <label className="auth-consent"><input type="checkbox" checked={regPrivacy} onChange={e => setRegPrivacy(e.target.checked)} required />He leído y acepto la <Link to="/privacidad">política de privacidad</Link>.</label>

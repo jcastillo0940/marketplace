@@ -22,6 +22,16 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [session, setSession] = useState<SessionUser | null | 'loading'>('loading')
   const location = useLocation()
+  const overHero = location.pathname === '/'
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    if (!overHero) return
+    const update = () => setScrolled(window.scrollY > 8)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [overHero])
   const navigate = useNavigate()
 
   const isAdminPath = location.pathname.startsWith('/admin') || location.pathname === '/adminsc1car'
@@ -61,7 +71,7 @@ export function SiteHeader() {
           <img src="/super-carnes-logo.png" alt="Super Carnes" className="initiative-bar__logo" />
         </a>
       </div>
-      <header className="site-header">
+      <header className={`site-header${overHero ? ' site-header--over-hero' : ''}${overHero && !scrolled && !menuOpen ? ' site-header--transparent' : ''}`}>
         <div className="site-header__inner page-shell">
           <Link className="brand" to="/" aria-label="Mercapro, inicio">
             <BrandLogo />

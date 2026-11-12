@@ -533,6 +533,7 @@ class ProducerOwnershipTest extends TestCase
 
         $producer = User::query()->where('email', 'flujo-manual@example.test')->firstOrFail();
         $this->assertAuthenticatedAs($producer);
+        $producer->producerProfile()->update(['cedula_photo_path' => 'documents/test/cedula_photo.jpg.enc']);
         $this->postJson('/api/me/verify-phone/start')->assertAccepted();
         $this->postJson('/api/auth/verify', ['phone' => '+50760001234', 'code' => '123456'])
             ->assertOk()
@@ -1010,7 +1011,7 @@ class ProducerOwnershipTest extends TestCase
     public function test_rejected_product_can_be_corrected_and_resubmitted_with_history_preserved(): void
     {
         $owner = User::factory()->create();
-        $profile = $owner->producerProfile()->create(['slug' => 'rejected-owner', 'public_name' => 'Productor rechazado', 'phone_private' => '+50760000042', 'profile_status' => 'active']);
+        $profile = $owner->producerProfile()->create(['slug' => 'rejected-owner', 'public_name' => 'Productor rechazado', 'phone_private' => '+50760000042', 'profile_status' => 'active', 'cedula_photo_path' => 'documents/test/cedula_photo.jpg.enc']);
         $product = Product::factory()->create(['producer_profile_id' => $profile->id, 'created_by' => $owner->id, 'status' => ProductStatus::Pending]);
         Storage::fake('local');
         $this->attachAvailablePhoto($product);
@@ -1241,7 +1242,7 @@ class ProducerOwnershipTest extends TestCase
             $this->markTestSkipped('La normalización de imágenes requiere GD; está instalado en la imagen Docker de PHP.');
         }
         $user = User::factory()->create();
-        $user->producerProfile()->create(['slug' => 'draft-producer', 'public_name' => 'Productora Draft', 'phone_private' => '+50760000111']);
+        $user->producerProfile()->create(['slug' => 'draft-producer', 'public_name' => 'Productora Draft', 'phone_private' => '+50760000111', 'cedula_photo_path' => 'documents/test/cedula_photo.jpg.enc']);
         $jpeg = base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgMBAQEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPyF//9k=', true);
         $image = new UploadedFile(base_path('tests/fixture-product.jpg'), 'yuca.jpg', 'image/jpeg', null, true);
         $response = $this->actingAs($user)->post('/api/me/products', [
@@ -1262,7 +1263,7 @@ class ProducerOwnershipTest extends TestCase
         Storage::fake('local');
         config(['filesystems.media' => 'local']);
         $user = User::factory()->create();
-        $user->producerProfile()->create(['slug' => 'photo-rollback-profile', 'public_name' => 'Finca de prueba', 'phone_private' => '+50760008890']);
+        $user->producerProfile()->create(['slug' => 'photo-rollback-profile', 'public_name' => 'Finca de prueba', 'phone_private' => '+50760008890', 'cedula_photo_path' => 'documents/test/cedula_photo.jpg.enc']);
         $attempt = 0;
         $partialPath = null;
         $partialThumbnailPath = null;
@@ -2044,6 +2045,20 @@ class ProducerOwnershipTest extends TestCase
         foreach ([$product, $recentProduct, $oldProduct, $orphanProduct] as $moderatedProduct) {
             $this->assertStringNotContainsString($moderatedProduct->producer->user->email, $csv);
         }
+    }
+
+    public function test_producer_without_required_document_cannot_publish(): void
+    {
+        $user = User::factory()->create();
+        $profile = $user->producerProfile()->create(['slug' => 'sin-cedula', 'public_name' => 'Finca sin cédula', 'phone_private' => '+50760000777', 'vendor_type' => 'productor', 'profile_status' => 'active']);
+        $product = Product::factory()->create(['producer_profile_id' => $profile->id, 'created_by' => $user->id, 'status' => ProductStatus::Rejected]);
+
+        $this->actingAs($user)->getJson('/api/me')->assertOk()->assertJsonPath('data.profile.missing_documents', ['cedula_photo']);
+        $this->actingAs($user)->postJson("/api/me/products/{$product->id}/submit", ['reason' => 'Lista para revisión humana.'])
+            ->assertStatus(422)->assertJsonPath('message', 'Para publicar productos primero sube la foto de tu cédula en Mi perfil → Verificación.');
+
+        $profile->update(['cedula_photo_path' => 'documents/test/cedula_photo.jpg.enc']);
+        $this->actingAs($user)->getJson('/api/me')->assertOk()->assertJsonPath('data.profile.missing_documents', []);
     }
 
     private function recordStatusEvent(Product $product, User $actor, string $from, string $to, \DateTimeInterface $createdAt): void

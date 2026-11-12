@@ -16,6 +16,7 @@ use App\Rules\ValidContactPhone;
 use App\Services\AdminMfaRecoveryWorkflow;
 use App\Services\MarketMailer;
 use App\Services\MfaAttemptLimiter;
+use App\Services\SensitiveFileStore;
 use App\Services\Totp;
 use App\Support\PanamaPhoneNumber;
 use Illuminate\Auth\Events\PasswordReset;
@@ -34,6 +35,33 @@ class AuthController extends Controller
     public function register(RegisterProducerRequest $request): JsonResponse
     {
         return $this->createProducer($request->validated(), $request->user(), $request);
+    }
+
+    /**
+     * Lets the registration form warn about an existing account while the person is still on
+     * step 1, instead of after they fill in every step. Throttled per IP against enumeration.
+     */
+    public function checkRegistration(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'cedula' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'ruc' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $cedula = strtoupper(trim((string) ($data['cedula'] ?? '')));
+        $email = strtolower(trim((string) ($data['email'] ?? '')));
+        $ruc = strtoupper(trim((string) ($data['ruc'] ?? '')));
+        $phone = PanamaPhoneNumber::normalize($data['phone'] ?? null);
+
+        return response()->json(['data' => [
+            'cedula_taken' => $cedula !== '' && ProducerProfile::whereRaw('UPPER(cedula) = ?', [$cedula])->exists(),
+            'email_taken' => $email !== '' && User::whereRaw('LOWER(email) = ?', [$email])->exists(),
+            'ruc_taken' => $ruc !== '' && ProducerProfile::whereRaw('UPPER(ruc) = ?', [$ruc])->exists(),
+            // Without an email the account is keyed on the phone, so a reused phone would collide.
+            'phone_taken' => $email === '' && $phone !== null && User::where('email', 'ph-'.$phone.'@mercapro.internal')->exists(),
+        ]]);
     }
 
     public function registerAssisted(RegisterProducerRequest $request): JsonResponse
@@ -67,7 +95,8 @@ class AuthController extends Controller
                 'registration_method' => $assisted ? 'assisted' : 'self',
                 'slug' => Str::slug($data['public_name']).'-'.Str::lower(Str::random(6)),
                 'public_name' => $data['public_name'],
-                'activity' => $data['activity'] ?? null,
+                'activity' => ProducerProfile::activityLabel($data['activities'] ?? []),
+                'activities' => array_values(array_unique($data['activities'] ?? [])) ?: null,
                 'vendor_type' => $data['vendor_type'] ?? 'productor',
                 'payment_methods' => $data['payment_methods'] ?? null,
                 'location_id' => $data['location_id'],
@@ -78,6 +107,15 @@ class AuthController extends Controller
                 'contact_level' => 'unverified',
                 'profile_status' => 'pending',
             ]);
+            foreach (['pacto_social', 'cedula_photo', 'aviso_operacion'] as $type) {
+                if (! isset($data[$type])) {
+                    continue;
+                }
+                $file = $data[$type];
+                $path = "documents/{$profile->id}/{$type}.{$file->extension()}.enc";
+                abort_unless(app(SensitiveFileStore::class)->put($path, $file->get()), 503, 'No pudimos guardar el documento. Inténtalo de nuevo.');
+                $profile->update([$type.'_path' => $path]);
+            }
             $profile->consents()->createMany([
                 ['consent_type' => 'terms', 'version' => config('marketplace.consent_versions.terms'), 'accepted_at' => now()],
                 ['consent_type' => 'privacy', 'version' => config('marketplace.consent_versions.privacy'), 'accepted_at' => now()],
@@ -105,20 +143,7 @@ class AuthController extends Controller
     public function login(Request $request, MfaAttemptLimiter $limiter): JsonResponse
     {
         $data = $request->validate(['email' => ['required', 'string', 'max:255'], 'password' => ['required', 'string']]);
-        $identifier = trim($data['email']);
-        // If it looks like a phone number (digits, dashes, spaces), resolve to email
-        if (! str_contains($identifier, '@')) {
-            $normalizedPhone = PanamaPhoneNumber::normalize($identifier) ?? preg_replace('/\D/', '', $identifier);
-            $profile = \App\Models\ProducerProfile::query()
-                ->where('phone_private', $normalizedPhone)
-                ->first();
-            if ($profile) {
-                $identifier = \App\Models\User::query()->find($profile->user_id)?->email ?? $identifier;
-            } else {
-                // Try auto-generated email pattern
-                $identifier = 'ph-'.$normalizedPhone.'@mercapro.internal';
-            }
-        }
+        $identifier = $this->resolveLoginEmail(trim($data['email']));
         $credentials = ['email' => $identifier, 'password' => $data['password']];
         if (! auth()->attempt($credentials)) {
             throw ValidationException::withMessages(['email' => ['Las credenciales no son válidas.']]);
@@ -146,6 +171,25 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return $user->isInternalStaff() ? response()->json(['mfa_setup_required' => true]) : response()->json([], 204);
+    }
+
+    /** Producers may sign in with their cédula, phone or email; email is optional at registration. */
+    private function resolveLoginEmail(string $identifier): string
+    {
+        if (str_contains($identifier, '@')) {
+            return $identifier;
+        }
+
+        if (preg_match('/^([0-9]{1,2}[A-Z]?|[A-Z]{1,3})-[0-9]{1,4}-[0-9]{1,6}$/i', $identifier) === 1) {
+            $profile = ProducerProfile::query()->where('cedula', strtoupper($identifier))->first();
+
+            return User::query()->find($profile?->user_id)?->email ?? $identifier;
+        }
+
+        $normalizedPhone = PanamaPhoneNumber::normalize($identifier) ?? preg_replace('/\D/', '', $identifier);
+        $profile = ProducerProfile::query()->where('phone_private', $normalizedPhone)->first();
+
+        return User::query()->find($profile?->user_id)?->email ?? 'ph-'.$normalizedPhone.'@mercapro.internal';
     }
 
     public function requestPasswordReset(Request $request): JsonResponse
@@ -300,7 +344,7 @@ class AuthController extends Controller
         $publicPhone = $profile ? PanamaPhoneNumber::normalize($profile->phone_public) : null;
         $contactLevel = $profile && $profile->contact_level !== 'unverified' && $publicPhone !== null ? $profile->contact_level : 'unverified';
 
-        return response()->json(['data' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'roles' => $user->roles->pluck('name'), 'permissions' => $permissions, 'profile' => $profile ? ['public_name' => $profile->public_name, 'slug' => $profile->slug, 'activity' => $profile->activity, 'vendor_type' => $profile->vendor_type ?? 'productor', 'payment_methods' => $profile->payment_methods ?? [], 'description' => $profile->description, 'location_id' => $profile->location_id, 'phone_private' => $profile->phone_private, 'cedula' => $profile->cedula, 'ruc' => $profile->ruc, 'ruc_dv' => $profile->ruc_dv, 'has_cedula_photo' => ! empty($profile->cedula_photo_path), 'has_pacto_social' => ! empty($profile->pacto_social_path), 'has_aviso_operacion' => ! empty($profile->aviso_operacion_path), 'contact_level' => $contactLevel, 'verification_level' => $profile->publicVerificationLevel(), 'profile_status' => $profile->profile_status, 'suspension_reason' => $profile->suspension_reason] : null]]);
+        return response()->json(['data' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'roles' => $user->roles->pluck('name'), 'permissions' => $permissions, 'profile' => $profile ? ['public_name' => $profile->public_name, 'slug' => $profile->slug, 'activity' => $profile->activity, 'activities' => $profile->activities ?? [], 'vendor_type' => $profile->vendor_type ?? 'productor', 'payment_methods' => $profile->payment_methods ?? [], 'description' => $profile->description, 'location_id' => $profile->location_id, 'phone_private' => $profile->phone_private, 'cedula' => $profile->cedula, 'ruc' => $profile->ruc, 'ruc_dv' => $profile->ruc_dv, 'has_cedula_photo' => ! empty($profile->cedula_photo_path), 'has_pacto_social' => ! empty($profile->pacto_social_path), 'has_aviso_operacion' => ! empty($profile->aviso_operacion_path), 'missing_documents' => array_keys($profile->missingPublishingDocuments()), 'contact_level' => $contactLevel, 'verification_level' => $profile->publicVerificationLevel(), 'profile_status' => $profile->profile_status, 'suspension_reason' => $profile->suspension_reason] : null]]);
     }
 
     public function updateProfile(Request $request): JsonResponse
@@ -316,7 +360,8 @@ class AuthController extends Controller
             'public_name' => ['required', 'string', 'min:2', 'max:120'],
             'ruc' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^[0-9A-Z]+(-[0-9A-Z]+){1,4}$/', Rule::unique('producer_profiles', 'ruc')->ignore($profile->id)],
             'ruc_dv' => ['sometimes', 'nullable', 'required_with:ruc', 'string', 'regex:/^[0-9]{1,2}$/'],
-            'activity' => ['nullable', 'string', 'max:120', Rule::exists('categories', 'name')->where('active', true)],
+            'activities' => ['nullable', 'array', 'max:20'],
+            'activities.*' => ['string', 'max:120', Rule::exists('categories', 'name')->where('active', true)->whereNull('parent_id')],
             'vendor_type' => ['nullable', 'string', 'in:productor,cooperativa,distribuidor'],
             'payment_methods' => ['nullable', 'array'],
             'payment_methods.*' => ['string', 'in:efectivo,yappy,transferencia,tarjeta,cheque,credito'],
@@ -336,7 +381,10 @@ class AuthController extends Controller
                 $profile->ruc_dv = $data['ruc_dv'] ?? null;
             }
             $profile->public_name = $data['public_name'];
-            $profile->activity = $data['activity'] ?? null;
+            if (array_key_exists('activities', $data)) {
+                $profile->activity = ProducerProfile::activityLabel($data['activities'] ?? []);
+                $profile->activities = array_values(array_unique($data['activities'] ?? [])) ?: null;
+            }
             if (array_key_exists('vendor_type', $data)) {
                 $profile->vendor_type = $data['vendor_type'] ?? 'productor';
             }

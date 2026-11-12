@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
         ResetPassword::createUrlUsing(fn ($user, string $token): string => rtrim((string) config('app.frontend_url'), '/')
             .'/restablecer?'.http_build_query(['token' => $token, 'email' => $user->getEmailForPasswordReset()]));
         RateLimiter::for('auth', fn ($request) => Limit::perMinute(8)->by($request->ip().':'.strtolower((string) $request->input('email'))));
+        RateLimiter::for('registration-check', fn ($request) => Limit::perMinute(20)->by($request->ip()));
         RateLimiter::for('public-actions', fn ($request) => Limit::perMinute(12)->by($request->ip()));
         RateLimiter::for('product-writes', fn ($request) => Limit::perMinute(6)->by('user:'.$request->user()->getAuthIdentifier()));
         Gate::define('products.review', fn ($user) => $user->hasPermission('products.review'));

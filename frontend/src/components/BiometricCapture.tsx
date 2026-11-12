@@ -88,7 +88,6 @@ export default function BiometricCapture({ onDone, onCancel }: { onDone: () => v
 
   useEffect(() => {
     if (step !== 'cedula') return
-    setError('')
     startCamera('environment').catch((failure: unknown) => setError(cameraErrorMessage(failure)))
   }, [step, startCamera])
 
@@ -104,15 +103,20 @@ export default function BiometricCapture({ onDone, onCancel }: { onDone: () => v
       const face = await faceapi.detectSingleFace(frame, detectorOptions(faceapi, 416)).withFaceLandmarks().withFaceDescriptor()
       const cedula = cedulaRef.current
       if (!face || !cedula) return false
+      const selfie = await canvasToJpeg(frame)
+      const matchDistance = faceapi.euclideanDistance(Array.from(face.descriptor), Array.from(cedula.descriptor))
+      // Changing the step ends this effect, so the outcome is handled here rather than by handleFailure.
       setStep('sending')
       stopCamera()
-      await submitBiometricCheck({
-        selfie: await canvasToJpeg(frame),
-        cedula: cedula.blob,
-        matchDistance: faceapi.euclideanDistance(Array.from(face.descriptor), Array.from(cedula.descriptor)),
-        challenges,
-      })
-      onDone()
+      try {
+        await submitBiometricCheck({ selfie, cedula: cedula.blob, matchDistance, challenges })
+        onDone()
+      } catch (failure) {
+        const message = failure instanceof Error ? failure.message : 'No pudimos enviar tu verificación.'
+        // The server could not read the cédula photo: that photo has to be taken again.
+        setStep(message.includes('cédula') ? 'cedula' : 'selfie')
+        setError(message)
+      }
       return true
     }
 
@@ -129,6 +133,7 @@ export default function BiometricCapture({ onDone, onCancel }: { onDone: () => v
       if (faces.length !== 1) {
         setInstruction(faces.length ? 'Solo debe aparecer una persona' : 'Coloca tu cara dentro del óvalo')
       } else {
+        setError((previous) => (previous ? '' : previous))
         const points = faces[0].landmarks.positions
         const sample = {
           eyeOpenness: (eyeAspectRatio(points.slice(36, 42)) + eyeAspectRatio(points.slice(42, 48))) / 2,
@@ -150,11 +155,9 @@ export default function BiometricCapture({ onDone, onCancel }: { onDone: () => v
     function handleFailure(failure: unknown) {
       if (!active) return
       stopCamera()
-      setStep('selfie')
       setError(failure instanceof Error ? failure.message : 'No pudimos completar la verificación.')
     }
 
-    setError('')
     setInstruction('Abriendo la cámara…')
     Promise.all([loadFaceApi(), startCamera('user')])
       .then(([faceapi]) => scan(faceapi))
@@ -204,7 +207,7 @@ export default function BiometricCapture({ onDone, onCancel }: { onDone: () => v
           </label>
           <div className="biometric-capture__actions">
             <button className="button button--quiet" type="button" onClick={onCancel}>Cancelar</button>
-            <button className="button button--primary" type="button" disabled={!consent} onClick={() => setStep('cedula')}>Continuar</button>
+            <button className="button button--primary" type="button" disabled={!consent} onClick={() => { setError(''); setStep('cedula') }}>Continuar</button>
           </div>
         </>
       )}

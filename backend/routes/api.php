@@ -84,6 +84,7 @@ Route::prefix('admin-auth')->middleware('web')->group(function (): void {
 
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register'])->middleware(['web', 'throttle:auth']);
+    Route::post('/register/check', [AuthController::class, 'checkRegistration'])->middleware(['web', 'throttle:registration-check']);
     Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:auth']);
     Route::post('/password/forgot', [AuthController::class, 'requestPasswordReset'])->middleware(['web', 'throttle:auth']);
     Route::post('/password/reset', [AuthController::class, 'resetPassword'])->middleware(['web', 'throttle:auth']);
